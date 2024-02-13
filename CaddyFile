@@ -1,0 +1,13 @@
+{$DOMAIN}
+
+encode gzip
+
+@backend_routes path /_event/* /_upload /ping
+handle @backend_routes {
+        reverse_proxy {$API_URL}
+}
+
+# Reverse proxy for all other requests
+handle {
+        reverse_proxy {$UI_URL}
+}

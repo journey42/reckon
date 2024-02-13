@@ -1,0 +1,28 @@
+# During build and run, set environment DOMAIN pointing
+# to publicly accessible domain where app will be hosted
+services:
+  app:
+    image: reckon
+    build:
+      context: .
+      args:
+        API_URL: https://${DOMAIN:-http://localhost:8000}
+    environment:
+      API_URL: "https://${DOMAIN:-http://localhost:8000}"
+      TRANSFORMERS_CACHE: "/tmp/.cache/huggingface/hub"
+    ports:
+      - 8000:8000
+      - 3000:3000   
+  webserver:
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      API_URL: "app:8000"
+      UI_URL: "app:3000"
+    ports:
+      - 443:443
+      - 80:80  # for acme-challenge via HTTP
+    build:
+      context: .
+      dockerfile: Caddy.Dockerfile
+    depends_on:
+      - app
