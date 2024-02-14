@@ -35,4 +35,6 @@ COPY --chown=reflex --from=init /app /app
 USER reflex
 ENV PATH="/app/.venv/bin:$PATH" API_URL=$API_URL
 
+RUN apt-get update && apt-get install -y libpq-dev
+
 CMD reflex db migrate && reflex run --env prod --loglevel debug
