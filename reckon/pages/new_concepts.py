@@ -55,9 +55,9 @@ class NewConceptsPageState(AppState):
     reckonings: list[Reckoning]
     search: str
 
-    def compare_concepts(self, concept):
-        pass
-
+    def compare_concepts(self, cid):
+        return rx.redirect(f"/compare/{cid}")
+    
     def delete_reckoning(self, reckoning):
         """Delete a reckoning."""
         with rx.session() as session:

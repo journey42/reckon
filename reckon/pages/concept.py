@@ -19,8 +19,8 @@ class ConceptPageState(AppState):
                 self.concept = session.exec(select(Reckoning).where(Reckoning.id == cid)).first()
                 self.concept.compute_tallies(self.user.id)
 
-    def compare_concepts(self, concept):
-        pass
+    def compare_concepts(self, cid):
+        return rx.redirect(f"/compare/{cid}")
 
     def delete_reckoning(self, rid):
         """Delete a reckoning."""
