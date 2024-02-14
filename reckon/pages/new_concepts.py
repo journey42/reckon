@@ -185,6 +185,7 @@ def render_concept(c: Reckoning):
                 px=2,
                 gap=2,
             ),
+            key=c.id,
             border="1px solid #ededed",
             border_radius="10px",
             padding=2,
