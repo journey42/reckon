@@ -6,6 +6,7 @@ from reckon.styles import button_style, page_params
 from ..components import container
 from ..components import navbar
 from reckon.utils.db import insert_text_with_embedding
+#from sqlalchemy import text
 
 class HomePageState(AppState):
     concept: str
@@ -16,6 +17,7 @@ class HomePageState(AppState):
             return rx.window_alert("Please log in to post.")
         with rx.session() as session:
             session.expire_on_commit = False
+            # session.execute(text("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;"))
             concept = Reckoning(
                 user_id=self.user.id,
                 content=self.concept,
@@ -25,9 +27,9 @@ class HomePageState(AppState):
             )
             session.add(concept)
             session.commit()
-            self._db_updated = True
-            insert_text_with_embedding(concept.content, concept.id)
-            #session.refresh(concept)
+            
+        insert_text_with_embedding(concept.content, concept.id)
+        self._db_updated = True
         return rx.redirect(f"/compare/{concept.id}")
 
 def composer():

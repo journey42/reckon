@@ -4,9 +4,9 @@ import numpy as np
 
 db_params = {
     'dbname': 'reckon',
-    'user': 'postgres',
-    'password': 'password',
-    'host': 'localhost'
+    'user': 'reckon', #postgres
+    'password': '+bX2NBT~;oa?', #password
+    'host': 'reckon-db.postgres.database.azure.com' #localhost
 }
 
 def get_matching_threshold():
