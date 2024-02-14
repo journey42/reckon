@@ -3,9 +3,9 @@ import psycopg2
 # Database connection parameters - adjust these according to your environment
 db_params = {
     'dbname': 'reckon',
-    'user': 'postgres',
-    'password': 'password',
-    'host': 'localhost'
+    'user': 'reckon', #postgres
+    'password': '+bX2NBT~;oa?', #password
+    'host': 'reckon-db.postgres.database.azure.com' #localhost
 }
 
 # SQL commands to be executed

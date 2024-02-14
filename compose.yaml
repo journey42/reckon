@@ -9,6 +9,7 @@ services:
         API_URL: https://${DOMAIN:-http://localhost:8000}
     environment:
       API_URL: "https://${DOMAIN:-http://localhost:8000}"
+      DB_URL: "postgresql://reckon:+bX2NBT~;oa?@reckon-db.postgres.database.azure.com:5432/reckon"
       TRANSFORMERS_CACHE: "/tmp/.cache/huggingface/hub"
     ports:
       - 8000:8000

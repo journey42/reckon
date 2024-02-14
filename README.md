@@ -10,10 +10,18 @@ reflex db migrate
 
 Azure Setup
 
+run the following script via the Azure CLI to create the resource group and supporting resources
 ./scripts/azure-create-vm.sh
 
+configure db with the following templates:
 ./scripts/parameters.json
 ./scripts/template.json
+
+create db reckon
+
+enable pg vector using the following instructions: https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/how-to-use-pgvector
+
+connect to the host vm and run the following commands:
 
 az ssh vm --resource-group reckon-rg --vm-name reckon --subscription ba96b303-2d6d-4450-82a1-50de5bb7b50e
 
