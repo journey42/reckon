@@ -25,6 +25,10 @@ RUN reflex init
 # Export static copy of frontend to /app/.web/_static (and pre-install frontend packages)
 RUN reflex export --frontend-only --no-zip
 
+# Copy static files out of /app to save space in backend image
+RUN mv .web/_static /tmp/_static
+RUN rm -rf .web && mkdir .web
+RUN mv /tmp/_static .web/_static
 
 # Stage 2: copy artifacts into slim image 
 FROM python:3.11-slim
@@ -35,7 +39,7 @@ COPY --chown=reflex --from=init /app /app
 USER reflex
 ENV PATH="/app/.venv/bin:$PATH" API_URL=$API_URL
 
-CMD reflex db migrate && reflex run --env prod --loglevel debug
+CMD reflex db migrate && reflex run --env prod --backend-only
 
 USER root
 

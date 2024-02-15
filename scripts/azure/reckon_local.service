@@ -8,8 +8,8 @@ Environment="API_URL=http://localhost:8000"
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/home/reckon/reckon
-ExecStart=sh /home/reckon/reckon/scripts/startwebserver.sh
-ExecStop=sh /home/reckon/reckon/scripts/stopwebserver.sh
+ExecStart=sh /home/reckon/reckon/scripts/azure/startwebserver.sh
+ExecStop=sh /home/reckon/reckon/scripts/azure/stopwebserver.sh
 TimeoutStartSec=0
 
 [Install]
