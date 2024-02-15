@@ -8,9 +8,6 @@ ARG API_URL
 WORKDIR /app
 COPY . .
 
-# Reflex will install bun, nvm, and node to `$HOME/.reflex` (/app/.reflex)
-ENV HOME=/app
-
 # Create virtualenv which will be copied into final container
 ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
