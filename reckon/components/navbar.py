@@ -44,8 +44,8 @@ def user_menu() -> rx.Component:
                 rx.cond(
                     AppState.user.role == UserTypes.admin,
                     rx.link(
-                        rx.menu_item("Logs"),
-                        href="/logs"
+                        rx.menu_item("Log"),
+                        href="/log"
                     )
                 ),
                 rx.cond(

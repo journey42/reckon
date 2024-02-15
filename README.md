@@ -39,7 +39,7 @@ gh repo clone journey42/reckon
 sudo apt install docker.io
 sudo apt install docker-compose
 
-sudo DOMAIN=reckon.eastus.cloudapp.azure.com docker-compose build
+sudo DOMAIN=reckon-dev.eastus.cloudapp.azure.com docker-compose build
 
 cp ~/reckon/scripts/azure/reckon.service /etc/systemd/system/reckon.service
 
