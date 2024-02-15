@@ -41,4 +41,4 @@ CMD reflex db migrate && reflex run --env prod --backend-only
 USER root
 
 # Install necessary packages
-RUN apt-get update && apt-get install -y libpq-dev
+RUN apt-get update && apt-get install -y libpq-dev unzip
