@@ -30,6 +30,7 @@ RUN mv /tmp/_static .web/_static
 # Stage 2: copy artifacts into slim image 
 FROM python:3.11-slim
 ARG API_URL
+RUN apt-get update && apt-get install -y curl && apt-get update && apt-get install -y unzip && apt-get update && apt-get install -y libpq-dev
 WORKDIR /app
 RUN adduser --disabled-password --home /app reflex
 COPY --chown=reflex --from=init /app /app
@@ -41,4 +42,3 @@ CMD reflex db migrate && reflex run --env prod --backend-only
 USER root
 
 # Install necessary packages
-RUN apt-get update && apt-get install -y libpq-dev unzip
