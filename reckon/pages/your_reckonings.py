@@ -99,28 +99,28 @@ def render_comment(c: Reckoning):
                     on_click=ReckoningFeedbackModalState.visible,
                 ),
                 rx.cond(
-                    (c.user_id == YourReckoningsPageState.user.id),
+                    ((YourReckoningsPageState.user.role > 0) | ((c.user_id == YourReckoningsPageState.user.id) & (c.supports == 0) & (c.detracts == 0) & (c.points_of_order == 0))),
                     edit_button(
                         height="15%",
                         width="15%",
                         on_click=rx.redirect(f'/comment_editor/{c.parent_reckoning_id}/{c.id}'),
                     ),
-                    no_edit_button(
-                        height="15%",
-                        width="15%",
-                    ),
+                    # no_edit_button(
+                    #     height="15%",
+                    #     width="15%",
+                    # ),
                 ),
                 rx.cond(
-                    (c.user_id == YourReckoningsPageState.user.id),
+                    ((YourReckoningsPageState.user.role > 0) | ((c.user_id == YourReckoningsPageState.user.id) & (c.supports == 0) & (c.detracts == 0) & (c.points_of_order == 0))),
                     delete_button(
                         height="15%",
                         width="15%",
                         on_click=YourReckoningsPageState.delete_reckoning(c.id),
                     ),
-                    no_delete_button(
-                        height="15%",
-                        width="15%",
-                    ),
+                    # no_delete_button(
+                    #     height="15%",
+                    #     width="15%",
+                    # ),
                 ),
                 view_children_button(
                     height="15%",

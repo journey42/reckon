@@ -64,6 +64,13 @@ def user_menu() -> rx.Component:
                 ),
                 rx.cond(
                     AppState.user.role == UserTypes.admin,
+                    rx.link(
+                        rx.menu_item("New Concepts"),
+                        href="/new_concepts"
+                    )
+                ),
+                rx.cond(
+                    AppState.user.role == UserTypes.admin,
                     rx.menu_divider(),
                 ),
                 rx.link(
@@ -78,11 +85,10 @@ def app_logo() -> rx.Component:
     """App logo."""
     return rx.grid(
         logo_button(),
-        new_concepts_button(),
         trending_concepts_button(),
         your_reckonings_button(),
         rx.spacer(),
-        grid_template_columns="0.25fr 1fr 1fr 1fr 8fr",
+        grid_template_columns="0.25fr 1fr 1fr 8fr",
         py=2,
         px=2,
         gap=2,

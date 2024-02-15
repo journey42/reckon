@@ -151,28 +151,28 @@ def render_concept(c: Reckoning):
                         on_click=TrendingConceptsPageState.compare_concepts(c.id),
                     ),
                     rx.cond(
-                        (c.user_id == TrendingConceptsPageState.user.id),
+                        ((TrendingConceptsPageState.user.role > 0) | ((c.user_id == TrendingConceptsPageState.user.id) & (c.supports == 0) & (c.detracts == 0) & (c.points_of_order == 0))),
                         edit_button(
                             height="15%",
                             width="15%",
                             on_click=rx.redirect(f'/concept_editor/{c.id}'),
                         ),
-                        no_edit_button(
-                            height="15%",
-                            width="15%",
-                        ),
+                        # no_edit_button(
+                        #     height="15%",
+                        #     width="15%",
+                        # ),
                     ),
                     rx.cond(
-                        (c.user_id == TrendingConceptsPageState.user.id),
+                        ((TrendingConceptsPageState.user.role > 0) | ((c.user_id == TrendingConceptsPageState.user.id) & (c.supports == 0) & (c.detracts == 0) & (c.points_of_order == 0))),
                         delete_button(
                             height="15%",
                             width="15%",
                             on_click=TrendingConceptsPageState.delete_reckoning(c.id),
                         ),
-                        no_delete_button(
-                            height="15%",
-                            width="15%",
-                        ),
+                        # no_delete_button(
+                        #     height="15%",
+                        #     width="15%",
+                        # ),
                     ),
                     view_children_button(
                         height="15%",
