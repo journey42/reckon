@@ -1,0 +1,715 @@
+"""The your reckonings page."""
+import reflex as rx
+from datetime import datetime
+from sqlmodel import select, delete, func
+from sqlalchemy.orm import aliased
+from sqlalchemy import and_ as _and
+from sqlalchemy import or_ as _or
+from reckon.state.base import AppState, Reckoning, ReckoningTypes
+from reckon.styles import input_style, page_params, control_panel_text_style, input_style_focus
+from ..components import container
+from ..components import navbar
+from reckon.components.buttons import support_concept_button, detract_from_concept_button, feedback_button, view_comments_button, compare_concepts_button, delete_button, support_comment_button, detract_from_comment_button, poo_comment_button, no_feedback_button, feedback_button, unsupported_concept_button, undetracted_concept_button, edit_button, view_concept_button, view_parent_button
+from reckon.components.feedback_modal import feedback_modal, FeedbackModalState, reckoning_feedback_options
+from reckon.components.concept_modal import concept_modal, ConceptModalState
+from reckon.components.comment_modal import comment_modal, CommentModalState
+from reckon.utils.db import find_similar_texts_with_join
+
+
+class ReckoningsPageState(AppState):
+    reckonings: list[Reckoning] = []
+    search: str
+    page_type: int = 0
+
+    def new_comment(self, subject, type, pid):
+        yield CommentModalState.new_comment(subject, type, pid)
+        yield CommentModalState.visible()
+    
+    def edit_comment(self, pid, type, cid, content):
+        yield CommentModalState.edit_comment(pid, type, cid, content)
+        yield CommentModalState.visible()
+
+    def edit_concept(self, cid):
+        yield ConceptModalState.set_concept(cid)
+        yield ConceptModalState.visible()
+
+    def provide_feedback_on_reckoning(self, rid):
+        yield FeedbackModalState.set_reckoning(rid)
+        yield FeedbackModalState.visible()
+
+    def close_modal(self):
+        pass
+
+    def compare_concepts(self, cid):
+        return rx.redirect(f"/compare/{cid}")
+    
+    def view_comments(self, cid):
+        return rx.redirect(f"/comments/{cid}")
+    
+    def vote_on_concept(self, cid, type):
+        with rx.session() as session:
+            session.expire_on_commit = False
+            concept = session.exec(select(Reckoning).where(Reckoning.id == cid)).first()
+            if concept.user_id == self.user.id:
+                concept.type = ReckoningTypes.concept
+            comment = Reckoning(content="", parent_reckoning_id=cid, type=type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
+            session.add(comment)
+            session.commit()
+        return rx.redirect(f"/comments/{cid}")
+    
+
+class YourDraftsPageState(ReckoningsPageState):
+
+    def close_complete_modal(self):
+        yield self.get_reckonings()
+
+    def delete_reckoning(self, reckoning):
+        """Delete a reckoning."""
+        with rx.session() as session:
+            session.exec(delete(Reckoning).where(Reckoning.id == reckoning))
+            session.commit()
+        return self.get_reckonings()
+    
+    def set_search(self, search):
+        """Set the search query."""
+        self.search = search
+        return self.get_reckonings()
+    
+    def on_load(self):
+        self.page_type = 1
+        self.check_login()
+        self.get_reckonings()
+
+    def get_reckonings(self):
+        """Get reckonings of type concept for this user from the database."""
+        with rx.session() as session:
+            if self.search:
+                self.reckonings = session.exec(
+                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content.contains(self.search), _and(Reckoning.user_id == self.user.id, Reckoning.type == ReckoningTypes.draft)))
+                ).unique().all()
+            else:
+                self.reckonings = session.exec(select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.type == ReckoningTypes.draft, Reckoning.user_id == self.user.id))
+                ).unique().all()
+            for r in self.reckonings:
+                r.compute_tallies(self.user.id)
+
+class NewConceptsPageState(ReckoningsPageState):
+
+    def close_complete_modal(self):
+        yield self.get_reckonings()
+
+    def delete_reckoning(self, reckoning):
+        """Delete a reckoning."""
+        with rx.session() as session:
+            session.exec(delete(Reckoning).where(Reckoning.id == reckoning))
+            session.commit()
+        return self.get_reckonings()
+    
+    def set_search(self, search):
+        """Set the search query."""
+        self.search = search
+        return self.get_reckonings()
+    
+    def on_load(self):
+        self.page_type = 2
+        self.check_login()
+        self.get_reckonings()
+
+    def get_reckonings(self):
+        """Get reckonings of type concept for this user from the database."""
+        with rx.session() as session:
+            if self.search:
+                self.reckonings = session.exec(
+                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content.contains(self.search), _or(Reckoning.type == ReckoningTypes.concept, Reckoning.type == ReckoningTypes.draft)))
+                ).all()
+            else:
+                self.reckonings = session.exec(
+                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_or(Reckoning.type == ReckoningTypes.concept, Reckoning.type == ReckoningTypes.draft))
+                ).all()
+            
+            for r in self.reckonings:
+                r.compute_tallies(self.user.id)
+
+class TrendingConceptsPageState(ReckoningsPageState):
+
+    def close_complete_modal(self):
+        yield self.get_reckonings()
+
+    def delete_reckoning(self, reckoning):
+        """Delete a reckoning."""
+        with rx.session() as session:
+            session.exec(delete(Reckoning).where(Reckoning.id == reckoning))
+            session.commit()
+        return self.get_reckonings()
+    
+    def set_search(self, search):
+        """Set the search query."""
+        self.search = search
+        return self.get_reckonings()
+    
+    def on_load(self):
+        self.page_type = 3
+        self.check_login()
+        self.get_reckonings()
+
+
+    def get_reckonings(self):
+        """Get reckonings of type concept for this user from the database."""
+        with rx.session() as session:
+            if self.search:
+                self.reckonings = session.exec(
+                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content.contains(self.search), Reckoning.type == ReckoningTypes.concept))
+                ).unique().all()
+            else:
+
+                # Create an alias for child reckonings to differentiate from parent reckonings in the self-join
+                ChildReckoning = aliased(Reckoning)
+
+                # Subquery to count the number of "support" type child reckonings for each parent
+                supports_count_subquery = (
+                    select(
+                        ChildReckoning.parent_reckoning_id,
+                        func.count(ChildReckoning.id).label('supports_count')
+                    )
+                    .where(ChildReckoning.type == ReckoningTypes.support)
+                    .group_by(ChildReckoning.parent_reckoning_id)
+                    .subquery()
+                )
+
+                # Main query to select reckonings and the count of their supports, ordered by the count of supports
+                statement = (
+                    select(
+                        Reckoning,
+                        supports_count_subquery.c.supports_count
+                    )
+                    .outerjoin(supports_count_subquery, Reckoning.id == supports_count_subquery.c.parent_reckoning_id)
+                    .where(Reckoning.type == ReckoningTypes.concept)  # Adjust as needed to filter by specific reckoning types
+                    .order_by(supports_count_subquery.c.supports_count.asc(), Reckoning.created_at.desc())
+                )
+                
+                # Execute the query and fetch all results
+                results = session.exec(statement).unique().all()
+
+                # Extract Reckoning objects from the results
+                self.reckonings = [result[0] for result in results]
+
+            for r in self.reckonings:
+                r.compute_tallies(self.user.id)
+
+class YourReckoningsPageState(ReckoningsPageState):
+
+    def close_complete_modal(self):
+        yield self.get_reckonings()
+
+    def delete_reckoning(self, reckoning):
+        """Delete a reckoning."""
+        with rx.session() as session:
+            session.exec(delete(Reckoning).where(Reckoning.id == reckoning))
+            session.commit()
+        return self.get_reckonings()
+    
+    def set_search(self, search):
+        """Set the search query."""
+        self.search = search
+        return self.get_reckonings()
+    
+    def on_load(self):
+        self.page_type = 4
+        self.check_login()
+        self.get_reckonings()
+
+    """The state for the your reckonings page."""
+    def get_reckonings(self):
+        """Get reckonings of type concept for this user from the database."""
+        with rx.session() as session:
+            if self.search:
+                self.reckonings = session.exec(
+                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content.contains(self.search), _and(Reckoning.content != "", _and(Reckoning.user_id == self.user.id, Reckoning.type != ReckoningTypes.draft))))
+                ).unique().all()
+            else:
+                self.reckonings = session.exec(select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content != "", _and(Reckoning.user_id == self.user.id, Reckoning.type != ReckoningTypes.draft)))
+                ).unique().all()
+            for r in self.reckonings:
+                r.compute_tallies(self.user.id)
+
+
+class ComparePageState(ReckoningsPageState):
+
+    def close_complete_modal(self):
+        yield self.get_reckonings()
+
+    def delete_reckoning(self, reckoning):
+        """Delete a reckoning."""
+        with rx.session() as session:
+            session.exec(delete(Reckoning).where(Reckoning.id == reckoning))
+            session.commit()
+        return self.get_reckonings()
+
+    def set_search(self, search):
+        """Set the search query."""
+        self.search = search
+        return self.get_reckonings()
+    
+    def on_load(self):
+        self.page_type = 5
+        self.check_login()
+        self.get_reckonings()
+
+    @rx.var
+    def reckoning_id(self) -> str:
+        return self.router.page.params.get('rid', 'no rid')
+    
+    def get_reckonings(self):
+        """Get reckonings of type concept for this user from the database."""
+        primary_keys = []
+        with rx.session() as session:
+            session.expire_on_commit = False
+            concept = self.reckonings = session.exec(
+                select(Reckoning)
+                .where(
+                    Reckoning.id == self.reckoning_id
+                )
+            ).one_or_none()
+            # print(concept.content)
+            primary_keys, results = find_similar_texts_with_join(concept.id, 0.75, 10)
+            # print(primary_keys)
+            # print(results)
+        
+            if self.search:
+                # Assuming `primary_keys` is your list of IDs to filter by
+                self.reckonings = session.exec(
+                    select(Reckoning)
+                    .where(
+                        _and(
+                            Reckoning.content.contains(self.search),
+                            Reckoning.id.in_(primary_keys)  # Filtering by a list of primary keys
+                        )
+                    )
+                ).all()
+            else:
+                self.reckonings = session.exec(
+                    select(Reckoning)
+                    .where(
+                            Reckoning.id.in_(primary_keys)  # Filtering by a list of primary keys
+                    )
+                ).all()
+
+            # Creating a mapping of ID to reckoning for fast lookup
+            id_to_reckoning = {reckoning.id: reckoning for reckoning in self.reckonings}
+
+            # Ordering the reckonings in Python according to the order of IDs in primary_keys
+            ordered_reckonings = [id_to_reckoning[id] for id in primary_keys if id in id_to_reckoning]
+
+            # Now ordered_reckonings contains your objects in the order of primary_keys
+            self.reckonings = ordered_reckonings
+
+            results_dict = dict(results)
+
+            for r in self.reckonings:
+                r.similarity = round(((results_dict[r.id]-1)*-1),2) #((round(results_dict[r.id] - 1), 2) * -1)
+                r.compute_tallies(self.user.id)
+
+class ConceptPageState(ReckoningsPageState):
+    """The state for the comment page."""
+    def close_complete_modal(self):
+        yield self.get_reckonings()
+
+    def delete_reckoning(self, reckoning):
+        """Delete a reckoning."""
+        with rx.session() as session:
+            session.exec(delete(Reckoning).where(Reckoning.id == reckoning))
+            session.commit()
+        return self.get_reckonings()
+
+    def set_search(self, search):
+        """Set the search query."""
+        self.search = search
+        return self.get_reckonings()
+    
+    def on_load(self):
+        self.page_type = 6
+        self.check_login()
+        self.get_reckonings()
+
+    def get_reckonings(self):
+        """Get reckoning with rid of cid from the database."""
+        with rx.session() as session:
+                self.reckonings = [session.exec(select(Reckoning).where(Reckoning.id == self.concept_id)).first()]
+                for r in self.reckonings:
+                    r.compute_tallies(self.user.id)
+
+    @rx.var
+    def concept_id(self) -> str:
+        return self.router.page.params.get('rid', 'no rid')
+    
+
+class CommentsPageState(ReckoningsPageState):
+    """The state for the comments page."""
+    parent: Reckoning = None
+
+    def close_complete_modal(self):
+        yield self.get_reckonings()
+
+    def delete_reckoning(self, rid):
+        """Delete a reckoning."""
+        with rx.session() as session:
+            session.exec(delete(Reckoning).where(Reckoning.id == rid))
+            session.commit()
+        return self.get_reckonings()
+    
+    def set_search(self, search):
+        """Set the search query."""
+        self.search = search
+        return self.get_reckonings()
+    
+    def on_load(self):
+        self.page_type = 7
+        self.check_login()
+        self.get_reckonings()
+
+    def get_reckonings(self):
+        """Get comments for this reckoning from the database."""
+        with rx.session() as session:
+            self.parent = session.exec(select(Reckoning).where(Reckoning.id == self.reckoning_id)).first()
+
+            if self.search:
+                self.reckonings = session.exec(
+                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content.contains(self.search), _and(Reckoning.content != "", Reckoning.parent_reckoning_id == self.reckoning_id)))
+                ).unique().all()
+            else:
+                self.reckonings = session.exec(select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content != "", Reckoning.parent_reckoning_id == self.reckoning_id))
+                ).unique().all()
+
+            for r in self.reckonings:
+                r.compute_tallies(self.user.id)
+
+    @rx.var
+    def reckoning_id(self) -> str:
+        return self.router.page.params.get('rid', 'no rid')
+    
+
+def parent_reckoning(state):
+    """The parent reckoning component."""
+    return rx.grid(
+        rx.input(on_change=state.set_search, placeholder="Search comments", **input_style_focus),
+        rx.grid(
+            rx.cond(
+                state.parent.parent_reckoning_id,
+                view_parent_button(
+                    on_click=rx.redirect(f"/comments/{state.parent.parent_reckoning_id}"),
+                    height="15%",
+                    width="15%",
+                ),
+                view_parent_button(
+                    on_click=rx.redirect(f"/concept/{state.parent.id}"),
+                    height="15%",
+                    width="15%",
+                ),
+            ),
+            rx.text_area(default_value=state.parent.content, is_read_only=True, width="98%", height="98%", overflow="hidden", background_color="gray.50", border_radius="10px", padding="1em"),
+            support_comment_button(
+                height="15%",
+                width="15%",
+                on_click=state.new_comment(state.parent.content, ReckoningTypes.support, state.reckoning_id)
+            ),
+            poo_comment_button(
+                height="15%",
+                width="15%",
+                on_click=state.new_comment(state.parent.content, ReckoningTypes.point_of_order, state.reckoning_id)
+            ),
+            detract_from_comment_button(
+                height="15%",
+                width="15%",
+                on_click=state.new_comment(state.parent.content, ReckoningTypes.detract, state.reckoning_id)
+            ),
+            grid_template_columns="1fr 10fr 1fr 1fr 1fr",
+            py=2,
+            px=2,
+            border_bottom="1px solid #ededed",
+            **control_panel_text_style,
+        ),
+        grid_template_columns="1fr",
+        py=2,
+        px=2,
+        border_bottom="1px solid #ededed",
+        **control_panel_text_style,
+    )
+
+def search(state):
+    """The search component of the navbar."""
+    return rx.hstack(
+        rx.input(on_change=state.set_search, placeholder="Search reckonings", **input_style),
+        justify="space-between",
+        p=4,
+        # border_bottom="1px solid #ededed",
+    )
+
+def render_comment(state, c: Reckoning):
+    """Display for an individual comment in the feed."""
+    return rx.grid(
+        rx.grid(
+            rx.text(c.content, width="98%", height="98%", overflow="hidden", background_color="gray.50", border_radius="10px", padding="1em"),
+            rx.match(
+                c.type,
+                (ReckoningTypes.support, support_comment_button(height="15%", width="15%")),
+                (ReckoningTypes.detract, detract_from_comment_button(height="15%", width="15%")),
+                (ReckoningTypes.point_of_order, poo_comment_button(height="15%", width="15%")),
+            ),
+            grid_template_columns="12fr 1fr",
+            py=1,
+            px=1,
+            gap=1,
+            **control_panel_text_style,
+        ),
+        rx.grid (
+                support_comment_button(
+                    height="15%",
+                    width="15%",
+                    on_click=state.new_comment(c.content, ReckoningTypes.support, c.parent_reckoning_id)
+                ),
+                rx.text(c.supports),
+                poo_comment_button(
+                    height="15%",
+                    width="15%",
+                    on_click=state.new_comment(c.content, ReckoningTypes.point_of_order, c.parent_reckoning_id)
+                ),
+                rx.text(c.points_of_order),
+                    detract_from_comment_button(
+                    height="15%",
+                    width="15%",
+                    on_click=state.new_comment(c.content, ReckoningTypes.detract, c.parent_reckoning_id)
+                ),
+                rx.text(c.detracts),
+                rx.spacer(),
+                feedback_button(
+                    height="15%",
+                    width="15%",
+                    on_click=state.provide_feedback_on_reckoning(c.id),
+                ),
+                rx.spacer(),
+                rx.cond(
+                    ((state.user.role > 0) | ((c.user_id == state.user.id) & (c.supports == 0) & (c.detracts == 0) & (c.points_of_order == 0))),
+                    edit_button(
+                        height="15%",
+                        width="15%",
+                        on_click=state.edit_comment(c.parent_reckoning_id, c.type, c.id, c.content)
+                    ),
+                    rx.spacer(),
+                ),
+                rx.cond(
+                    ((state.user.role > 0) | ((c.user_id == state.user.id) & (c.supports == 0) & (c.detracts == 0) & (c.points_of_order == 0))),
+                    delete_button(
+                        height="15%",
+                        width="15%",
+                        on_click=state.delete_reckoning(c.id),
+                    ),
+                    rx.spacer(),
+                ),
+                rx.cond(
+                    (state.page_type == 4),
+                    view_concept_button(
+                        height="15%",
+                        width="15%",
+                        on_click=rx.redirect(f"/comments/{c.parent_reckoning_id}"),
+                    ),
+                    view_comments_button(
+                        height="15%",
+                        width="15%",
+                        on_click=state.view_comments(c.id),
+                    ),
+                ),
+                grid_template_columns="1fr 1fr 1fr 1fr 1fr 1fr 2fr 1fr 2fr 1fr 1fr 1fr",
+                py=1,
+                px=1,
+                gap=1,
+                #auto_columns="auto auto auto 5fr auto auto auto auto auto auto auto",
+                **control_panel_text_style,
+            ),
+        border="1px solid #ededed",
+        border_radius="10px",
+        padding=2,
+        gap=2,
+        mt=2,
+    )
+
+def render_concept(state, c: Reckoning):
+    """Display for an individual concept in the feed."""
+    return rx.grid(
+                rx.text( c.content, width="98%", height="98%", overflow="hidden", background_color="gray.50", border_radius="10px", padding="1em"),
+                rx.grid(
+                    rx.cond(
+                        (c.user_vote_history == 0), #& (c.user_id != state.user.id),
+                        rx.fragment(
+                            unsupported_concept_button (
+                                height="15%",
+                                width="15%",
+                                on_click=state.vote_on_concept(c.id, ReckoningTypes.support)
+                            ),
+                            rx.text(c.supports),
+                            undetracted_concept_button(
+                                height="15%",
+                                width="15%",
+                                on_click=state.vote_on_concept(c.id, ReckoningTypes.detract)
+                            ),
+                            rx.text(c.detracts),
+                        ),
+                        None
+                    ),
+                    rx.cond(
+                        (c.user_vote_history == 1), #| (c.user_id == state.user.id),
+                        rx.fragment(
+                            support_concept_button (
+                                height="15%",
+                                width="15%",
+                            ),
+                            rx.text(c.supports),
+                            undetracted_concept_button (
+                                height="15%",
+                                width="15%",
+                            ),
+                            rx.text(c.detracts),
+                        ),
+                        None
+                    ),
+                    rx.cond(
+                        (c.user_vote_history == 2),
+                        rx.fragment(
+                            unsupported_concept_button(
+                                height="15%",
+                                width="15%",
+                            ),
+                            rx.text(c.supports),
+                            detract_from_concept_button(
+                                height="15%",
+                                width="15%",
+                            ),
+                            rx.text(c.detracts),
+                        ),
+                        None
+                    ),
+                    rx.spacer(),
+                    feedback_button(
+                        height="15%",
+                        width="15%",
+                        on_click=state.provide_feedback_on_reckoning(c.id),
+                    ),
+                    rx.spacer(),
+                    rx.cond(
+                        (state.page_type == 5),
+                        rx.text(c.similarity),
+                        rx.spacer(),
+                    ),
+                    rx.spacer(),
+                    rx.cond(
+                        (state.page_type == 1),
+                        edit_button(
+                            height="15%",
+                            width="15%",
+                            on_click=state.edit_concept(c.id),
+                        ),
+                       rx.spacer(), 
+                    ),
+                    rx.cond(
+                        (state.page_type == 1),
+                        delete_button(
+                            height="15%",
+                            width="15%",
+                            on_click=state.delete_reckoning(c.id),
+                        ),
+                        rx.spacer(),
+                    ),
+                    compare_concepts_button(
+                        height="15%",
+                        width="15%",
+                        on_click=state.compare_concepts(c.id),
+                    ),
+                    rx.cond(
+                        (state.page_type == 4),
+                        view_concept_button(
+                            height="15%",
+                            width="15%",
+                            on_click=rx.redirect(f"/comment/{c.id}"),
+                        ),
+                        view_comments_button(
+                            height="15%",
+                            width="15%",
+                            on_click=state.view_comments(c.id),
+                        ),
+                    ),
+                    grid_template_columns="1fr 1fr 1fr 1fr 2fr 1fr 2fr 1fr 2fr 1fr 1fr 1fr 1fr",
+                    py=1,
+                    px=1,
+                    gap=1,
+                    **control_panel_text_style,
+            ),
+            border="1px solid #ededed",
+            border_radius="10px",
+            padding=2,
+            gap=4,
+            mt=2
+        )
+
+def reckoning(state, r: Reckoning):
+    return rx.cond(
+        ((r.type == ReckoningTypes.concept) | (r.type == ReckoningTypes.draft)),
+        render_concept(state, r),
+        render_comment(state, r),
+    )
+
+def page(state, *args, **kwargs):
+    return container(
+        *args,
+        rx.grid(
+            rx.box(
+                rx.foreach(
+                    state.reckonings,
+                    lambda r: reckoning(state, r),
+                ),
+                h="100%",
+            ),
+            grid_template_columns="1fr",
+            h="100vh",
+            gap=4,
+        ),
+        comment_modal(on_close=state.close_modal, on_close_complete=state.close_complete_modal),
+        concept_modal(on_close=state.close_modal, on_close_complete=state.close_complete_modal),
+        feedback_modal(reckoning_feedback_options),
+        max_width="1300px",
+        **kwargs,
+    )
+
+
+@rx.page(route="/your_reckonings", on_load=YourReckoningsPageState.on_load, **page_params)
+def your_reckonings():
+    """The your reckonings page."""
+    return page(YourReckoningsPageState, navbar(search(YourReckoningsPageState)))
+
+@rx.page(route="/trending_concepts", on_load=TrendingConceptsPageState.on_load, **page_params)
+def trending_concepts():
+    """The trending concepts page."""
+    return page(TrendingConceptsPageState, navbar(search(TrendingConceptsPageState)))
+
+@rx.page(route="/new_concepts", on_load=NewConceptsPageState.on_load, **page_params)
+def new_concepts():
+    """The new concepts page."""
+    return page(NewConceptsPageState, navbar(search(NewConceptsPageState)))
+
+@rx.page(route="/your_drafts", on_load=YourDraftsPageState.on_load, **page_params)
+def your_drafts():
+    """The your drafts page."""
+    return page(YourDraftsPageState, navbar(search(YourDraftsPageState)))
+
+@rx.page(route="/compare/[rid]", on_load=ComparePageState.on_load, **page_params)
+def compare():
+    """The compare page."""
+    return page(ComparePageState, navbar(search(ComparePageState)))
+
+@rx.page(route="/concept/[rid]", on_load=ConceptPageState.on_load, **page_params)
+def concept():
+    """The concept page."""
+    return page(ConceptPageState, navbar())
+
+@rx.page(route="/comments/[rid]", on_load=CommentsPageState.on_load, **page_params)
+def comments():
+    """The comments page."""
+    return page(CommentsPageState, navbar(parent_reckoning(CommentsPageState)))

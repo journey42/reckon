@@ -1,8 +1,8 @@
 """Navbar component for the app."""
 import reflex as rx
 from reckon.styles import control_panel_text_style
-from .buttons import new_concepts_button, trending_concepts_button, your_reckonings_button, logo_button
-from .general_feedback_modal import general_feedback_modal, GeneralFeedbackModalState
+from .buttons import trending_concepts_button, your_reckonings_button, your_drafts_button, logo_button
+from reckon.components.feedback_modal import feedback_modal, FeedbackModalState, general_feedback_options
 from reckon.state.base import AppState, UserTypes
 
 def user_menu() -> rx.Component:
@@ -20,7 +20,7 @@ def user_menu() -> rx.Component:
                     rx.menu_item("Profile"),
                     href="/profile"
                 ),
-                rx.menu_item("Feedback", on_click=GeneralFeedbackModalState.visible),
+                rx.menu_item("Feedback", on_click=FeedbackModalState.visible),
                 rx.link(
                     rx.menu_item("About"),
                     href="/about"
@@ -87,8 +87,9 @@ def app_logo() -> rx.Component:
         logo_button(),
         trending_concepts_button(),
         your_reckonings_button(),
+        your_drafts_button(),
         rx.spacer(),
-        grid_template_columns="0.25fr 1fr 1fr 8fr",
+        grid_template_columns="0.25fr 1fr 1fr 1fr 8fr",
         py=2,
         px=2,
         gap=2,
@@ -115,7 +116,7 @@ def navbar(*args, **kwargs) -> rx.Component:
                 app_logo(),
                 rx.spacer(),
                 user_menu(),
-                general_feedback_modal(),
+                feedback_modal(options=general_feedback_options, on_close=FeedbackModalState.close),
                 grid_template_columns="10fr 3fr 1fr",
                 py=2,
                 px=2,

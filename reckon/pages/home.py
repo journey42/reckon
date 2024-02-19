@@ -1,12 +1,13 @@
 """The home page."""
 import reflex as rx
 from datetime import datetime
+from sqlalchemy import text
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
-from reckon.styles import button_style, page_params
+from reckon.styles import page_params, input_style
+from reckon.components.buttons import submit_button
 from ..components import container
 from ..components import navbar
 from reckon.utils.db import insert_text_with_embedding
-#from sqlalchemy import text
 
 class HomePageState(AppState):
     concept: str
@@ -17,11 +18,11 @@ class HomePageState(AppState):
             return rx.window_alert("Please log in to post.")
         with rx.session() as session:
             session.expire_on_commit = False
-            # session.execute(text("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;"))
+            #session.execute(text("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;"))
             concept = Reckoning(
                 user_id=self.user.id,
                 content=self.concept,
-                type=ReckoningTypes.concept,
+                type=ReckoningTypes.draft,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
             )
@@ -39,16 +40,17 @@ def composer():
             rx.text_area(
                 w="100%",
                 h="50%",
-                background_color="gray.50", border_radius="10px", padding="1em",
+                #background_color="gray.50", border_radius="10px", padding="1em",
                 placeholder="What do you Reckon?",
-                _focus={"border": 0, "outline": 0, "boxShadow": "none"},
+                #_focus={"border": 0, "outline": 0, "boxShadow": "none"},
                 on_blur=HomePageState.set_concept,
+                **input_style,
             ),
             rx.hstack(
-                rx.button(
-                    "Submit",
-                    on_click=HomePageState.post_concept,
-                    **button_style
+                submit_button(
+                    height="5%",
+                    width="5%",
+                    on_click=HomePageState.post_concept
                 ),
                 justify_content="flex-end",
                 border_top="1px solid #ededed",

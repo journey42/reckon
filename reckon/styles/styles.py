@@ -1,6 +1,6 @@
 """Reckon Styles"""
 
-favicon="/favicon.ico"
+favicon="/favicon.svg"
 
 reckon_green="#16e073"
 reckon_dark_green="#01cc5d"
@@ -56,8 +56,14 @@ info_text_style = dict (
     h="100%",
 )
 
+meta = [
+    {"name":"viewport", "content":"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"}
+]
+
 page_params = dict(
     title="Reckon",
     description="Speak Together",
     image=favicon,
+    meta=meta
 )
+

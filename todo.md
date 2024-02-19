@@ -1,16 +1,28 @@
-stats
-paging
 feedback types to int?
-email hookup
 
-enabled check
-feedback dialog
-abandon bad post
+staging to production
+documentation
+
+stats
+paging - trending (20% of all results sorted by popularity), history, date search
+email hookup azure commuication services (identify verification?)
+account enabled check
 static pages
+localization
 
-gradient display on firefox mobile.
-lock zoom on mobile?
-collapse grid on button hide
-text area not expandable firefox mobile
-submit button crunched
-stats folds vertically
+*zoom lock on mobile?
+*reckoning feedback hookup
+
+*compare controls specialization add similarity for concepts
+*draft controls specialization (publish draft) edit, delete for concepts
+your_reckoning controls specialization (view) options for concepts and comments
+
+
+
+resize vm disk
+
+transparency on favicon
+
+refactor reckonings state classes
+navbar does not remain sticky
+prohibit hard deletes - replace comment

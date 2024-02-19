@@ -46,18 +46,6 @@ def logo_button(*args, **kwargs) -> rx.Component:
             href="/",
         )
 
-def new_concepts_button(*args, **kwargs) -> rx.Component:
-    return rx.link (
-        rx.tooltip(
-            rx.button(
-                rx.image(src="/new_concepts.svg", width="auto", height="auto"),
-                **large_button_params,
-                **kwargs,
-            ),
-            label="New Concepts"
-        ),
-        href="/new_concepts",
-    )
 
 def trending_concepts_button(*args, **kwargs) -> rx.Component:
     return rx.link (
@@ -85,6 +73,33 @@ def your_reckonings_button(*args, **kwargs) -> rx.Component:
         href="/your_reckonings",
     )
 
+def your_drafts_button(*args, **kwargs) -> rx.Component:
+    return rx.link (
+        rx.tooltip(
+            rx.button(
+                rx.image(src="/your_drafts.svg", width="auto", height="auto"),
+                **large_button_params,
+                **kwargs,
+            ),
+            label="Your Drafts"
+        ),
+        href="/your_drafts",
+    )
+
+def submit_button(*args, **kwargs) -> rx.Component:
+    return rx.button(
+        rx.image(src="/submit.svg", width="auto", height="auto"),
+        **medium_button_params,
+        **kwargs,
+    )
+
+def close_button(*args, **kwargs) -> rx.Component:
+    return rx.button(
+        rx.image(src="/close.svg", width="auto", height="auto"),
+        **medium_button_params,
+        **kwargs,
+    )
+
 def view_parent_button(*args, **kwargs) -> rx.Component:
     return rx.tooltip(rx.button(
         rx.image(src="/view_parent.svg", width="auto", height="auto"),
@@ -92,12 +107,19 @@ def view_parent_button(*args, **kwargs) -> rx.Component:
         **kwargs,
     ), label="View Parent")
 
-def view_children_button(*args, **kwargs) -> rx.Component:
+def view_comments_button(*args, **kwargs) -> rx.Component:
     return rx.tooltip(rx.button(
-        rx.image(src="/view_children.svg", width="auto", height="auto"),
+        rx.image(src="/view_comments.svg", width="auto", height="auto"),
         **medium_button_params,
         **kwargs,
-    ), label="View Children")
+    ), label="View Comments")
+
+def view_concept_button(*args, **kwargs) -> rx.Component:
+    return rx.tooltip(rx.button(
+        rx.image(src="/view_concept.svg", width="auto", height="auto"),
+        **medium_button_params,
+        **kwargs,
+    ), label="View Concept")
 
 def new_comment_button(*args, **kwargs) -> rx.Component:
     return rx.tooltip(rx.button(
@@ -154,20 +176,6 @@ def unsupported_concept_button(*args, **kwargs) -> rx.Component:
         **medium_button_params,
         **kwargs,
     ), label="Support")
-
-# def view_children_button(*args, **kwargs) -> rx.Component:
-#     return rx.tooltip(rx.button(
-#         rx.image(src="/comment_on_concept.svg", width="auto", height="auto"),
-#         **medium_button_params,
-#         **kwargs,
-#     ), label="Comment")
-
-def provide_feedback_on_concept_button(*args, **kwargs) -> rx.Component:
-    return rx.tooltip(rx.button(
-        rx.image(src="/feedback.svg", width="auto", height="auto"),
-        **medium_button_params,
-        **kwargs,
-    ), label="Feedback")
 
 def detract_from_concept_button(*args, **kwargs) -> rx.Component:
     return rx.tooltip(rx.button(

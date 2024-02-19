@@ -24,7 +24,7 @@ commands = [
         id SERIAL PRIMARY KEY,
         reckoning_id INTEGER NOT NULL,
         embedding VECTOR(384), -- Adjust the dimension based on your model's output
-        FOREIGN KEY (reckoning_id) REFERENCES reckoning(id)
+        FOREIGN KEY (reckoning_id) REFERENCES reckoning(id) ON DELETE CASCADE
     );
     """
 ]

@@ -65,6 +65,7 @@ class ReckoningTypes:
     support: int = 1
     detract: int = 2
     point_of_order: int = 3
+    draft: int = 4
 
 class Reckoning(rx.Model, table=True):
     """A table of Reckonings."""
@@ -142,8 +143,17 @@ class Feedback(rx.Model, table=True):
     content: str = Field()
     type: str = Field()
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+    subject_reckoning_id: Optional[int] = Field(
+        default=None,
+        nullable=True,
+        foreign_key="reckoning.id"
+    )
     
-    user_id: int = Field(foreign_key="user.id", nullable=True)
+    user_id: int = Field(
+        foreign_key="user.id",
+        nullable=True
+    )
 
     user: Optional["User"] = Relationship(
         back_populates="feedback"
