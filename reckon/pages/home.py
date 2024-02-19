@@ -53,14 +53,14 @@ def composer():
                     on_click=HomePageState.post_concept
                 ),
                 justify_content="flex-end",
-                border_top="1px solid #ededed",
+                #border_top="1px solid #ededed",
                 px=4,
                 py=2,
             ),
         ),
         p=4,
         grid_template_columns="1fr",
-        border_bottom="1px solid #ededed",
+        #border_bottom="1px solid #ededed",
     )
 
 
