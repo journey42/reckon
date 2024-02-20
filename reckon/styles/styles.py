@@ -35,6 +35,14 @@ input_style_focus = dict(
     _focus={"borderColor": "#000000", "boxShadowColor": "#000000"}
 )
 
+read_only_text_style = dict(
+    is_read_only=True,
+    overflow="hidden",
+    background_color="gray.50",
+    border_radius="10px",
+    padding="1em"
+)
+
 form_box_style = dict(
     bg="white",
     border="1px solid #eaeaea",

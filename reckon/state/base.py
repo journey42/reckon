@@ -100,15 +100,38 @@ class Reckoning(rx.Model, table=True):
     )
 
     # Cache variables, not stored in the database
-    supports_detracts_ratio: Optional[str] = None
+    # supports_detracts_ratio: Optional[str] = None
     supports: Optional[int] = 0
     detracts: Optional[int] = 0
     points_of_order: Optional[int] = 0
+    total_comments: Optional[int] = 0
     user_vote_history: Optional[int] = 0
     similarity: Optional[float] = 0.0
 
+    def tally_children(self, reckoning):
+        """
+        Recursively counts the total number of child reckonings for a given reckoning instance.
+        
+        Parameters:
+        - reckoning: Instance of Reckoning
+        
+        Returns:
+        - int: Total number of children and sub-children reckonings
+        """
+        # Base case: If there are no child reckonings, return 0
+        if not reckoning.child_reckonings:
+            return 0
+
+        # Recursive case: For each child, count itself plus any of its children
+        total_children = 0
+        for child in reckoning.child_reckonings:
+            # Count the child itself plus any of its children
+            if child.content != "":
+                total_children += 1 + self.tally_children(child)
+
+        return total_children
+
     def compute_tallies(self, uid: int) -> int:
-        """Recursively counts the number of child reckonings of a given type."""
         for child in self.child_reckonings:
             if child.type == ReckoningTypes.support:
                 self.supports+=1
@@ -123,18 +146,19 @@ class Reckoning(rx.Model, table=True):
                 if child.user_id == uid:
                     self.user_vote_history = ReckoningTypes.point_of_order
         
-        # Calculate GCD for simplifying the ratio, avoid division by zero
-        if self.detracts != 0 and self.supports != 0:
-            ratio_gcd = gcd(self.supports, self.detracts)
-            simplified_supports = self.supports // ratio_gcd
-            simplified_detracts = self.detracts // ratio_gcd
-            ratio = f"{simplified_supports}:{simplified_detracts}"
-        elif self.supports == 0:
-            ratio = "0:1" if self.detracts != 0 else "0:0"  # Handle case where supports are zero
-        else:
-            ratio = "N/A"  # If detracts are zero, we can't form a meaningful ratio
+        self.total_comments = self.tally_children(self)
+        # # Calculate GCD for simplifying the ratio, avoid division by zero
+        # if self.detracts != 0 and self.supports != 0:
+        #     ratio_gcd = gcd(self.supports, self.detracts)
+        #     simplified_supports = self.supports // ratio_gcd
+        #     simplified_detracts = self.detracts // ratio_gcd
+        #     ratio = f"{simplified_supports}:{simplified_detracts}"
+        # elif self.supports == 0:
+        #     ratio = "0:1" if self.detracts != 0 else "0:0"  # Handle case where supports are zero
+        # else:
+        #     ratio = "N/A"  # If detracts are zero, we can't form a meaningful ratio
 
-        self.supports_detracts_ratio = f"{self.supports} {ratio} {self.detracts}"
+        # self.supports_detracts_ratio = f"{self.supports} {ratio} {self.detracts}"
 
   
 class Feedback(rx.Model, table=True):

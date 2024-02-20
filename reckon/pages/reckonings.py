@@ -6,10 +6,10 @@ from sqlalchemy.orm import aliased
 from sqlalchemy import and_ as _and
 from sqlalchemy import or_ as _or
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
-from reckon.styles import input_style, page_params, control_panel_text_style, input_style_focus
+from reckon.styles import input_style, page_params, control_panel_text_style, input_style_focus, read_only_text_style
 from ..components import container
 from ..components import navbar
-from reckon.components.buttons import support_concept_button, detract_from_concept_button, feedback_button, view_comments_button, compare_concepts_button, delete_button, support_comment_button, detract_from_comment_button, poo_comment_button, no_feedback_button, feedback_button, unsupported_concept_button, undetracted_concept_button, edit_button, view_concept_button, view_parent_button
+from reckon.components.buttons import support_concept_button, detract_from_concept_button, feedback_button, view_comments_button, compare_concepts_button, delete_button, support_comment_button, detract_from_comment_button, poo_comment_button, no_feedback_button, feedback_button, unsupported_concept_button, undetracted_concept_button, edit_button, view_concept_button, view_parent_comment_button
 from reckon.components.feedback_modal import feedback_modal, FeedbackModalState, reckoning_feedback_options
 from reckon.components.concept_modal import concept_modal, ConceptModalState
 from reckon.components.comment_modal import comment_modal, CommentModalState
@@ -395,18 +395,18 @@ def parent_reckoning(state):
         rx.grid(
             rx.cond(
                 state.parent.parent_reckoning_id,
-                view_parent_button(
-                    on_click=rx.redirect(f"/comments/{state.parent.parent_reckoning_id}"),
+                view_parent_comment_button(
                     height="15%",
                     width="15%",
+                    on_click=rx.redirect(f"/comments/{state.parent.parent_reckoning_id}"),
                 ),
-                view_parent_button(
-                    on_click=rx.redirect(f"/concept/{state.parent.id}"),
+                compare_concepts_button(
+                    on_click=rx.redirect(f"/compare/{state.parent.id}"),
                     height="15%",
                     width="15%",
                 ),
             ),
-            rx.text_area(default_value=state.parent.content, is_read_only=True, width="98%", height="98%", overflow="hidden", background_color="gray.50", border_radius="10px", padding="1em"),
+            rx.text_area(default_value=state.parent.content, **read_only_text_style),
             support_comment_button(
                 height="15%",
                 width="15%",
@@ -425,7 +425,8 @@ def parent_reckoning(state):
             grid_template_columns="1fr 10fr 1fr 1fr 1fr",
             py=2,
             px=2,
-            border_bottom="1px solid #ededed",
+            gap=1,
+            # border_bottom="1px solid #ededed",
             **control_panel_text_style,
         ),
         grid_template_columns="1fr",
@@ -447,8 +448,25 @@ def search(state):
 def render_comment(state, c: Reckoning):
     """Display for an individual comment in the feed."""
     return rx.grid(
+        rx.cond(
+            (state.page_type == 4),
+            rx.grid(
+                rx.text(c.parent_reckoning.content, **read_only_text_style),
+                view_parent_comment_button(
+                    height="15%",
+                    width="15%",
+                    on_click=rx.redirect(f"/comments/{c.parent_reckoning_id}"),
+                ),
+                grid_template_columns="12fr 1fr",
+                py=1,
+                px=1,
+                gap=1,
+                **control_panel_text_style,
+            ),
+            None
+        ),
         rx.grid(
-            rx.text(c.content, width="98%", height="98%", overflow="hidden", background_color="gray.50", border_radius="10px", padding="1em"),
+            rx.text(c.content, **read_only_text_style),
             rx.match(
                 c.type,
                 (ReckoningTypes.support, support_comment_button(height="15%", width="15%")),
@@ -462,31 +480,6 @@ def render_comment(state, c: Reckoning):
             **control_panel_text_style,
         ),
         rx.grid (
-                support_comment_button(
-                    height="15%",
-                    width="15%",
-                    on_click=state.new_comment(c.content, ReckoningTypes.support, c.parent_reckoning_id)
-                ),
-                rx.text(c.supports),
-                poo_comment_button(
-                    height="15%",
-                    width="15%",
-                    on_click=state.new_comment(c.content, ReckoningTypes.point_of_order, c.parent_reckoning_id)
-                ),
-                rx.text(c.points_of_order),
-                    detract_from_comment_button(
-                    height="15%",
-                    width="15%",
-                    on_click=state.new_comment(c.content, ReckoningTypes.detract, c.parent_reckoning_id)
-                ),
-                rx.text(c.detracts),
-                rx.spacer(),
-                feedback_button(
-                    height="15%",
-                    width="15%",
-                    on_click=state.provide_feedback_on_reckoning(c.id),
-                ),
-                rx.spacer(),
                 rx.cond(
                     ((state.user.role > 0) | ((c.user_id == state.user.id) & (c.supports == 0) & (c.detracts == 0) & (c.points_of_order == 0))),
                     edit_button(
@@ -505,20 +498,43 @@ def render_comment(state, c: Reckoning):
                     ),
                     rx.spacer(),
                 ),
+                rx.spacer(),
                 rx.cond(
-                    (state.page_type == 4),
-                    view_concept_button(
+                    (c.user_id == state.user.id),
+                    feedback_button(
                         height="15%",
                         width="15%",
-                        on_click=rx.redirect(f"/comments/{c.parent_reckoning_id}"),
+                        on_click=state.provide_feedback_on_reckoning(c.id),
                     ),
-                    view_comments_button(
-                        height="15%",
-                        width="15%",
-                        on_click=state.view_comments(c.id),
-                    ),
+                    rx.spacer()
                 ),
-                grid_template_columns="1fr 1fr 1fr 1fr 1fr 1fr 2fr 1fr 2fr 1fr 1fr 1fr",
+                rx.spacer(),
+                support_comment_button(
+                    height="15%",
+                    width="15%",
+                    on_click=state.new_comment(c.content, ReckoningTypes.support, c.parent_reckoning_id)
+                ),
+                rx.text(c.supports),
+                poo_comment_button(
+                    height="15%",
+                    width="15%",
+                    on_click=state.new_comment(c.content, ReckoningTypes.point_of_order, c.parent_reckoning_id)
+                ),
+                rx.text(c.points_of_order),
+                detract_from_comment_button(
+                    height="15%",
+                    width="15%",
+                    on_click=state.new_comment(c.content, ReckoningTypes.detract, c.parent_reckoning_id)
+                ),
+                rx.text(c.detracts),
+                rx.spacer(),
+                view_comments_button(
+                    height="15%",
+                    width="15%",
+                    on_click=state.view_comments(c.id),
+                ),
+                rx.text(c.total_comments),
+                grid_template_columns="1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 2fr 1fr 1fr",
                 py=1,
                 px=1,
                 gap=1,
@@ -535,8 +551,55 @@ def render_comment(state, c: Reckoning):
 def render_concept(state, c: Reckoning):
     """Display for an individual concept in the feed."""
     return rx.grid(
-                rx.text( c.content, width="98%", height="98%", overflow="hidden", background_color="gray.50", border_radius="10px", padding="1em"),
                 rx.grid(
+                    compare_concepts_button(
+                        height="15%",
+                        width="15%",
+                        on_click=state.compare_concepts(c.id),
+                    ),
+                    rx.text( c.content, **read_only_text_style),
+                    grid_template_columns="1fr 22fr",
+                    py=1,
+                    px=1,
+                    gap=1,
+                    **control_panel_text_style,
+                ),
+                rx.grid(
+                    rx.cond(
+                        (state.page_type == 1),
+                        edit_button(
+                            height="15%",
+                            width="15%",
+                            on_click=state.edit_concept(c.id),
+                        ),
+                       rx.spacer(), 
+                    ),
+                    rx.cond(
+                        (state.page_type == 1),
+                        delete_button(
+                            height="15%",
+                            width="15%",
+                            on_click=state.delete_reckoning(c.id),
+                        ),
+                        rx.spacer(),
+                    ),
+                    rx.spacer(),
+                    rx.cond(
+                        (state.page_type == 5),
+                        rx.text(c.similarity),
+                        rx.spacer(),
+                    ),
+                    rx.spacer(),
+                    rx.cond(
+                        (c.user_id != state.user.id),
+                        feedback_button(
+                            height="15%",
+                            width="15%",
+                            on_click=state.provide_feedback_on_reckoning(c.id),
+                        ),
+                        rx.spacer()
+                    ),
+                    rx.spacer(),
                     rx.cond(
                         (c.user_vote_history == 0), #& (c.user_id != state.user.id),
                         rx.fragment(
@@ -588,55 +651,13 @@ def render_concept(state, c: Reckoning):
                         None
                     ),
                     rx.spacer(),
-                    feedback_button(
+                    view_comments_button(
                         height="15%",
                         width="15%",
-                        on_click=state.provide_feedback_on_reckoning(c.id),
+                        on_click=state.view_comments(c.id),
                     ),
-                    rx.spacer(),
-                    rx.cond(
-                        (state.page_type == 5),
-                        rx.text(c.similarity),
-                        rx.spacer(),
-                    ),
-                    rx.spacer(),
-                    rx.cond(
-                        (state.page_type == 1),
-                        edit_button(
-                            height="15%",
-                            width="15%",
-                            on_click=state.edit_concept(c.id),
-                        ),
-                       rx.spacer(), 
-                    ),
-                    rx.cond(
-                        (state.page_type == 1),
-                        delete_button(
-                            height="15%",
-                            width="15%",
-                            on_click=state.delete_reckoning(c.id),
-                        ),
-                        rx.spacer(),
-                    ),
-                    compare_concepts_button(
-                        height="15%",
-                        width="15%",
-                        on_click=state.compare_concepts(c.id),
-                    ),
-                    rx.cond(
-                        (state.page_type == 4),
-                        view_concept_button(
-                            height="15%",
-                            width="15%",
-                            on_click=rx.redirect(f"/comment/{c.id}"),
-                        ),
-                        view_comments_button(
-                            height="15%",
-                            width="15%",
-                            on_click=state.view_comments(c.id),
-                        ),
-                    ),
-                    grid_template_columns="1fr 1fr 1fr 1fr 2fr 1fr 2fr 1fr 2fr 1fr 1fr 1fr 1fr",
+                    rx.text(c.total_comments),
+                    grid_template_columns="1fr 1fr 1fr 1fr 8fr 1fr 2fr 1fr 1fr 1fr 1fr 2fr 1fr 1fr",
                     py=1,
                     px=1,
                     gap=1,

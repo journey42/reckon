@@ -2,7 +2,7 @@
 import reflex as rx
 from sqlmodel import select
 from datetime import datetime
-from reckon.styles import input_style
+from reckon.styles import input_style, read_only_text_style
 from reckon.components.buttons import support_comment_button, detract_from_comment_button, poo_comment_button, close_button
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
 
@@ -17,6 +17,7 @@ class CommentModalState(AppState):
     is_editing: bool = False
 
     def new_comment(self, subject, type, pid):
+        print("new comment")
         self.is_editing = False
         self.subject = subject
         self.type = type
@@ -40,6 +41,7 @@ class CommentModalState(AppState):
 
     def submit(self):
         """Submit feedback."""
+        print("submit")
         with rx.session() as session:
             if self.is_editing:
                 comment = session.exec(select(Reckoning).where(Reckoning.id == self.cid)).first()
@@ -47,9 +49,10 @@ class CommentModalState(AppState):
                 comment.updated_at = datetime.utcnow()
                 session.commit()
             else:
-                comment = Reckoning(content=self.content, parent_reckoning_id=self.pid, type=self.type, created_at=datetime.utcnow(), updated_at=None, user_id=self.user.id)
+                comment = Reckoning(content=self.content, parent_reckoning_id=self.pid, type=self.type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
                 session.add(comment)
                 session.commit()
+                print("committing")
 
         self.show = not (self.show)
 
@@ -76,37 +79,32 @@ def comment_modal(*args, **kwargs):
                     ),
                     rx.modal_body(
                         rx.form(
-                            rx.responsive_grid(
-                                rx.spacer(max_width="225px"),
-                                rx.vstack(
-                                    rx.text_area(
-                                        is_read_only=True,
-                                        value=CommentModalState.subject,
-                                        max_height="30vh",
-                                        width="100%",
-                                        **input_style,
-                                    ),
-                                    rx.text_area(
-                                        default_value=CommentModalState.content,
-                                        placeholder="Comment",
-                                        max_height="30vh",
-                                        width="100%",
-                                        **input_style,
-                                        on_blur=CommentModalState.set_content,
-                                    ),
-                                    rx.match(
-                                        CommentModalState.type,
-                                        (ReckoningTypes.support, support_comment_button(type_="submit", width="15%", height="15%", align_self="flex-end", on_click=CommentModalState.submit)),
-                                        (ReckoningTypes.point_of_order, poo_comment_button(type_="submit", width="15%", height="15%", align_self="flex-end", on_click=CommentModalState.submit)),
-                                        (ReckoningTypes.detract, detract_from_comment_button(type_="submit", width="15%", height="15%", align_self="flex-end", on_click=CommentModalState.submit)),
-                                    ),
-                                    max_width="850px",
+                            rx.vstack(
+                                rx.text_area(
+                                    value=CommentModalState.subject,
+                                    height="30vh",
+                                    **read_only_text_style,
                                 ),
-                                rx.spacer(max_width="225px"),
-                                columns=[3],
+                                rx.text_area(
+                                    default_value=CommentModalState.content,
+                                    placeholder="Comment",
+                                    height="30vh",
+                                    width="100%",
+                                    **input_style,
+                                    on_blur=CommentModalState.set_content,
+                                ),
+                                rx.match(
+                                    CommentModalState.type,
+                                    (ReckoningTypes.support, support_comment_button(width="15%", height="15%", align_self="flex-end", on_click=CommentModalState.submit)),
+                                    (ReckoningTypes.point_of_order, poo_comment_button(width="15%", height="15%", align_self="flex-end", on_click=CommentModalState.submit)),
+                                    (ReckoningTypes.detract, detract_from_comment_button(width="15%", height="15%", align_self="flex-end", on_click=CommentModalState.submit)),
+                                ),
                                 id="tacontainer",
-                                max_height="60vh",
+                                width="90%",
                             ),
+                            display="flex",
+                            justify_content="center",
+                            align_items="center",
                         ),
                     ),
                 )

@@ -9,12 +9,16 @@ def user_menu() -> rx.Component:
     """User menu."""
     return rx.menu(
             rx.menu_button(
-                rx.avatar(src="/wind_rose.svg", border_color="black.900"),
+                rx.avatar(src="/wind_rose.svg", size="sm", border_color="black.900"),
             ),
             rx.menu_list(
                 rx.link(
                     rx.menu_item("Help"),
                     href="/help"
+                ),
+                rx.link(
+                    rx.menu_item("Drafts"),
+                    href="/your_drafts"
                 ),
                 rx.link(
                     rx.menu_item("Profile"),
@@ -84,12 +88,14 @@ def user_menu() -> rx.Component:
 def app_logo() -> rx.Component:
     """App logo."""
     return rx.grid(
-        logo_button(),
+        logo_button(width="150px"),
         trending_concepts_button(),
         your_reckonings_button(),
-        your_drafts_button(),
         rx.spacer(),
-        grid_template_columns="0.25fr 1fr 1fr 1fr 8fr",
+        user_menu(),
+        grid_template_columns="1fr 1fr 1fr 20fr 1fr",
+        place_items="center",
+        mt=4,
         py=2,
         px=2,
         gap=2,
@@ -112,17 +118,8 @@ def navbar(*args, **kwargs) -> rx.Component:
     """Navbar component."""
     return rx.box(
         rx.grid(
-            rx.grid(
-                app_logo(),
-                rx.spacer(),
-                user_menu(),
-                feedback_modal(options=general_feedback_options, on_close=FeedbackModalState.close),
-                grid_template_columns="10fr 3fr 1fr",
-                py=2,
-                px=2,
-                gap=2,
-                **control_panel_text_style,
-            ),
+            app_logo(),
+            feedback_modal(options=general_feedback_options, on_close=FeedbackModalState.close),
             *args,
         ),
         **navbar_styles

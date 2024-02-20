@@ -39,10 +39,8 @@ def composer():
         rx.box(
             rx.text_area(
                 w="100%",
-                h="50%",
-                #background_color="gray.50", border_radius="10px", padding="1em",
+                h="50vh",
                 placeholder="What do you Reckon?",
-                #_focus={"border": 0, "outline": 0, "boxShadow": "none"},
                 on_blur=HomePageState.set_concept,
                 **input_style,
             ),
@@ -53,14 +51,12 @@ def composer():
                     on_click=HomePageState.post_concept
                 ),
                 justify_content="flex-end",
-                #border_top="1px solid #ededed",
                 px=4,
                 py=2,
             ),
         ),
         p=4,
         grid_template_columns="1fr",
-        #border_bottom="1px solid #ededed",
     )
 
 

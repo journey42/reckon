@@ -31,10 +31,6 @@ class FeedbackModalState(AppState):
     def is_error(self) -> bool:
         return self.type == ""
     
-    def resize_textarea(self):
-        """Resize the textarea."""
-        return [rx.call_script('resizeTextarea("autoresizing");')]
-
     def submit(self):
         """submit feedback."""
         if(self.is_error):
@@ -53,7 +49,6 @@ class FeedbackModalState(AppState):
 def feedback_modal(options: List[str], *args, **kwargs):
     """feedback modal component."""
     return rx.box(
-        rx.script(src="/resize_text_area.js"),
         rx.modal(
             rx.modal_overlay(
                 rx.modal_content(
@@ -73,51 +68,46 @@ def feedback_modal(options: List[str], *args, **kwargs):
                     ),
                     rx.modal_body(
                         rx.form(
-                            rx.responsive_grid(
-                                rx.spacer(max_width="225px"),
-                                rx.vstack(
-                                    rx.form_control(
-                                        rx.select(
-                                            options,
-                                            is_required=True,
-                                            placeholder="Type of Feedback",
-                                            on_change=FeedbackModalState.set_type,
-                                            color_schemes="twitter",
-                                        ),
-                                        rx.cond(
-                                            FeedbackModalState.is_error,
-                                            rx.form_error_message(
-                                                "Feedback type is required."
-                                            ),
-                                        ),
-                                        is_invalid=FeedbackModalState.is_error,
+                            rx.vstack(
+                                rx.form_control(
+                                    rx.select(
+                                        options,
                                         is_required=True,
+                                        placeholder="Type of Feedback",
+                                        on_change=FeedbackModalState.set_type,
+                                        color_schemes="twitter",
                                     ),
-                                    rx.text_area(
-                                        id="autoresizing",
-                                        placeholder="Feedback",
-                                        height="60vh",
-                                        width="100%",
-                                        **input_style,
-                                        on_blur=FeedbackModalState.set_content,
-                                        # on_mount=FeedbackModalState.resize_textarea,
+                                    rx.cond(
+                                        FeedbackModalState.is_error,
+                                        rx.form_error_message(
+                                            "Feedback type is required."
+                                        ),
                                     ),
-                                    submit_button(
-                                        type_="submit",
-                                        height="5%",
-                                        width="5%",
-                                        padding_top=4,
-                                        align_self="flex-end",
-                                        on_click=FeedbackModalState.submit
-                                    ),
-                                    max_width="850px",
+                                    is_invalid=FeedbackModalState.is_error,
+                                    is_required=True,
                                 ),
-                                rx.spacer(max_width="225px"),
-                                columns=[3],
+                                rx.text_area(
+                                    id="autoresizing",
+                                    placeholder="Feedback",
+                                    height="60vh",
+                                    width="100%",
+                                    **input_style,
+                                    on_blur=FeedbackModalState.set_content,
+                                ),
+                                submit_button(
+                                    height="5%",
+                                    width="5%",
+                                    padding_top=4,
+                                    align_self="flex-end",
+                                    on_click=FeedbackModalState.submit
+                                ),
                                 id="tacontainer",
-                                max_height="60vh",
-                            )
-                        )
+                                width="90%",
+                            ),
+                            display="flex",
+                            justify_content="center",
+                            align_items="center",
+                        ),
                     )
                 )
             ),

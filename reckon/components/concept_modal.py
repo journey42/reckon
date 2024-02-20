@@ -59,34 +59,29 @@ def concept_modal(*args, **kwargs):
                         ),
                     ),
                     rx.modal_body(
-                        rx.form(
-                            rx.responsive_grid(
-                                rx.spacer(max_width="225px"),
-                                rx.vstack(
-                                    rx.text_area(
-                                         id="autoresizing",
-                                        default_value=ConceptModalState.content,
-                                        placeholder="Concept",
-                                        max_height="80vh",
-                                        width="100%",
-                                        **input_style,
-                                        on_blur=ConceptModalState.set_content,
-                                        on_mount=ConceptModalState.resize_textarea,
-                                    ),
-                                    submit_button(
-                                        height="5%",
-                                        width="5%",
-                                        on_click=ConceptModalState.submit,
-                                        align_self="flex-end",
-                                    ),
-                                    max_width="850px",
-                                ),
-                                rx.spacer(max_width="225px"),
-                                columns=[3],
-                                id="tacontainer",
+                        rx.vstack(
+                            rx.text_area(
+                                    id="autoresizing",
+                                default_value=ConceptModalState.content,
+                                placeholder="Concept",
                                 max_height="80vh",
-                            )
-                        )
+                                width="100%",
+                                **input_style,
+                                on_blur=ConceptModalState.set_content,
+                                on_mount=ConceptModalState.resize_textarea,
+                            ),
+                            submit_button(
+                                height="5%",
+                                width="5%",
+                                on_click=ConceptModalState.submit,
+                                align_self="flex-end",
+                            ),
+                            id="tacontainer",
+                            width="90%",
+                        ),
+                        display="flex",
+                        justify_content="center",
+                        align_items="center",
                     )
                 )
             ),
