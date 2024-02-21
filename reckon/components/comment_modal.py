@@ -17,11 +17,13 @@ class CommentModalState(AppState):
     is_editing: bool = False
 
     def new_comment(self, subject, type, pid):
-        print("new comment")
         self.is_editing = False
         self.subject = subject
         self.type = type
         self.pid = pid
+        #reset to avoid errors
+        self.cid = 0
+        self.content = ""
 
     def edit_comment(self, pid, type, cid, content):
         """Set the comment."""
@@ -41,20 +43,19 @@ class CommentModalState(AppState):
 
     def submit(self):
         """Submit feedback."""
-        print("submit")
         with rx.session() as session:
             if self.is_editing:
                 comment = session.exec(select(Reckoning).where(Reckoning.id == self.cid)).first()
                 comment.content = self.content
                 comment.updated_at = datetime.utcnow()
                 session.commit()
+                self.show = not (self.show)
             else:
                 comment = Reckoning(content=self.content, parent_reckoning_id=self.pid, type=self.type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
                 session.add(comment)
                 session.commit()
-                print("committing")
-
-        self.show = not (self.show)
+                self.show = not (self.show)
+                #yield rx.redirect(f"/comments/{comment.id}")
 
 
 def comment_modal(*args, **kwargs):
@@ -95,9 +96,9 @@ def comment_modal(*args, **kwargs):
                                 ),
                                 rx.match(
                                     CommentModalState.type,
-                                    (ReckoningTypes.support, support_comment_button(width="15%", height="15%", align_self="flex-end", on_click=CommentModalState.submit)),
-                                    (ReckoningTypes.point_of_order, poo_comment_button(width="15%", height="15%", align_self="flex-end", on_click=CommentModalState.submit)),
-                                    (ReckoningTypes.detract, detract_from_comment_button(width="15%", height="15%", align_self="flex-end", on_click=CommentModalState.submit)),
+                                    (ReckoningTypes.support, support_comment_button(height="5%", width="5%", align_self="flex-end", on_click=CommentModalState.submit)),
+                                    (ReckoningTypes.point_of_order, poo_comment_button(height="5%", width="5%", align_self="flex-end", on_click=CommentModalState.submit)),
+                                    (ReckoningTypes.detract, detract_from_comment_button(height="5%", width="5%", align_self="flex-end", on_click=CommentModalState.submit)),
                                 ),
                                 id="tacontainer",
                                 width="90%",

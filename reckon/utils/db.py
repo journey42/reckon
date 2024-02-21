@@ -28,6 +28,50 @@ def insert_text_with_embedding(text_to_embed, reckoning_id):
         # Commit the transaction
         session.commit()
 
+# def find_similar_texts_with_join(rid, threshold, limit):
+#     with rx.session() as session:
+#         # Prepare the SQL query
+#         query = text("""
+#         WITH target_embedding AS (
+#             SELECT embedding 
+#             FROM embeddings 
+#             WHERE reckoning_id = :id
+#             LIMIT 1
+#         )
+#         SELECT 
+#             e.reckoning_id, 
+#             CASE 
+#                 WHEN e.reckoning_id = :id THEN 0
+#                 ELSE e.embedding <=> te.embedding 
+#             END AS similarity
+#         FROM 
+#             embeddings e
+#         INNER JOIN 
+#             reckoning r ON e.reckoning_id = r.id
+#         CROSS JOIN 
+#             target_embedding te
+#         WHERE 
+#             (
+#                 r.type = 0 OR
+#                 e.reckoning_id = :id -- Ensures inclusion of the target record regardless of its type
+#             ) AND (
+#                 e.reckoning_id = :id OR
+#                 e.embedding <=> te.embedding < :threshold
+#             )
+#         ORDER BY 
+#             e.reckoning_id = :id DESC, -- Ensures the record with id is on top
+#             similarity
+#         LIMIT 
+#             :limit;
+#         """)
+#         # Execute the query with parameters
+#         result = session.execute(query, {'id': rid, 'threshold': threshold, 'limit': limit})
+#         results = result.fetchall()
+#         # print(results)
+#         keys = [id for id, similarity in results]
+#         # print(keys)
+
+#     return keys, results
 def find_similar_texts_with_join(rid, threshold, limit):
     with rx.session() as session:
         # Prepare the SQL query
@@ -37,38 +81,49 @@ def find_similar_texts_with_join(rid, threshold, limit):
             FROM embeddings 
             WHERE reckoning_id = :id
             LIMIT 1
+        ), similarity_results AS (
+            SELECT 
+                e.reckoning_id, 
+                CASE 
+                    WHEN e.reckoning_id = :id THEN 0
+                    ELSE e.embedding <=> te.embedding 
+                END AS similarity
+            FROM 
+                embeddings e
+            INNER JOIN 
+                reckoning r ON e.reckoning_id = r.id
+            CROSS JOIN 
+                target_embedding te
+            WHERE 
+                r.type = 0
+                AND e.embedding <=> te.embedding < :threshold
+        ), include_original AS (
+            SELECT 
+                reckoning_id, similarity
+            FROM 
+                similarity_results
+            UNION ALL
+            SELECT 
+                :id AS reckoning_id, 0 AS similarity
+            WHERE
+                NOT EXISTS (
+                    SELECT 1 
+                    FROM similarity_results 
+                    WHERE similarity = 0
+                )
+            OR :limit = 1 -- Include the original if the limit is 1, assuming you want the original in case of a single result
         )
-        SELECT 
-            e.reckoning_id, 
-            CASE 
-                WHEN e.reckoning_id = :id THEN 0
-                ELSE e.embedding <=> te.embedding 
-            END AS similarity
-        FROM 
-            embeddings e
-        INNER JOIN 
-            reckoning r ON e.reckoning_id = r.id
-        CROSS JOIN 
-            target_embedding te
-        WHERE 
-            (
-                r.type = 0 OR
-                e.reckoning_id = :id -- Ensures inclusion of the target record regardless of its type
-            ) AND (
-                e.reckoning_id = :id OR
-                e.embedding <=> te.embedding < :threshold
-            )
+        SELECT * FROM include_original
         ORDER BY 
-            e.reckoning_id = :id DESC, -- Ensures the record with id is on top
-            similarity
+            similarity,
+            reckoning_id = :id DESC
         LIMIT 
             :limit;
         """)
         # Execute the query with parameters
         result = session.execute(query, {'id': rid, 'threshold': threshold, 'limit': limit})
         results = result.fetchall()
-        print(results)
+        # Process results
         keys = [id for id, similarity in results]
-        print(keys)
 
     return keys, results

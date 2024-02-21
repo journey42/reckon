@@ -1,6 +1,7 @@
 feedback types to int?
-
-staging to production
+domain setup
+production setup
+resize vm disk
 documentation
 
 stats
@@ -10,12 +11,18 @@ account enabled check
 static pages
 localization
 
-
-resize vm disk
-
 transparency on favicon
 
 refactor reckonings state classes
+
+prohibit hard deletes on comments - replace comment
+
+
 navbar does not remain sticky
-prohibit hard deletes - replace comment
-unvote, revote
+refresh vote count without redirect
+
+folding with drafts issue. if yours is folded and you vote for the folded concept you then have an orphaned draft that can be put back into circulation by voting for it.
+
+unvoting does not return concept to draft state
+
+how does unvoting work with comments? 

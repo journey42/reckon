@@ -100,13 +100,25 @@ class Reckoning(rx.Model, table=True):
     )
 
     # Cache variables, not stored in the database
-    # supports_detracts_ratio: Optional[str] = None
+    supports_detracts_ratio: Optional[str] = None
+    up_votes: Optional[int] = 0
+    down_votes: Optional[int] = 0
     supports: Optional[int] = 0
     detracts: Optional[int] = 0
     points_of_order: Optional[int] = 0
     total_comments: Optional[int] = 0
     user_vote_history: Optional[int] = 0
     similarity: Optional[float] = 0.0
+    parent_content: Optional[str] = ""
+
+    def cache_parent_content(self):
+        try:
+            with rx.session() as session:
+                # session.expire_on_commit = False
+                self.parent_content = session.exec(select(Reckoning).where(Reckoning.id == self.parent_reckoning_id)).first().content
+        except:
+            pass
+
 
     def tally_children(self, reckoning):
         """
@@ -133,17 +145,24 @@ class Reckoning(rx.Model, table=True):
 
     def compute_tallies(self, uid: int) -> int:
         for child in self.child_reckonings:
+            is_vote = child.content == ""
             if child.type == ReckoningTypes.support:
-                self.supports+=1
-                if child.user_id == uid:
+                if is_vote:
+                    self.up_votes+=1
+                else:
+                    self.supports+=1
+                if child.user_id == uid and is_vote:
                     self.user_vote_history = ReckoningTypes.support
             elif child.type == ReckoningTypes.detract:
-                self.detracts+=1
-                if child.user_id == uid:
+                if is_vote:
+                    self.down_votes+=1
+                else:
+                    self.detracts+=1
+                if child.user_id == uid and is_vote:
                     self.user_vote_history = ReckoningTypes.detract
             else:
                 self.points_of_order+=1
-                if child.user_id == uid:
+                if child.user_id == uid and is_vote:
                     self.user_vote_history = ReckoningTypes.point_of_order
         
         self.total_comments = self.tally_children(self)

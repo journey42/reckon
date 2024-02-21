@@ -40,7 +40,8 @@ read_only_text_style = dict(
     overflow="hidden",
     background_color="gray.50",
     border_radius="10px",
-    padding="1em"
+    padding="1em",
+    font_size="sm"
 )
 
 form_box_style = dict(
