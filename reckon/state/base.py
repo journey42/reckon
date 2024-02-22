@@ -66,6 +66,9 @@ class ReckoningTypes:
     detract: int = 2
     point_of_order: int = 3
     draft: int = 4
+    up_vote: int = 5
+    down_vote: int = 6
+    no_vote: int = 7
 
 class Reckoning(rx.Model, table=True):
     """A table of Reckonings."""
@@ -107,20 +110,35 @@ class Reckoning(rx.Model, table=True):
     detracts: Optional[int] = 0
     points_of_order: Optional[int] = 0
     total_comments: Optional[int] = 0
-    user_vote_history: Optional[int] = 0
+    user_vote_history: Optional[int] = ReckoningTypes.no_vote
     similarity: Optional[float] = 0.0
     parent_content: Optional[str] = ""
+    parent_type: Optional[int] = 0
+    parent_id: Optional[int] = 0
+    parent_user_vote_history: Optional[int] = ReckoningTypes.no_vote
+    parent_up_votes: Optional[int] = 0
+    parent_down_votes: Optional[int] = 0
+    parent_total_comments: Optional[int] = 0
 
-    def cache_parent_content(self):
+    def cache_parent_details(self, uid: int):
         try:
             with rx.session() as session:
                 # session.expire_on_commit = False
-                self.parent_content = session.exec(select(Reckoning).where(Reckoning.id == self.parent_reckoning_id)).first().content
+                parent = session.exec(select(Reckoning).where(Reckoning.id == self.parent_reckoning_id)).first()
+                self.parent_content = parent.content
+                self.parent_id = parent.id
+                self.parent_type = parent.type
+                if parent.type == ReckoningTypes.concept:
+                    parent.compute_tallies(uid)
+                    self.parent_down_votes = parent.down_votes
+                    self.parent_up_votes = parent.up_votes
+                    self.parent_user_vote_history = parent.user_vote_history
+                    self.parent_total_comments = parent.total_comments
         except:
             pass
 
 
-    def tally_children(self, reckoning):
+    def tally_child_comments(self, reckoning):
         """
         Recursively counts the total number of child reckonings for a given reckoning instance.
         
@@ -138,34 +156,29 @@ class Reckoning(rx.Model, table=True):
         total_children = 0
         for child in reckoning.child_reckonings:
             # Count the child itself plus any of its children
-            if child.content != "":
-                total_children += 1 + self.tally_children(child)
+            if child.type != ReckoningTypes.down_vote and child.type != ReckoningTypes.up_vote:
+                total_children += 1 + self.tally_child_comments(child)
 
         return total_children
 
     def compute_tallies(self, uid: int) -> int:
         for child in self.child_reckonings:
-            is_vote = child.content == ""
             if child.type == ReckoningTypes.support:
-                if is_vote:
-                    self.up_votes+=1
-                else:
-                    self.supports+=1
-                if child.user_id == uid and is_vote:
-                    self.user_vote_history = ReckoningTypes.support
+                self.supports+=1
             elif child.type == ReckoningTypes.detract:
-                if is_vote:
-                    self.down_votes+=1
-                else:
-                    self.detracts+=1
-                if child.user_id == uid and is_vote:
-                    self.user_vote_history = ReckoningTypes.detract
+                self.detracts+=1
+            elif child.type == ReckoningTypes.up_vote:
+                self.up_votes+=1
+                if child.user_id == uid:
+                    self.user_vote_history = ReckoningTypes.up_vote
+            elif child.type == ReckoningTypes.down_vote:
+                self.down_votes+=1
+                if child.user_id == uid:
+                    self.user_vote_history = ReckoningTypes.down_vote        
             else:
                 self.points_of_order+=1
-                if child.user_id == uid and is_vote:
-                    self.user_vote_history = ReckoningTypes.point_of_order
         
-        self.total_comments = self.tally_children(self)
+        self.total_comments = self.tally_child_comments(self)
         # # Calculate GCD for simplifying the ratio, avoid division by zero
         # if self.detracts != 0 and self.supports != 0:
         #     ratio_gcd = gcd(self.supports, self.detracts)

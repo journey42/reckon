@@ -163,30 +163,30 @@ def compare_concepts_button(*args, **kwargs) -> rx.Component:
         **kwargs,
     ), label="Compare")
 
-def support_concept_button(*args, **kwargs) -> rx.Component:
+def up_vote_concept_button(*args, **kwargs) -> rx.Component:
     return rx.tooltip(rx.button(
-        rx.image(src="/support_concept.svg", width="auto", height="auto"),
+        rx.image(src="/up_vote_concept.svg", width="auto", height="auto"),
         **small_button_params,
         **kwargs,
     ), label="Support")
 
-def unsupported_concept_button(*args, **kwargs) -> rx.Component:
+def no_up_vote_concept_button(*args, **kwargs) -> rx.Component:
     return rx.tooltip(rx.button(
-        rx.image(src="/unsupported_concept.svg", width="auto", height="auto"),
+        rx.image(src="/no_up_vote_concept.svg", width="auto", height="auto"),
         **small_button_params,
         **kwargs,
     ), label="Support")
 
-def detract_from_concept_button(*args, **kwargs) -> rx.Component:
+def down_vote_concept_button(*args, **kwargs) -> rx.Component:
     return rx.tooltip(rx.button(
-        rx.image(src="/detract_from_concept.svg", width="auto", height="auto"),
+        rx.image(src="/down_vote_concept.svg", width="auto", height="auto"),
         **small_button_params,
         **kwargs,
     ), label="Detract")
 
-def undetracted_concept_button(*args, **kwargs) -> rx.Component:
+def no_down_vote_concept_button(*args, **kwargs) -> rx.Component:
     return rx.tooltip(rx.button(
-        rx.image(src="/undetracted_concept.svg", width="auto", height="auto"),
+        rx.image(src="/no_down_vote_concept.svg", width="auto", height="auto"),
         **small_button_params,
         **kwargs,
     ), label="Detract")

@@ -12,5 +12,5 @@ def profile_layout(*args):
             flex_direction="column",
             align_items="center",
             gap=4,
-            max_width="1300px",
+            max_width="960px",
         )

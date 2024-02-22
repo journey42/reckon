@@ -21,6 +21,23 @@ prohibit hard deletes on comments - replace comment
 navbar does not remain sticky
 refresh vote count without redirect
 
+
+privacy policy
+
+removed ads for policy maker
+corrected typos
+cookie contradiction
+
+tos
+
+removed ads for policy maker
+prohibits people from profiting on their own ideas?
+test phase
+
+help write up
+
+no
+
 folding with drafts issue. if yours is folded and you vote for the folded concept you then have an orphaned draft that can be put back into circulation by voting for it.
 
 unvoting does not return concept to draft state
