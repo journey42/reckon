@@ -590,7 +590,7 @@ def render_comment(state, c: Reckoning):
                                     width="15%",
                                     on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
                                 ),
-                                rx.text(c.parent_reckoning.up_votes),
+                                rx.text(c.parent_up_votes),
                                 no_down_vote_concept_button(
                                     height="15%",
                                     width="15%",
@@ -626,7 +626,7 @@ def render_comment(state, c: Reckoning):
                                     width="15%",
                                     on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
                                 ),
-                                rx.text(c.parent_reckoning.up_votes),
+                                rx.text(c.parent_up_votes),
                                 down_vote_concept_button(
                                     height="15%",
                                     width="15%",
