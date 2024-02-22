@@ -391,11 +391,29 @@ class CommentsPageState(ReckoningsPageState):
 
             if self.search:
                 self.reckonings = session.exec(
-                    select(Reckoning).order_by(Reckoning.created_at.asc()).where(_and(Reckoning.content.contains(self.search), _and(Reckoning.content != "", _and(Reckoning.parent_reckoning_id == self.reckoning_id, _and(Reckoning.type == ReckoningTypes.support, _or(Reckoning.type == ReckoningTypes.support, Reckoning.type == ReckoningTypes.support))))))
-                ).unique().all()
+                    select(Reckoning).order_by(Reckoning.created_at.asc()).where(_and(
+                        Reckoning.content.contains(self.search),
+                        Reckoning.content != "",
+                        Reckoning.parent_reckoning_id == self.reckoning_id,
+                        _or(
+                            Reckoning.type == ReckoningTypes.support,
+                            Reckoning.type == ReckoningTypes.detract,
+                            Reckoning.type == ReckoningTypes.point_of_order
+                        )
+                    )
+                )).unique().all()
             else:
-                self.reckonings = session.exec(select(Reckoning).order_by(Reckoning.created_at.asc()).where(_and(Reckoning.content != "", _and(Reckoning.parent_reckoning_id == self.reckoning_id, _and(Reckoning.type == ReckoningTypes.support, _or(Reckoning.type == ReckoningTypes.support, Reckoning.type == ReckoningTypes.support)))))
-                ).unique().all()
+                self.reckonings = session.exec(select(Reckoning).order_by(Reckoning.created_at.asc()).where(
+                    _and(
+                        Reckoning.content != "",
+                        Reckoning.parent_reckoning_id == self.reckoning_id,
+                        _or(
+                            Reckoning.type == ReckoningTypes.support,
+                            Reckoning.type == ReckoningTypes.detract,
+                            Reckoning.type == ReckoningTypes.point_of_order
+                        )
+                    )
+                )).unique().all()
 
             for r in self.reckonings:
                 r.compute_tallies(self.user.id)
