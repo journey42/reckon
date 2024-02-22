@@ -391,10 +391,10 @@ class CommentsPageState(ReckoningsPageState):
 
             if self.search:
                 self.reckonings = session.exec(
-                    select(Reckoning).order_by(Reckoning.created_at.asc()).where(_and(Reckoning.content.contains(self.search), _and(Reckoning.content != "", _and(Reckoning.parent_reckoning_id == self.reckoning_id, _or(Reckoning.type == ReckoningTypes.support, _or(Reckoning.type == ReckoningTypes.support, Reckoning.type == ReckoningTypes.support))))))
+                    select(Reckoning).order_by(Reckoning.created_at.asc()).where(_and(Reckoning.content.contains(self.search), _and(Reckoning.content != "", _and(Reckoning.parent_reckoning_id == self.reckoning_id, _and(Reckoning.type == ReckoningTypes.support, _or(Reckoning.type == ReckoningTypes.support, Reckoning.type == ReckoningTypes.support))))))
                 ).unique().all()
             else:
-                self.reckonings = session.exec(select(Reckoning).order_by(Reckoning.created_at.asc()).where(_and(Reckoning.content != "", _and(Reckoning.parent_reckoning_id == self.reckoning_id, _or(Reckoning.type == ReckoningTypes.support, _or(Reckoning.type == ReckoningTypes.support, Reckoning.type == ReckoningTypes.support)))))
+                self.reckonings = session.exec(select(Reckoning).order_by(Reckoning.created_at.asc()).where(_and(Reckoning.content != "", _and(Reckoning.parent_reckoning_id == self.reckoning_id, _and(Reckoning.type == ReckoningTypes.support, _or(Reckoning.type == ReckoningTypes.support, Reckoning.type == ReckoningTypes.support)))))
                 ).unique().all()
 
             for r in self.reckonings:
