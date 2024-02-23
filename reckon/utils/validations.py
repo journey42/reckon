@@ -30,6 +30,6 @@ def validate_password(password):
     return True, "Password is strong."
 
 def validate_role(role):
-    if role not in {"u", "a", "m"}:
-        return False, "Role must be either 'user (u)' or 'admin (a)' or 'moderator (m)'."
+    if role not in {0, 1, 2}:
+        return False, "Role must be either 'user (0)' or 'moderator (1)' or 'admin (2)'."
     return True, "Role is valid."

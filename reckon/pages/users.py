@@ -39,7 +39,7 @@ def get_users() -> List[List]:
                 str(user.id),
                 user.email,
                 user.enabled,
-                str(user.role),
+                user.role,
                 str(user.created_at),
                 str(user.updated_at),
             ]
@@ -71,7 +71,7 @@ class UserEditorState(AppState):
         },
         {
             "title": "Role",
-            "type": "str",
+            "type": "int",
         },
                 {
             "title": "Created At",
