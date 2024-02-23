@@ -22,6 +22,19 @@ navbar does not remain sticky
 refresh vote count without redirect
 
 
+
+spacer between concept votes and comment
+
+revert to draft if only one vote
+
+automatic text (You upvoted this concept. Feel to withdraw your vote.)
+
+reckon forum llc.
+reckon forum
+
+
+
+
 privacy policy
 
 removed ads for policy maker

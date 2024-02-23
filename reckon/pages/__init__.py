@@ -3,7 +3,6 @@ from .home import home
 from .login import login
 from .logged_out import logged_out
 from .info import about
-from .info import help
 from .info import guidelines
 from .info import privacy
 from .info import terms

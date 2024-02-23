@@ -6,13 +6,14 @@ def auth_layout(*args):
     """The shared layout for auth related pages."""
     return rx.box(
         container(
-            rx.image(src="/logo.svg", width="50%", height="auto"),
+            rx.image(src="/logo.svg", width="40%", height="auto"),
             rx.heading(
                 rx.span("Speak Together"),
                 display="flex",
                 flex_direction="column",
                 align_items="center",
                 text_align="center",
+                size="md"
             ),
             *args,
             border_top_radius="lg",
@@ -25,7 +26,7 @@ def auth_layout(*args):
         ),
         h="100vh",
         pt=16,
-        background="url(bg.svg)",
+        # background="url(bg.svg)",
         background_repeat="no-repeat",
         background_size="cover",
     )

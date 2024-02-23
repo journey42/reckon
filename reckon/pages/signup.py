@@ -9,10 +9,11 @@ def signup():
     """The sign up page."""
     return auth_layout(
         rx.text(
-            "Reckon is currently an invite-only platform. Please create an account, and we'll contact you once we're ready to welcome you aboard.",
-            font_size="1xl",
+            """Thank you for agreeing to test Reckon. Reckon is currently an invite-only platform. Please create an account, and we'll contact you once we're ready to welcome you aboard. By signing up, you agree to keep any information you learn during the testing confidential. This means not sharing details about our forum with others. After an initial small run you will have an opportunity to invite up to 5 people to participate.""",
+            font_size="0.75em",
             font_weight="normal",
             mb=4,
+            max_width="600px"
         ),
         rx.box(
             rx.input(

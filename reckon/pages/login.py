@@ -2,7 +2,7 @@
 import reflex as rx
 from reckon.layouts import auth_layout
 from reckon.state.auth import AuthState
-from reckon.styles import button_style, input_style, form_box_style, link_style, page_params
+from reckon.styles import button_style, input_style, form_box_style, link_style, page_params, page_footer_style
 
 @rx.page(route="/login", **page_params)
 def login():
@@ -35,4 +35,5 @@ def login():
         rx.text(
             rx.link("Don't have an account yet?", href="/signup", **link_style),
         ),
+        rx.text("Copyright 2024 - Reckon Forum LLC.", **page_footer_style)
     )

@@ -13,10 +13,6 @@ def user_menu() -> rx.Component:
             ),
             rx.menu_list(
                 rx.link(
-                    rx.menu_item("Help"),
-                    href="/help"
-                ),
-                rx.link(
                     rx.menu_item("Drafts"),
                     href="/your_drafts"
                 ),

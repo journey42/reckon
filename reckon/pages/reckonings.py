@@ -58,6 +58,7 @@ class ReckoningsPageState(AppState):
             if vote:
                 if vote.type == type:
                     session.delete(vote)
+                    concept.type = ReckoningTypes.draft
                 else:
                     vote.type = type
                 session.commit()
@@ -426,7 +427,6 @@ class CommentsPageState(ReckoningsPageState):
 def parent_reckoning(state):
     """The parent reckoning component."""
     return rx.grid(
-        rx.input(on_change=state.set_search, placeholder="Search comments", **input_style_focus),
         rx.grid(
             rx.grid(
                 rx.cond(
@@ -531,6 +531,7 @@ def parent_reckoning(state):
                     rx.spacer(),
                 ),
             ),
+            rx.spacer(),
             support_comment_button(
                 height="15%",
                 width="15%",
@@ -549,13 +550,14 @@ def parent_reckoning(state):
                 on_click=state.new_comment(state.parent.content, ReckoningTypes.detract, state.reckoning_id)
             ),
             # rx.text(state.parent.detracts),
-            grid_template_columns="10fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr",
+            grid_template_columns="10fr 1fr 1fr 1fr 1fr 2fr 1fr 1fr 1fr",
             py=2,
             px=2,
             gap=1,
             # border_bottom="1px solid #ededed",
             **control_panel_text_style,
         ),
+        rx.input(on_change=state.set_search, placeholder="Search comments", **input_style_focus),
         grid_template_columns="1fr",
         py=2,
         px=2,
@@ -750,7 +752,7 @@ def render_comment(state, c: Reckoning):
                 **control_panel_text_style,
             ),
             # grid_template_columns="14fr 1fr",
-            border="1px solid #ededed",
+            border="2px solid #ededed",
             border_radius="10px",
             padding=2,
             gap=2,
@@ -881,7 +883,7 @@ def render_vote(state, c: Reckoning):
                     gap=1,
                     **control_panel_text_style,
             ),
-            border="1px solid #ededed",
+            border="2px solid #ededed",
             border_radius="10px",
             padding=2,
             gap=4,
@@ -1012,7 +1014,7 @@ def render_concept(state, c: Reckoning):
                     gap=1,
                     **control_panel_text_style,
             ),
-            border="1px solid #ededed",
+            border="2px solid #ededed",
             border_radius="10px",
             padding=2,
             gap=4,

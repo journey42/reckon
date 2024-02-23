@@ -20,6 +20,14 @@ image_button_style = dict(
     border_radius="50%",
 )
 
+page_footer_style = dict(
+    margin_top="auto",
+    width="100%",
+    text_align="center",
+    position="relative",
+    bottom="0",
+)
+
 control_panel_text_style = dict (
     # display="flex",
     align_items="center",
