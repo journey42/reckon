@@ -4,7 +4,7 @@ Requires=docker.service
 After=docker.service
 
 [Service]
-Environment="DOMAIN=reckon-dev.eastus.cloudapp.azure.com"
+Environment="DOMAIN=reckonforum.com"
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/home/reckon/reckon
