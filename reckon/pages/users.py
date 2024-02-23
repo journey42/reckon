@@ -85,7 +85,9 @@ class UserEditorState(AppState):
 
     def on_load(self):
         """Load the users page."""
-        yield self.check_login()
+        result = self.check_login()
+        if result:
+            return result
         self.users = get_users()
 
     def refresh(self):

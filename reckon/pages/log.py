@@ -77,7 +77,9 @@ class LogEditorState(AppState):
 
     def on_load(self):
         """Load the logs editor."""
-        yield self.check_login()
+        result = self.check_login()
+        if result:
+            return result
         self.logs = get_logs()
 
     def refresh(self):

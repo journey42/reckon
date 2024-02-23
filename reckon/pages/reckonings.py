@@ -93,7 +93,9 @@ class YourDraftsPageState(ReckoningsPageState):
     
     def on_load(self):
         self.page_type = 1
-        self.check_login()
+        result = self.check_login()
+        if result:
+            return result
         self.get_reckonings()
 
     def get_reckonings(self):
@@ -128,7 +130,9 @@ class NewConceptsPageState(ReckoningsPageState):
     
     def on_load(self):
         self.page_type = 2
-        self.check_login()
+        result = self.check_login()
+        if result:
+            return result
         self.get_reckonings()
 
     def get_reckonings(self):
@@ -165,7 +169,9 @@ class TrendingConceptsPageState(ReckoningsPageState):
     
     def on_load(self):
         self.page_type = 3
-        self.check_login()
+        result = self.check_login()
+        if result:
+            return result
         self.get_reckonings()
 
 
@@ -231,7 +237,9 @@ class YourReckoningsPageState(ReckoningsPageState):
     
     def on_load(self):
         self.page_type = 4
-        self.check_login()
+        result = self.check_login()
+        if result:
+            return result
         self.get_reckonings()
 
     """The state for the your reckonings page."""
@@ -269,7 +277,9 @@ class ComparePageState(ReckoningsPageState):
     
     def on_load(self):
         self.page_type = 5
-        self.check_login()
+        result = self.check_login()
+        if result:
+            return result
         self.get_reckonings()
 
     @rx.var
@@ -345,7 +355,9 @@ class ConceptPageState(ReckoningsPageState):
     
     def on_load(self):
         self.page_type = 6
-        self.check_login()
+        result = self.check_login()
+        if result:
+            return result
         self.get_reckonings()
 
     def get_reckonings(self):
@@ -381,7 +393,9 @@ class CommentsPageState(ReckoningsPageState):
     
     def on_load(self):
         self.page_type = 7
-        self.check_login()
+        result = self.check_login()
+        if result:
+            return result
         self.get_reckonings()
 
     def get_reckonings(self):
