@@ -39,12 +39,12 @@ def get_users() -> List[List]:
                 str(user.id),
                 user.email,
                 user.enabled,
-                user.role,
+                str(user.role),
                 str(user.created_at),
                 str(user.updated_at),
             ]
             user_data_list.append(user_data)
-    
+    print(user_data_list)
     return user_data_list
 
 class UserEditorState(AppState):
