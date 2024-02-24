@@ -1,58 +1,42 @@
-feedback types to int?
-domain setup
-production setup
-resize vm disk
+devops todo:
+staging setup
+resize vm disk on prod for hot swap
+staging to prod migration script
 documentation
+get off lets encrypt?
 
-stats
-paging - trending (20% of all results sorted by popularity), history, date search
+reckon.cc->reckonforum.com
+
+
+dev todo:
+stats - posthog
+paging on admin pages
 email hookup azure commuication services (identify verification?)
-account enabled check
-static pages
+automatic log off
+background tallies
+compare variables
+trending variables - trending limits (20% of all results sorted by popularity), history, date search
+user history page
+feedback to user history search
+
+not yet sanctioned:
+dapp
+sso
 localization
 
-transparency on favicon
-
-refactor reckonings state classes
-
-prohibit hard deletes on comments - replace comment
-
-
+bugs todo:
 navbar does not remain sticky
 refresh vote count without redirect
 
+refactor todo:
+transparency on favicon
+feedback types to int?
+refactor reckonings state classes
+style consolidation for buttons and grids
+reflex 0.4 upgrade
+radix upgrade
 
+prohibit hard deletes on comments - replace comment
 
-spacer between concept votes and comment
-
-revert to draft if only one vote
-
-automatic text (You upvoted this concept. Feel to withdraw your vote.)
-
-reckon forum llc.
-reckon forum
-
-
-
-
-privacy policy
-
-removed ads for policy maker
-corrected typos
-cookie contradiction
-
-tos
-
-removed ads for policy maker
-prohibits people from profiting on their own ideas?
-test phase
-
-help write up
-
-no
-
+potential issues:
 folding with drafts issue. if yours is folded and you vote for the folded concept you then have an orphaned draft that can be put back into circulation by voting for it.
-
-unvoting does not return concept to draft state
-
-how does unvoting work with comments? 

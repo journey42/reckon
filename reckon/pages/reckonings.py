@@ -54,7 +54,7 @@ class ReckoningsPageState(AppState):
         with rx.session() as session:
             session.expire_on_commit = False
             concept = session.exec(select(Reckoning).where(Reckoning.id == cid)).first()
-            vote = session.exec(select(Reckoning).where(_and(Reckoning.parent_reckoning_id == cid, _or(Reckoning.type == ReckoningTypes.up_vote,Reckoning.type == ReckoningTypes.down_vote)))).first()
+            vote = session.exec(select(Reckoning).where(_and(Reckoning.parent_reckoning_id == cid, Reckoning.user_id == self.user.id, _or(Reckoning.type == ReckoningTypes.up_vote,Reckoning.type == ReckoningTypes.down_vote)))).first()
             if vote:
                 if vote.type == type:
                     session.delete(vote)
@@ -101,13 +101,21 @@ class YourDraftsPageState(ReckoningsPageState):
     def get_reckonings(self):
         """Get reckonings of type concept for this user from the database."""
         with rx.session() as session:
+            # Start with the base query, including the ordering and common conditions
+            query = select(Reckoning).order_by(Reckoning.created_at.desc()).where(
+                _and(
+                    Reckoning.type == ReckoningTypes.draft, 
+                    Reckoning.user_id == self.user.id
+                )
+            )
+
+            # If self.search is provided, add an additional condition to the query
             if self.search:
-                self.reckonings = session.exec(
-                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content.contains(self.search), _and(Reckoning.user_id == self.user.id, Reckoning.type == ReckoningTypes.draft)))
-                ).unique().all()
-            else:
-                self.reckonings = session.exec(select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.type == ReckoningTypes.draft, Reckoning.user_id == self.user.id))
-                ).unique().all()
+                query = query.where(Reckoning.content.contains(self.search))
+
+            # Execute the query to get the results, ensuring uniqueness
+            self.reckonings = session.exec(query).unique().all()
+
             for r in self.reckonings:
                 r.compute_tallies(self.user.id)
 
@@ -138,14 +146,20 @@ class NewConceptsPageState(ReckoningsPageState):
     def get_reckonings(self):
         """Get reckonings of type concept for this user from the database."""
         with rx.session() as session:
+            # Start with the base query, applying ordering and a condition that filters by type
+            query = select(Reckoning).order_by(Reckoning.created_at.desc()).where(
+                _or(
+                    Reckoning.type == ReckoningTypes.concept, 
+                    Reckoning.type == ReckoningTypes.draft
+                )
+            )
+
+            # If self.search is provided, add an additional condition to the query
             if self.search:
-                self.reckonings = session.exec(
-                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content.contains(self.search), _or(Reckoning.type == ReckoningTypes.concept, Reckoning.type == ReckoningTypes.draft)))
-                ).all()
-            else:
-                self.reckonings = session.exec(
-                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_or(Reckoning.type == ReckoningTypes.concept, Reckoning.type == ReckoningTypes.draft))
-                ).all()
+                query = query.where(Reckoning.content.contains(self.search))
+
+            # Execute the query to get the results
+            self.reckonings = session.exec(query).all()
             
             for r in self.reckonings:
                 r.compute_tallies(self.user.id)
@@ -178,42 +192,43 @@ class TrendingConceptsPageState(ReckoningsPageState):
     def get_reckonings(self):
         """Get reckonings of type concept for this user from the database."""
         with rx.session() as session:
+            # Create an alias for child reckonings to differentiate from parent reckonings in the self-join
+            ChildReckoning = aliased(Reckoning)
+
+            # Subquery to count the number of "up_vote" type child reckonings for each parent
+            up_vote_count_subquery = (
+                select(
+                    ChildReckoning.parent_reckoning_id,
+                    func.count(ChildReckoning.id).label('up_vote_count')
+                )
+                .where(ChildReckoning.type == ReckoningTypes.up_vote)
+                .group_by(ChildReckoning.parent_reckoning_id)
+                .subquery()
+            )
+
+            # Start building the base query for selecting reckonings and the count of their up_votes
+            # Adjust the where condition as needed to filter by specific reckoning types
+            query = (
+                select(
+                    Reckoning,
+                    up_vote_count_subquery.c.up_vote_count
+                )
+                .outerjoin(up_vote_count_subquery, Reckoning.id == up_vote_count_subquery.c.parent_reckoning_id)
+                .where(Reckoning.type == ReckoningTypes.concept)
+            )
+
+            # Conditionally add the search filter if `self.search` is provided
             if self.search:
-                self.reckonings = session.exec(
-                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content.contains(self.search), Reckoning.type == ReckoningTypes.concept))
-                ).unique().all()
-            else:
+                query = query.where(Reckoning.content.contains(self.search))
 
-                # Create an alias for child reckonings to differentiate from parent reckonings in the self-join
-                ChildReckoning = aliased(Reckoning)
+            # Apply ordering by up_vote count and then by created_at timestamp
+            query = query.order_by(up_vote_count_subquery.c.up_vote_count.desc(), Reckoning.created_at.desc())
 
-                # Subquery to count the number of "up_vote" type child reckonings for each parent
-                up_vote_count_subquery = (
-                    select(
-                        ChildReckoning.parent_reckoning_id,
-                        func.count(ChildReckoning.id).label('up_vote_count')
-                    )
-                    .where(ChildReckoning.type == ReckoningTypes.up_vote)
-                    .group_by(ChildReckoning.parent_reckoning_id)
-                    .subquery()
-                )
+            # Execute the query and fetch all results
+            results = session.exec(query).unique().all()
 
-                # Main query to select reckonings and the count of their up_votes, ordered by the count of upvotes
-                statement = (
-                    select(
-                        Reckoning,
-                        up_vote_count_subquery.c.up_vote_count
-                    )
-                    .outerjoin(up_vote_count_subquery, Reckoning.id == up_vote_count_subquery.c.parent_reckoning_id)
-                    .where(Reckoning.type == ReckoningTypes.concept)  # Adjust as needed to filter by specific reckoning types
-                    .order_by(up_vote_count_subquery.c.up_vote_count.desc(), Reckoning.created_at.desc())
-                )
-                
-                # Execute the query and fetch all results
-                results = session.exec(statement).unique().all()
-
-                # Extract Reckoning objects from the results
-                self.reckonings = [result[0] for result in results]
+            # Extract Reckoning objects from the results
+            self.reckonings = [result[0] for result in results]
 
             for r in self.reckonings:
                 r.compute_tallies(self.user.id)
@@ -246,13 +261,26 @@ class YourReckoningsPageState(ReckoningsPageState):
     def get_reckonings(self):
         """Get reckonings of type concept for this user from the database."""
         with rx.session() as session:
+            # Start with the base query
+            query = select(Reckoning).order_by(Reckoning.created_at.desc())
+
+            # Define common conditions
+            common_conditions = [
+                Reckoning.type != ReckoningTypes.concept,
+                Reckoning.user_id == self.user.id,
+                Reckoning.type != ReckoningTypes.draft
+            ]
+
+            # If self.search is provided, add the search condition
             if self.search:
-                self.reckonings = session.exec(
-                    select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.content.contains(self.search), _and(Reckoning.type != ReckoningTypes.concept, _and(Reckoning.user_id == self.user.id, Reckoning.type != ReckoningTypes.draft))))
-                ).unique().all()
-            else:
-                self.reckonings = session.exec(select(Reckoning).order_by(Reckoning.created_at.desc()).where(_and(Reckoning.type != ReckoningTypes.concept, _and(Reckoning.user_id == self.user.id, Reckoning.type != ReckoningTypes.draft)))
-                ).unique().all()
+                common_conditions.append(Reckoning.content.contains(self.search))
+
+            # Apply conditions to the query
+            query = query.where(_and(*common_conditions))
+
+            # Execute the query
+            self.reckonings = session.exec(query).unique().all()
+
             for r in self.reckonings:
                 r.cache_parent_details(self.user.id)
                 r.compute_tallies(self.user.id)
@@ -297,29 +325,18 @@ class ComparePageState(ReckoningsPageState):
                     Reckoning.id == self.reckoning_id
                 )
             ).one_or_none()
-            # print(concept.content)
+
             primary_keys, results = find_similar_texts_with_join(concept.id, 0.75, 10)
-            # print(primary_keys)
-            # print(results)
-        
+    
+            # Construct the base query with the condition that applies in both cases
+            query = select(Reckoning).where(Reckoning.id.in_(primary_keys))
+
+            # Conditionally add the search filter if `self.search` is provided
             if self.search:
-                # Assuming `primary_keys` is your list of IDs to filter by
-                self.reckonings = session.exec(
-                    select(Reckoning)
-                    .where(
-                        _and(
-                            Reckoning.content.contains(self.search),
-                            Reckoning.id.in_(primary_keys)  # Filtering by a list of primary keys
-                        )
-                    )
-                ).all()
-            else:
-                self.reckonings = session.exec(
-                    select(Reckoning)
-                    .where(
-                            Reckoning.id.in_(primary_keys)  # Filtering by a list of primary keys
-                    )
-                ).all()
+                query = query.where(Reckoning.content.contains(self.search))
+
+            # Execute the query
+            self.reckonings = session.exec(query).all()
 
             # Creating a mapping of ID to reckoning for fast lookup
             id_to_reckoning = {reckoning.id: reckoning for reckoning in self.reckonings}
@@ -404,31 +421,33 @@ class CommentsPageState(ReckoningsPageState):
             self.parent = session.exec(select(Reckoning).where(Reckoning.id == self.reckoning_id)).first()
             self.parent.compute_tallies(self.user.id)
 
+            # Start building the base query
+            query = select(Reckoning).order_by(Reckoning.created_at.asc())
+
+            # Common conditions that are always applied
+            common_conditions = (
+                Reckoning.content != "This reckoning did not include a comment. Feel free to add one.",
+                Reckoning.parent_reckoning_id == self.reckoning_id,
+                _or(
+                    Reckoning.type == ReckoningTypes.support,
+                    Reckoning.type == ReckoningTypes.detract,
+                    Reckoning.type == ReckoningTypes.point_of_order
+                )
+            )
+
             if self.search:
-                self.reckonings = session.exec(
-                    select(Reckoning).order_by(Reckoning.created_at.asc()).where(_and(
-                        Reckoning.content.contains(self.search),
-                        Reckoning.content != "",
-                        Reckoning.parent_reckoning_id == self.reckoning_id,
-                        _or(
-                            Reckoning.type == ReckoningTypes.support,
-                            Reckoning.type == ReckoningTypes.detract,
-                            Reckoning.type == ReckoningTypes.point_of_order
-                        )
-                    )
-                )).unique().all()
+                # Add the search condition only if self.search is not empty
+                search_condition = func.lower(Reckoning.content).contains(self.search.lower())
+                conditions = _and(search_condition, *common_conditions)
             else:
-                self.reckonings = session.exec(select(Reckoning).order_by(Reckoning.created_at.asc()).where(
-                    _and(
-                        Reckoning.content != "",
-                        Reckoning.parent_reckoning_id == self.reckoning_id,
-                        _or(
-                            Reckoning.type == ReckoningTypes.support,
-                            Reckoning.type == ReckoningTypes.detract,
-                            Reckoning.type == ReckoningTypes.point_of_order
-                        )
-                    )
-                )).unique().all()
+                conditions = _and(*common_conditions)
+
+            # Finalize the query with conditions
+            query = query.where(conditions)
+
+            # Execute the query
+            self.reckonings = session.exec(query).unique().all()
+
 
             for r in self.reckonings:
                 r.compute_tallies(self.user.id)
@@ -551,20 +570,20 @@ def parent_reckoning(state):
                 width="15%",
                 on_click=state.new_comment(state.parent.content, ReckoningTypes.support, state.reckoning_id)
             ),
-            # rx.text(state.parent.supports),
+            rx.text(state.parent.supports),
             poo_comment_button(
                 height="15%",
                 width="15%",
                 on_click=state.new_comment(state.parent.content, ReckoningTypes.point_of_order, state.reckoning_id)
             ),
-            # rx.text(state.parent.points_of_order),
+            rx.text(state.parent.points_of_order),
             detract_from_comment_button(
                 height="15%",
                 width="15%",
                 on_click=state.new_comment(state.parent.content, ReckoningTypes.detract, state.reckoning_id)
             ),
-            # rx.text(state.parent.detracts),
-            grid_template_columns="10fr 1fr 1fr 1fr 1fr 2fr 1fr 1fr 1fr",
+            rx.text(state.parent.detracts),
+            grid_template_columns="10fr 1fr 1fr 1fr 1fr 2fr 1fr 0.5fr 1fr 0.5fr 1fr 0.5fr",
             py=2,
             px=2,
             gap=1,
@@ -595,7 +614,7 @@ def render_comment(state, c: Reckoning):
             rx.cond(
                 (state.page_type == 4),
                 rx.cond(
-                    (c.parent_type == 0),
+                    (c.parent_type == ReckoningTypes.concept),
                     rx.grid(
                         rx.text(c.parent_content, **read_only_text_style),
                         rx.cond(

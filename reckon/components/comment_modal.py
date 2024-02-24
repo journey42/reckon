@@ -44,14 +44,19 @@ class CommentModalState(AppState):
     def submit(self):
         """Submit feedback."""
         with rx.session() as session:
+            comment_content = "This reckoning did not include a comment. Feel free to add one."
+
+            if self.content != "":
+                comment_content = self.content
+
             if self.is_editing:
                 comment = session.exec(select(Reckoning).where(Reckoning.id == self.cid)).first()
-                comment.content = self.content
+                comment.content = comment_content
                 comment.updated_at = datetime.utcnow()
                 session.commit()
                 self.show = not (self.show)
             else:
-                comment = Reckoning(content=self.content, parent_reckoning_id=self.pid, type=self.type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
+                comment = Reckoning(content=comment_content, parent_reckoning_id=self.pid, type=self.type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
                 session.add(comment)
                 session.commit()
                 self.show = not (self.show)
@@ -96,7 +101,7 @@ def comment_modal(*args, **kwargs):
                                 ),
                                 rx.match(
                                     CommentModalState.type,
-                                    (ReckoningTypes.support, support_comment_button(height="5%", width="5%", align_self="flex-end", on_click=CommentModalState.submit)),
+                                    (ReckoningTypes.support, support_comment_button(height="5%", width="5%", max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentModalState.submit)),
                                     (ReckoningTypes.point_of_order, poo_comment_button(height="5%", width="5%", align_self="flex-end", on_click=CommentModalState.submit)),
                                     (ReckoningTypes.detract, detract_from_comment_button(height="5%", width="5%", align_self="flex-end", on_click=CommentModalState.submit)),
                                 ),
