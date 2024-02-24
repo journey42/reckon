@@ -4,7 +4,7 @@ Requires=docker.service
 After=docker.service
 
 [Service]
-Environment="DOMAIN=reckonforum.com"
+Environment="DOMAIN=reckon.cc"
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/home/reckon/reckon
