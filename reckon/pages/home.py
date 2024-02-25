@@ -1,12 +1,10 @@
 """The home page."""
 import reflex as rx
 from datetime import datetime
-from sqlalchemy import text
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
 from reckon.styles import page_params, input_style
 from reckon.components.buttons import submit_button
-from ..components import container
-from ..components import navbar
+from ..components import container, navbar
 from reckon.utils.db import insert_text_with_embedding
 
 class HomePageState(AppState):
@@ -46,17 +44,13 @@ def composer():
             ),
             rx.hstack(
                 submit_button(
-                    height="5%",
-                    width="5%",
+                    max_width="48px",
+                    max_height="48px",
                     on_click=HomePageState.post_concept
                 ),
                 justify_content="flex-end",
-                px=4,
-                py=2,
             ),
         ),
-        p=4,
-        grid_template_columns="1fr",
     )
 
 
@@ -67,9 +61,5 @@ def home():
         navbar(),
         rx.grid(
             composer(),
-            grid_template_columns="1fr",
-            h="100vh",
-            gap=4,
         ),
-        max_width="960px",
     )

@@ -75,8 +75,6 @@ def comment_modal(*args, **kwargs):
                             rx.spacer(),
                             rx.modal_close_button(
                                 close_button(
-                                    height="15%",
-                                    width="15%",
                                     on_click=CommentModalState.visible
                                 ),
                             ),
@@ -101,9 +99,9 @@ def comment_modal(*args, **kwargs):
                                 ),
                                 rx.match(
                                     CommentModalState.type,
-                                    (ReckoningTypes.support, support_comment_button(height="5%", width="5%", max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentModalState.submit)),
-                                    (ReckoningTypes.point_of_order, poo_comment_button(height="5%", width="5%", align_self="flex-end", on_click=CommentModalState.submit)),
-                                    (ReckoningTypes.detract, detract_from_comment_button(height="5%", width="5%", align_self="flex-end", on_click=CommentModalState.submit)),
+                                    (ReckoningTypes.support, support_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentModalState.submit)),
+                                    (ReckoningTypes.point_of_order, poo_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentModalState.submit)),
+                                    (ReckoningTypes.detract, detract_from_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentModalState.submit)),
                                 ),
                                 id="tacontainer",
                                 width="90%",

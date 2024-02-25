@@ -58,8 +58,6 @@ def feedback_modal(options: List[str], *args, **kwargs):
                             rx.spacer(),
                             rx.modal_close_button(
                                 close_button(
-                                    height="15%",
-                                    width="15%",
                                     on_click=FeedbackModalState.visible
                                 ),
                             ),
@@ -95,8 +93,8 @@ def feedback_modal(options: List[str], *args, **kwargs):
                                     on_blur=FeedbackModalState.set_content,
                                 ),
                                 submit_button(
-                                    height="5%",
-                                    width="5%",
+                                    max_width="48px",
+                                    max_height="48px",
                                     padding_top=4,
                                     align_self="flex-end",
                                     on_click=FeedbackModalState.submit

@@ -8,7 +8,8 @@ from .styles import info_text_style
 from .styles import reckon_green
 from .styles import reckon_dark_green
 from .styles import page_params
-from .styles import control_panel_text_style
+from .styles import interior_grid_style
 from .styles import input_style_focus
 from .styles import read_only_text_style
 from .styles import page_footer_style
+from .styles import reckoning_grid_style

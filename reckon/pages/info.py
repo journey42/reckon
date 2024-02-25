@@ -2,15 +2,13 @@
 import reflex as rx
 from reckon.layouts import info_layout
 from reckon.state.base import AppState
-from reckon.styles import page_params
+from reckon.styles import page_params, info_text_style
 
 def info_page(*args, **kwargs):
     return info_layout(
             rx.markdown(
                 *args,
-                font_size="1xl",
-                font_weight="normal",
-                mb=4,
+                **info_text_style,
                 border_x="1px solid #ededed",
                 h="100%",
             )

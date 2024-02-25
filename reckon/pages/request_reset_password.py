@@ -2,7 +2,7 @@
 import reflex as rx
 from reckon.layouts import auth_layout
 from reckon.state.auth import AuthState
-from reckon.styles import button_style, input_style, form_box_style, link_style, page_params
+from reckon.styles import button_style, input_style, form_box_style, link_style, page_params, info_text_style
 
 @rx.page(route="/request_reset_password", **page_params)
 def request_reset_password():
@@ -10,9 +10,7 @@ def request_reset_password():
     return auth_layout(
         rx.text(
             "Enter your email address and we'll send you email with instructions to reset your password.",
-            font_size="1xl",
-            font_weight="normal",
-            mb=4,
+            **info_text_style
         ),
         rx.box(
             rx.input(

@@ -50,8 +50,6 @@ def concept_modal(*args, **kwargs):
                             rx.spacer(),
                             rx.modal_close_button(
                                 close_button(
-                                    height="15%",
-                                    width="15%",
                                     on_click=ConceptModalState.visible
                                 ),
                             ),
@@ -71,8 +69,8 @@ def concept_modal(*args, **kwargs):
                                 on_mount=ConceptModalState.resize_textarea,
                             ),
                             submit_button(
-                                height="5%",
-                                width="5%",
+                                max_width="48px",
+                                max_height="48px",
                                 on_click=ConceptModalState.submit,
                                 align_self="flex-end",
                             ),

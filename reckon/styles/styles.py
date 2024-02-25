@@ -13,7 +13,7 @@ button_style = dict(
 )
 
 image_button_style = dict(
-   # _hover={"bg": reckon_dark_green},
+    #_hover={"bg": "black"},
     display="flex",
     align_items="center",
     justify_content="center",
@@ -28,10 +28,20 @@ page_footer_style = dict(
     bottom="0",
 )
 
-control_panel_text_style = dict (
-    # display="flex",
+interior_grid_style = dict (
+    py=1,
+    px=1,
+    gap=1,
     align_items="center",
     justify_content="center",
+)
+
+reckoning_grid_style = dict (
+    border="2px solid #ededed",
+    border_radius="10px",
+    padding=2,
+    gap=4,
+    mt=2
 )
 
 input_style = dict(
@@ -69,8 +79,6 @@ info_text_style = dict (
     font_size="1xl",
     font_weight="normal",
     mb=4,
-    border_x="1px solid #ededed",
-    h="100%",
 )
 
 meta = [

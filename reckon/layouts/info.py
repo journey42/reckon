@@ -1,7 +1,6 @@
 """Shared info layout."""
 import reflex as rx
-from ..components import container
-from ..components import navbar
+from ..components import container, navbar
 
 def info_layout(*args):
     """The shared layout for info related pages."""
@@ -9,9 +8,7 @@ def info_layout(*args):
         navbar(),
         rx.grid(
             *args,
-            grid_template_columns="1fr",
             h="100vh",
             gap=4,
         ),
-        max_width="960px",
     )

@@ -1,7 +1,6 @@
 """Shared info layout."""
 import reflex as rx
-from ..components import container
-from ..components import navbar
+from ..components import container, navbar
 
 def profile_layout(*args):
     """The shared layout for profile related pages."""
@@ -12,5 +11,4 @@ def profile_layout(*args):
             flex_direction="column",
             align_items="center",
             gap=4,
-            max_width="960px",
         )

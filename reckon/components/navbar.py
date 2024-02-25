@@ -1,9 +1,9 @@
 """Navbar component for the app."""
 import reflex as rx
-from reckon.styles import control_panel_text_style
-from .buttons import trending_concepts_button, your_reckonings_button, your_drafts_button, logo_button
+from .buttons import trending_concepts_button, your_reckonings_button, logo_button
 from reckon.components.feedback_modal import feedback_modal, FeedbackModalState, general_feedback_options
 from reckon.state.base import AppState, UserTypes
+from reckon.styles import interior_grid_style
 
 def user_menu() -> rx.Component:
     """User menu."""
@@ -84,18 +84,13 @@ def user_menu() -> rx.Component:
 def app_logo() -> rx.Component:
     """App logo."""
     return rx.grid(
-        logo_button(width="150px"),
+        logo_button(),
         trending_concepts_button(),
         your_reckonings_button(),
         rx.spacer(),
         user_menu(),
         grid_template_columns="1fr 1fr 1fr 20fr 1fr",
-        place_items="center",
-        mt=4,
-        py=2,
-        px=2,
-        gap=2,
-        # **control_panel_text_style,
+        **interior_grid_style
     )
 
 navbar_styles = dict(

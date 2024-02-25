@@ -3,13 +3,11 @@ import reflex as rx
 from datetime import datetime
 from sqlmodel import select, delete, func
 from sqlalchemy.orm import aliased
-from sqlalchemy import and_ as _and
-from sqlalchemy import or_ as _or
+from sqlalchemy import and_ as _and, or_ as _or
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
-from reckon.styles import input_style, page_params, control_panel_text_style, input_style_focus, read_only_text_style
-from ..components import container
-from ..components import navbar
-from reckon.components.buttons import up_vote_concept_button, down_vote_concept_button, feedback_button, view_comments_button, compare_concepts_button, delete_button, support_comment_button, detract_from_comment_button, poo_comment_button, no_feedback_button, feedback_button, no_up_vote_concept_button, no_down_vote_concept_button, edit_button, view_concept_button, view_parent_comment_button
+from reckon.styles import input_style, page_params, interior_grid_style, input_style_focus, read_only_text_style, reckoning_grid_style
+from ..components import container, navbar
+from reckon.components.buttons import up_vote_concept_button, down_vote_concept_button, feedback_button, view_comments_button, compare_concepts_button, delete_button, support_comment_button, detract_from_comment_button, poo_comment_button, feedback_button, no_up_vote_concept_button, no_down_vote_concept_button, edit_button, view_concept_button, view_parent_comment_button
 from reckon.components.feedback_modal import feedback_modal, FeedbackModalState, reckoning_feedback_options
 from reckon.components.concept_modal import concept_modal, ConceptModalState
 from reckon.components.comment_modal import comment_modal, CommentModalState
@@ -54,11 +52,27 @@ class ReckoningsPageState(AppState):
         with rx.session() as session:
             session.expire_on_commit = False
             concept = session.exec(select(Reckoning).where(Reckoning.id == cid)).first()
-            vote = session.exec(select(Reckoning).where(_and(Reckoning.parent_reckoning_id == cid, Reckoning.user_id == self.user.id, _or(Reckoning.type == ReckoningTypes.up_vote,Reckoning.type == ReckoningTypes.down_vote)))).first()
+            vote = session.exec(select(Reckoning).where(_and(
+                Reckoning.parent_reckoning_id == cid, 
+                Reckoning.user_id == self.user.id, 
+                _or(Reckoning.type == ReckoningTypes.up_vote, Reckoning.type == ReckoningTypes.down_vote)
+            ))).first()
+            
             if vote:
-                if vote.type == type:
+                if vote.type == type:  # Check if no other votes have been made
                     session.delete(vote)
-                    concept.type = ReckoningTypes.draft
+                    
+                    # Check if there are other votes from different users
+                    other_votes_count = session.exec(select(func.count(Reckoning.id)).where(
+                        _and(
+                            Reckoning.parent_reckoning_id == cid, 
+                            Reckoning.user_id != self.user.id,  # Exclude current user's votes
+                            _or(Reckoning.type == ReckoningTypes.up_vote, Reckoning.type == ReckoningTypes.down_vote)
+                        )
+                    )).first()  # Assuming the count result is the first element
+                    
+                    if other_votes_count == 0:
+                        concept.type = ReckoningTypes.draft
                 else:
                     vote.type = type
                 session.commit()
@@ -71,6 +85,27 @@ class ReckoningsPageState(AppState):
                 session.add(comment)
                 session.commit()
                 return rx.redirect(f"/comments/{cid}")
+
+        # with rx.session() as session:
+        #     session.expire_on_commit = False
+        #     concept = session.exec(select(Reckoning).where(Reckoning.id == cid)).first()
+        #     vote = session.exec(select(Reckoning).where(_and(Reckoning.parent_reckoning_id == cid, Reckoning.user_id == self.user.id, _or(Reckoning.type == ReckoningTypes.up_vote,Reckoning.type == ReckoningTypes.down_vote)))).first()
+        #     if vote:
+        #         if vote.type == type:
+        #             session.delete(vote)
+        #             concept.type = ReckoningTypes.draft
+        #         else:
+        #             vote.type = type
+        #         session.commit()
+        #         #yield ReckoningsPageState.trigger_rerender()
+        #         return rx.redirect(self.router.page.path)
+        #     else:
+        #         if concept.user_id == self.user.id:
+        #             concept.type = ReckoningTypes.concept
+        #         comment = Reckoning(content="n/a", parent_reckoning_id=cid, type=type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
+        #         session.add(comment)
+        #         session.commit()
+        #         return rx.redirect(f"/comments/{cid}")
                 
     
 
@@ -111,7 +146,7 @@ class YourDraftsPageState(ReckoningsPageState):
 
             # If self.search is provided, add an additional condition to the query
             if self.search:
-                query = query.where(Reckoning.content.contains(self.search))
+                query = query.where(func.lower(Reckoning.content).contains(self.search.lower()))
 
             # Execute the query to get the results, ensuring uniqueness
             self.reckonings = session.exec(query).unique().all()
@@ -156,7 +191,7 @@ class NewConceptsPageState(ReckoningsPageState):
 
             # If self.search is provided, add an additional condition to the query
             if self.search:
-                query = query.where(Reckoning.content.contains(self.search))
+                query = query.where(func.lower(Reckoning.content).contains(self.search.lower()))
 
             # Execute the query to get the results
             self.reckonings = session.exec(query).all()
@@ -219,7 +254,7 @@ class TrendingConceptsPageState(ReckoningsPageState):
 
             # Conditionally add the search filter if `self.search` is provided
             if self.search:
-                query = query.where(Reckoning.content.contains(self.search))
+                query = query.where(func.lower(Reckoning.content).contains(self.search.lower()))
 
             # Apply ordering by up_vote count and then by created_at timestamp
             query = query.order_by(up_vote_count_subquery.c.up_vote_count.desc(), Reckoning.created_at.desc())
@@ -273,7 +308,7 @@ class YourReckoningsPageState(ReckoningsPageState):
 
             # If self.search is provided, add the search condition
             if self.search:
-                common_conditions.append(Reckoning.content.contains(self.search))
+                common_conditions.append(func.lower(Reckoning.content).contains(self.search.lower()))
 
             # Apply conditions to the query
             query = query.where(_and(*common_conditions))
@@ -333,7 +368,7 @@ class ComparePageState(ReckoningsPageState):
 
             # Conditionally add the search filter if `self.search` is provided
             if self.search:
-                query = query.where(Reckoning.content.contains(self.search))
+                query = query.where(func.lower(Reckoning.content).contains(self.search.lower()))
 
             # Execute the query
             self.reckonings = session.exec(query).all()
@@ -350,7 +385,7 @@ class ComparePageState(ReckoningsPageState):
             results_dict = dict(results)
 
             for r in self.reckonings:
-                r.similarity = round(((results_dict[r.id]-1)*-1),2) #((round(results_dict[r.id] - 1), 2) * -1)
+                r.similarity = round(((results_dict[r.id]-1)*-1),2) #reverse scale from 0 - infinity to 1 - 0
                 r.compute_tallies(self.user.id)
 
 class ConceptPageState(ReckoningsPageState):
@@ -462,140 +497,108 @@ def parent_reckoning(state):
     return rx.grid(
         rx.grid(
             rx.grid(
-                rx.cond(
-                    state.parent.parent_reckoning_id,
-                    view_parent_comment_button(
-                        height="15%",
-                        width="15%",
-                        on_click=rx.redirect(f"/comments/{state.parent.parent_reckoning_id}"),
-                    ),
-                    compare_concepts_button(
-                        on_click=rx.redirect(f"/compare/{state.parent.id}"),
-                        height="15%",
-                        width="15%",
-                    ),
-                ),
-                rx.cond(
-                    (state.parent.user_id != state.user.id),
-                    feedback_button(
-                        height="15%",
-                        width="15%",
-                        on_click=state.provide_feedback_on_reckoning(state.parent.id),
-                    ),
-                    rx.spacer()
-                ),
-                py=2,
-                px=2,
-                gap=2,
-                place_items="center",
-            ),
-            rx.text_area(key=state.parent.id, default_value=state.parent.content, **read_only_text_style),
-            grid_template_columns="1fr 12fr",
-            py=2,
-            px=2,
-            gap=1,
-            # border_bottom="1px solid #ededed",
-            **control_panel_text_style,
-        ),
-        rx.grid(
-            rx.spacer(),
-            rx.cond(
-                (state.parent.type == 0),
-                rx.fragment(
-                rx.cond(
-                        (state.parent.user_vote_history == ReckoningTypes.no_vote), #& (state.parent.user_id != state.user.id),
-                        rx.fragment(
-                            no_up_vote_concept_button (
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
-                            ),
-                            rx.text(state.parent.up_votes),
-                            no_down_vote_concept_button(
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.down_vote)
-                            ),
-                            rx.text(state.parent.down_votes),
+                rx.grid(
+                    rx.cond(
+                        state.parent.parent_reckoning_id,
+                        view_parent_comment_button(
+                            on_click=rx.redirect(f"/comments/{state.parent.parent_reckoning_id}"),
                         ),
-                        None
+                        compare_concepts_button(
+                            on_click=rx.redirect(f"/compare/{state.parent.id}"),
+                        ),
                     ),
                     rx.cond(
-                        (state.parent.user_vote_history == ReckoningTypes.up_vote), #| (state.parent.user_id == state.user.id),
-                        rx.fragment(
-                            up_vote_concept_button (
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
-                            ),
-                            rx.text(state.parent.up_votes),
-                            no_down_vote_concept_button (
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.down_vote)
-                            ),
-                            rx.text(state.parent.down_votes),
+                        (state.parent.user_id != state.user.id),
+                        feedback_button(
+                            on_click=state.provide_feedback_on_reckoning(state.parent.id),
                         ),
-                        None
+                        rx.spacer()
                     ),
+                    py=2,
+                    px=2,
+                    gap=2,
+                    place_items="center",
+                ),
+                rx.text_area(key=state.parent.id, default_value=state.parent.content, **read_only_text_style),
+                grid_template_columns="1fr 12fr",
+                **interior_grid_style,
+
+            ),
+            rx.grid(
+                rx.spacer(),
+                rx.cond(
+                    (state.parent.type == 0),
+                    rx.fragment(
                     rx.cond(
-                        (state.parent.user_vote_history == ReckoningTypes.down_vote),
-                        rx.fragment(
-                            no_up_vote_concept_button(
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
+                            (state.parent.user_vote_history == ReckoningTypes.no_vote), #& (state.parent.user_id != state.user.id),
+                            rx.fragment(
+                                no_up_vote_concept_button (
+                                    on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
+                                ),
+                                rx.text(state.parent.up_votes),
+                                no_down_vote_concept_button(
+                                    on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.down_vote)
+                                ),
+                                rx.text(state.parent.down_votes),
                             ),
-                            rx.text(state.parent.up_votes),
-                            down_vote_concept_button(
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.down_vote)
-                            ),
-                            rx.text(state.parent.down_votes),
+                            None
                         ),
-                        None
+                        rx.cond(
+                            (state.parent.user_vote_history == ReckoningTypes.up_vote), #| (state.parent.user_id == state.user.id),
+                            rx.fragment(
+                                up_vote_concept_button (
+                                    on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
+                                ),
+                                rx.text(state.parent.up_votes),
+                                no_down_vote_concept_button (
+                                    on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.down_vote)
+                                ),
+                                rx.text(state.parent.down_votes),
+                            ),
+                            None
+                        ),
+                        rx.cond(
+                            (state.parent.user_vote_history == ReckoningTypes.down_vote),
+                            rx.fragment(
+                                no_up_vote_concept_button(
+                                    on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
+                                ),
+                                rx.text(state.parent.up_votes),
+                                down_vote_concept_button(
+                                    on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.down_vote)
+                                ),
+                                rx.text(state.parent.down_votes),
+                            ),
+                            None
+                        ),
+                    ),
+                    rx.fragment(
+                        rx.spacer(),
+                        rx.spacer(),
+                        rx.spacer(),
+                        rx.spacer(),
                     ),
                 ),
-                rx.fragment(
-                    rx.spacer(),
-                    rx.spacer(),
-                    rx.spacer(),
-                    rx.spacer(),
+                rx.spacer(),
+                support_comment_button(
+                    on_click=state.new_comment(state.parent.content, ReckoningTypes.support, state.reckoning_id)
                 ),
+                rx.text(state.parent.supports),
+                poo_comment_button(
+                    on_click=state.new_comment(state.parent.content, ReckoningTypes.point_of_order, state.reckoning_id)
+                ),
+                rx.text(state.parent.points_of_order),
+                detract_from_comment_button(
+                    on_click=state.new_comment(state.parent.content, ReckoningTypes.detract, state.reckoning_id)
+                ),
+                rx.text(state.parent.detracts),
+                grid_template_columns="10fr 1fr 1fr 1fr 1fr 2fr 1fr 0.5fr 1fr 0.5fr 1fr 0.5fr",
+                **interior_grid_style,
             ),
-            rx.spacer(),
-            support_comment_button(
-                height="15%",
-                width="15%",
-                on_click=state.new_comment(state.parent.content, ReckoningTypes.support, state.reckoning_id)
-            ),
-            rx.text(state.parent.supports),
-            poo_comment_button(
-                height="15%",
-                width="15%",
-                on_click=state.new_comment(state.parent.content, ReckoningTypes.point_of_order, state.reckoning_id)
-            ),
-            rx.text(state.parent.points_of_order),
-            detract_from_comment_button(
-                height="15%",
-                width="15%",
-                on_click=state.new_comment(state.parent.content, ReckoningTypes.detract, state.reckoning_id)
-            ),
-            rx.text(state.parent.detracts),
-            grid_template_columns="10fr 1fr 1fr 1fr 1fr 2fr 1fr 0.5fr 1fr 0.5fr 1fr 0.5fr",
-            py=2,
-            px=2,
-            gap=1,
-            # border_bottom="1px solid #ededed",
-            **control_panel_text_style,
+            **reckoning_grid_style
         ),
         rx.input(on_change=state.set_search, placeholder="Search comments", **input_style_focus),
-        grid_template_columns="1fr",
-        py=2,
-        px=2,
-        border_bottom="1px solid #ededed",
-        **control_panel_text_style,
+        **interior_grid_style,
     )
 
 def search(state):
@@ -604,7 +607,6 @@ def search(state):
         rx.input(on_change=state.set_search, placeholder="Search reckonings", **input_style),
         justify="space-between",
         p=4,
-        # border_bottom="1px solid #ededed",
     )
 
 def render_comment(state, c: Reckoning):
@@ -621,14 +623,10 @@ def render_comment(state, c: Reckoning):
                             (c.parent_user_vote_history == ReckoningTypes.no_vote), #& (c.user_id != state.user.id),
                             rx.fragment(
                                 no_up_vote_concept_button (
-                                    height="15%",
-                                    width="15%",
                                     on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
                                 ),
                                 rx.text(c.parent_up_votes),
                                 no_down_vote_concept_button(
-                                    height="15%",
-                                    width="15%",
                                     on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.down_vote)
                                 ),
                                 rx.text(c.parent_down_votes),
@@ -639,14 +637,10 @@ def render_comment(state, c: Reckoning):
                             (c.parent_user_vote_history == ReckoningTypes.up_vote), #| (c.user_id == state.user.id),
                             rx.fragment(
                                 up_vote_concept_button (
-                                    height="15%",
-                                    width="15%",
                                     on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
                                 ),
                                 rx.text(c.parent_up_votes),
                                 no_down_vote_concept_button (
-                                    height="15%",
-                                    width="15%",
                                     on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.down_vote)
                                 ),
                                 rx.text(c.parent_down_votes),
@@ -657,14 +651,10 @@ def render_comment(state, c: Reckoning):
                             (c.parent_user_vote_history == ReckoningTypes.down_vote),
                             rx.fragment(
                                 no_up_vote_concept_button(
-                                    height="15%",
-                                    width="15%",
                                     on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
                                 ),
                                 rx.text(c.parent_up_votes),
                                 down_vote_concept_button(
-                                    height="15%",
-                                    width="15%",
                                     on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.down_vote)
                                 ),
                                 rx.text(c.parent_down_votes),
@@ -672,34 +662,25 @@ def render_comment(state, c: Reckoning):
                             None
                         ),
                         view_parent_comment_button(
-                            height="15%",
-                            width="15%",
+                            
                             on_click=rx.redirect(f"/comments/{c.parent_id}"),
                         ),
                         grid_template_columns="9fr 1fr 1fr 1fr 1fr 1fr",
-                        py=1,
-                        px=1,
-                        gap=1,
-                        **control_panel_text_style,
+                        **interior_grid_style,
                     ),
                     rx.grid(
                         rx.text(c.parent_content, **read_only_text_style),
                         rx.match(
                             c.parent_type,
-                            (ReckoningTypes.support, support_comment_button(height="15%", width="15%")),
-                            (ReckoningTypes.detract, detract_from_comment_button(height="15%", width="15%")),
-                            (ReckoningTypes.point_of_order, poo_comment_button(height="15%", width="15%")),
+                            (ReckoningTypes.support, support_comment_button()),
+                            (ReckoningTypes.detract, detract_from_comment_button()),
+                            (ReckoningTypes.point_of_order, poo_comment_button()),
                         ),
                         view_parent_comment_button(
-                            height="15%",
-                            width="15%",
                             on_click=rx.redirect(f"/comments/{c.parent_reckoning_id}"),
                         ),
                         grid_template_columns="12fr 1fr 1fr",
-                        py=1,
-                        px=1,
-                        gap=1,
-                        **control_panel_text_style,
+                        **interior_grid_style,
                     ),
 
                 ),
@@ -709,27 +690,20 @@ def render_comment(state, c: Reckoning):
                 rx.text(c.content, **read_only_text_style),
                 rx.match(
                     c.type,
-                    (ReckoningTypes.support, support_comment_button(height="15%", width="15%")),
-                    (ReckoningTypes.detract, detract_from_comment_button(height="15%", width="15%")),
-                    (ReckoningTypes.point_of_order, poo_comment_button(height="15%", width="15%")),
+                    (ReckoningTypes.support, support_comment_button()),
+                    (ReckoningTypes.detract, detract_from_comment_button()),
+                    (ReckoningTypes.point_of_order, poo_comment_button()),
                 ),
                 view_comments_button(
-                    height="15%",
-                    width="15%",
                     on_click=state.view_comments(c.id),
                 ),
                 grid_template_columns="12fr 1fr 1fr",
-                py=1,
-                px=1,
-                gap=1,
-                **control_panel_text_style,
+                **interior_grid_style,
             ),
             rx.grid (
                     rx.cond(
                         ((state.user.role > 0) | ((c.user_id == state.user.id) & (c.supports == 0) & (c.detracts == 0) & (c.points_of_order == 0))),
                         edit_button(
-                            height="15%",
-                            width="15%",
                             on_click=state.edit_comment(c.parent_reckoning_id, c.type, c.id, c.content)
                         ),
                         rx.spacer(),
@@ -737,8 +711,6 @@ def render_comment(state, c: Reckoning):
                     rx.cond(
                         ((state.user.role > 0) | ((c.user_id == state.user.id) & (c.supports == 0) & (c.detracts == 0) & (c.points_of_order == 0))),
                         delete_button(
-                            height="15%",
-                            width="15%",
                             on_click=state.delete_reckoning(c.id),
                         ),
                         rx.spacer(),
@@ -747,84 +719,259 @@ def render_comment(state, c: Reckoning):
                     rx.cond(
                         (c.user_id != state.user.id),
                         feedback_button(
-                            height="15%",
-                            width="15%",
                             on_click=state.provide_feedback_on_reckoning(c.id),
                         ),
                         rx.spacer(),
                     ),
                     rx.spacer(),
                     support_comment_button(
-                        height="15%",
-                        width="15%",
                         on_click=state.new_comment(c.content, ReckoningTypes.support, c.id)
                     ),
                     rx.text(c.supports),
                     poo_comment_button(
-                        height="15%",
-                        width="15%",
                         on_click=state.new_comment(c.content, ReckoningTypes.point_of_order, c.id)
                     ),
                     rx.text(c.points_of_order),
                     detract_from_comment_button(
-                        height="15%",
-                        width="15%",
                         on_click=state.new_comment(c.content, ReckoningTypes.detract, c.id)
                     ),
                     rx.text(c.detracts),
                     grid_template_columns="1fr 1fr 2fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr",
-                    py=1,
-                    px=1,
-                    gap=1,
-                    **control_panel_text_style,
+                    **interior_grid_style,
                 ),
-                # grid_template_columns="1fr 1fr 1fr",
-                py=1,
-                px=1,
-                gap=1,
-                **control_panel_text_style,
+                **interior_grid_style,
             ),
-            # grid_template_columns="14fr 1fr",
-            border="2px solid #ededed",
-            border_radius="10px",
-            padding=2,
-            gap=2,
-            mt=2,
+            **reckoning_grid_style
         )
 
 
-def render_vote(state, c: Reckoning):
-    """Display for an individual vote in the feed."""
+# def render_vote(state, c: Reckoning):
+#     """Display for an individual vote in the feed."""
+#     return rx.grid(
+#                 rx.grid(
+#                     compare_concepts_button(
+#                         on_click=state.compare_concepts(c.parent_id),
+#                     ),
+#                     rx.text( c.parent_content, **read_only_text_style),
+#                     grid_template_columns="1fr 22fr",
+#                     **interior_grid_style,
+#                 ),
+#                 rx.grid(
+#                     rx.cond(
+#                         (state.page_type == 1),
+#                         edit_button(
+#                             on_click=state.edit_concept(c.parent_id),
+#                         ),
+#                        rx.spacer(), 
+#                     ),
+#                     rx.cond(
+#                         (state.page_type == 1),
+#                         delete_button(
+#                             on_click=state.delete_reckoning(c.parent_id),
+#                         ),
+#                         rx.spacer(),
+#                     ),
+#                     rx.spacer(),
+#                     rx.cond(
+#                         (state.page_type == 5),
+#                         rx.text(c.similarity),
+#                         rx.spacer(),
+#                     ),
+#                     rx.spacer(),
+#                     rx.cond(
+#                         (c.user_id != state.user.id),
+#                         feedback_button(
+#                             on_click=state.provide_feedback_on_reckoning(c.parent_id),
+#                         ),
+#                         rx.spacer()
+#                     ),
+#                     rx.spacer(),
+#                     rx.cond(
+#                         (c.parent_user_vote_history == ReckoningTypes.no_vote), #& (c.user_id != state.user.id),
+#                         rx.fragment(
+#                             no_up_vote_concept_button (
+#                                 on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
+#                             ),
+#                             rx.text(c.parent_up_votes),
+#                             no_down_vote_concept_button(
+#                                 on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.down_vote)
+#                             ),
+#                             rx.text(c.parent_down_votes),
+#                         ),
+#                         None
+#                     ),
+#                     rx.cond(
+#                         (c.parent_user_vote_history == ReckoningTypes.up_vote), #| (c.user_id == state.user.id),
+#                         rx.fragment(
+#                             up_vote_concept_button (
+#                                 on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
+#                             ),
+#                             rx.text(c.parent_up_votes),
+#                             no_down_vote_concept_button (
+#                                 on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.down_vote)
+#                             ),
+#                             rx.text(c.parent_down_votes),
+#                         ),
+#                         None
+#                     ),
+#                     rx.cond(
+#                         (c.parent_user_vote_history == ReckoningTypes.down_vote),
+#                         rx.fragment(
+#                             no_up_vote_concept_button(
+#                                 on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
+#                             ),
+#                             rx.text(c.parent_up_votes),
+#                             down_vote_concept_button(
+#                                 on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.down_vote)
+#                             ),
+#                             rx.text(c.parent_down_votes),
+#                         ),
+#                         None
+#                     ),
+#                     rx.spacer(),
+#                     view_concept_button(
+#                         on_click=state.view_comments(c.parent_id),
+#                     ),
+#                     rx.cond(
+#                         (state.rerender),
+#                         rx.text(c.parent_total_comments),
+#                         rx.text(c.parent_total_comments),
+#                     ),
+#                     grid_template_columns="1fr 1fr 1fr 1fr 8fr 1fr 2fr 1fr 1fr 1fr 1fr 2fr 1fr 1fr",
+#                     **interior_grid_style,
+#             ),
+#             **reckoning_grid_style
+#         )
+
+
+# def render_concept(state, c: Reckoning):
+#     """Display for an individual concept in the feed."""
+#     return rx.grid(
+#                 rx.grid(
+#                     compare_concepts_button(
+#                         on_click=state.compare_concepts(c.id),
+#                     ),
+#                     rx.text( c.content, **read_only_text_style),
+#                     grid_template_columns="1fr 22fr",
+#                     **interior_grid_style,
+#                 ),
+#                 rx.grid(
+#                     rx.cond(
+#                         (state.page_type == 1),
+#                         edit_button(
+#                             on_click=state.edit_concept(c.id),
+#                         ),
+#                        rx.spacer(), 
+#                     ),
+#                     rx.cond(
+#                         (state.page_type == 1),
+#                         delete_button(
+#                             on_click=state.delete_reckoning(c.id),
+#                         ),
+#                         rx.spacer(),
+#                     ),
+#                     rx.spacer(),
+#                     rx.cond(
+#                         (state.page_type == 5),
+#                         rx.text(c.similarity),
+#                         rx.spacer(),
+#                     ),
+#                     rx.spacer(),
+#                     rx.cond(
+#                         (c.user_id != state.user.id),
+#                         feedback_button(
+#                             on_click=state.provide_feedback_on_reckoning(c.id),
+#                         ),
+#                         rx.spacer()
+#                     ),
+#                     rx.spacer(),
+#                     rx.cond(
+#                         (c.user_vote_history == ReckoningTypes.no_vote), #& (c.user_id != state.user.id),
+#                         rx.fragment(
+#                             no_up_vote_concept_button (
+#                                 on_click=state.vote_on_concept(c.id, ReckoningTypes.up_vote)
+#                             ),
+#                             rx.text(c.up_votes),
+#                             no_down_vote_concept_button(
+#                                 on_click=state.vote_on_concept(c.id, ReckoningTypes.down_vote)
+#                             ),
+#                             rx.text(c.down_votes),
+#                         ),
+#                         None
+#                     ),
+#                     rx.cond(
+#                         (c.user_vote_history == ReckoningTypes.up_vote), #| (c.user_id == state.user.id),
+#                         rx.fragment(
+#                             up_vote_concept_button (
+#                                 on_click=state.vote_on_concept(c.id, ReckoningTypes.up_vote)
+#                             ),
+#                             rx.text(c.up_votes),
+#                             no_down_vote_concept_button (
+#                                 on_click=state.vote_on_concept(c.id, ReckoningTypes.down_vote)
+#                             ),
+#                             rx.text(c.down_votes),
+#                         ),
+#                         None
+#                     ),
+#                     rx.cond(
+#                         (c.user_vote_history == ReckoningTypes.down_vote),
+#                         rx.fragment(
+#                             no_up_vote_concept_button(
+#                                 on_click=state.vote_on_concept(c.id, ReckoningTypes.up_vote)
+#                             ),
+#                             rx.text(c.up_votes),
+#                             down_vote_concept_button(
+#                                 on_click=state.vote_on_concept(c.id, ReckoningTypes.down_vote)
+#                             ),
+#                             rx.text(c.down_votes),
+#                         ),
+#                         None
+#                     ),
+#                     rx.spacer(),
+#                     view_concept_button(
+#                         on_click=state.view_comments(c.id),
+#                     ),
+#                     rx.cond(
+#                         (state.rerender),
+#                         rx.text(c.total_comments),
+#                         rx.text(c.total_comments),
+#                     ),
+#                     grid_template_columns="1fr 1fr 1fr 1fr 8fr 1fr 2fr 1fr 1fr 1fr 1fr 2fr 1fr 1fr",
+#                     **interior_grid_style,
+#             ),
+#             **reckoning_grid_style
+#         )
+
+def render_concept_template(state, c: Reckoning, item_attributes: dict):
+    """Display for an individual item (vote or concept) in the feed, dynamically adapting based on attributes."""
+    item_id = getattr(c, item_attributes['id'])
+    content = getattr(c, item_attributes['content'])
+    vote_history = getattr(c, item_attributes['vote_history'])
+    up_votes = getattr(c, item_attributes['up_votes'])
+    down_votes = getattr(c, item_attributes['down_votes'])
+    total_comments = getattr(c, item_attributes['total_comments'])
+    
     return rx.grid(
                 rx.grid(
                     compare_concepts_button(
-                        height="15%",
-                        width="15%",
-                        on_click=state.compare_concepts(c.parent_id),
+                        on_click=state.compare_concepts(item_id),
                     ),
-                    rx.text( c.parent_content, **read_only_text_style),
+                    rx.text(content, **read_only_text_style),
                     grid_template_columns="1fr 22fr",
-                    py=1,
-                    px=1,
-                    gap=1,
-                    **control_panel_text_style,
+                    **interior_grid_style,
                 ),
                 rx.grid(
                     rx.cond(
                         (state.page_type == 1),
                         edit_button(
-                            height="15%",
-                            width="15%",
-                            on_click=state.edit_concept(c.parent_id),
+                            on_click=state.edit_concept(item_id),
                         ),
                        rx.spacer(), 
                     ),
                     rx.cond(
                         (state.page_type == 1),
                         delete_button(
-                            height="15%",
-                            width="15%",
-                            on_click=state.delete_reckoning(c.parent_id),
+                            on_click=state.delete_reckoning(item_id),
                         ),
                         rx.spacer(),
                     ),
@@ -838,221 +985,93 @@ def render_vote(state, c: Reckoning):
                     rx.cond(
                         (c.user_id != state.user.id),
                         feedback_button(
-                            height="15%",
-                            width="15%",
-                            on_click=state.provide_feedback_on_reckoning(c.parent_id),
+                            on_click=state.provide_feedback_on_reckoning(item_id),
                         ),
                         rx.spacer()
                     ),
                     rx.spacer(),
                     rx.cond(
-                        (c.parent_user_vote_history == ReckoningTypes.no_vote), #& (c.user_id != state.user.id),
+                        (vote_history == ReckoningTypes.no_vote),
                         rx.fragment(
                             no_up_vote_concept_button (
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
+                                on_click=state.vote_on_concept(item_id, ReckoningTypes.up_vote)
                             ),
-                            rx.text(c.parent_up_votes),
+                            rx.text(up_votes),
                             no_down_vote_concept_button(
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.down_vote)
+                                on_click=state.vote_on_concept(item_id, ReckoningTypes.down_vote)
                             ),
-                            rx.text(c.parent_down_votes),
+                            rx.text(down_votes),
                         ),
                         None
                     ),
                     rx.cond(
-                        (c.parent_user_vote_history == ReckoningTypes.up_vote), #| (c.user_id == state.user.id),
+                        (vote_history == ReckoningTypes.up_vote),
                         rx.fragment(
                             up_vote_concept_button (
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
+                                on_click=state.vote_on_concept(item_id, ReckoningTypes.up_vote)
                             ),
-                            rx.text(c.parent_up_votes),
+                            rx.text(up_votes),
                             no_down_vote_concept_button (
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.down_vote)
+                                on_click=state.vote_on_concept(item_id, ReckoningTypes.down_vote)
                             ),
-                            rx.text(c.parent_down_votes),
+                            rx.text(down_votes),
                         ),
                         None
                     ),
                     rx.cond(
-                        (c.parent_user_vote_history == ReckoningTypes.down_vote),
+                        (vote_history == ReckoningTypes.down_vote),
                         rx.fragment(
                             no_up_vote_concept_button(
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.up_vote)
+                                on_click=state.vote_on_concept(item_id, ReckoningTypes.up_vote)
                             ),
-                            rx.text(c.parent_up_votes),
+                            rx.text(up_votes),
                             down_vote_concept_button(
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.parent_id, ReckoningTypes.down_vote)
+                                on_click=state.vote_on_concept(item_id, ReckoningTypes.down_vote)
                             ),
-                            rx.text(c.parent_down_votes),
+                            rx.text(down_votes),
                         ),
                         None
                     ),
                     rx.spacer(),
                     view_concept_button(
-                        height="15%",
-                        width="15%",
-                        on_click=state.view_comments(c.parent_id),
+                        on_click=state.view_comments(item_id),
                     ),
                     rx.cond(
                         (state.rerender),
-                        rx.text(c.parent_total_comments),
-                        rx.text(c.parent_total_comments),
+                        rx.text(total_comments),
+                        rx.text(total_comments),
                     ),
                     grid_template_columns="1fr 1fr 1fr 1fr 8fr 1fr 2fr 1fr 1fr 1fr 1fr 2fr 1fr 1fr",
-                    py=1,
-                    px=1,
-                    gap=1,
-                    **control_panel_text_style,
+                    **interior_grid_style,
             ),
-            border="2px solid #ededed",
-            border_radius="10px",
-            padding=2,
-            gap=4,
-            mt=2
+            **reckoning_grid_style
         )
 
+# Example of calling the function for a vote
+attributes_for_vote = {
+    'id': 'parent_id',
+    'content': 'parent_content',
+    'vote_history': 'parent_user_vote_history',
+    'up_votes': 'parent_up_votes',
+    'down_votes': 'parent_down_votes',
+    'total_comments': 'parent_total_comments'
+}
+
+# Example of calling the function for a concept
+attributes_for_concept = {
+    'id': 'id',
+    'content': 'content',
+    'vote_history': 'user_vote_history',
+    'up_votes': 'up_votes',
+    'down_votes': 'down_votes',
+    'total_comments': 'total_comments'
+}
 
 def render_concept(state, c: Reckoning):
-    """Display for an individual concept in the feed."""
-    return rx.grid(
-                rx.grid(
-                    compare_concepts_button(
-                        height="15%",
-                        width="15%",
-                        on_click=state.compare_concepts(c.id),
-                    ),
-                    rx.text( c.content, **read_only_text_style),
-                    grid_template_columns="1fr 22fr",
-                    py=1,
-                    px=1,
-                    gap=1,
-                    **control_panel_text_style,
-                ),
-                rx.grid(
-                    rx.cond(
-                        (state.page_type == 1),
-                        edit_button(
-                            height="15%",
-                            width="15%",
-                            on_click=state.edit_concept(c.id),
-                        ),
-                       rx.spacer(), 
-                    ),
-                    rx.cond(
-                        (state.page_type == 1),
-                        delete_button(
-                            height="15%",
-                            width="15%",
-                            on_click=state.delete_reckoning(c.id),
-                        ),
-                        rx.spacer(),
-                    ),
-                    rx.spacer(),
-                    rx.cond(
-                        (state.page_type == 5),
-                        rx.text(c.similarity),
-                        rx.spacer(),
-                    ),
-                    rx.spacer(),
-                    rx.cond(
-                        (c.user_id != state.user.id),
-                        feedback_button(
-                            height="15%",
-                            width="15%",
-                            on_click=state.provide_feedback_on_reckoning(c.id),
-                        ),
-                        rx.spacer()
-                    ),
-                    rx.spacer(),
-                    rx.cond(
-                        (c.user_vote_history == ReckoningTypes.no_vote), #& (c.user_id != state.user.id),
-                        rx.fragment(
-                            no_up_vote_concept_button (
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.id, ReckoningTypes.up_vote)
-                            ),
-                            rx.text(c.up_votes),
-                            no_down_vote_concept_button(
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.id, ReckoningTypes.down_vote)
-                            ),
-                            rx.text(c.down_votes),
-                        ),
-                        None
-                    ),
-                    rx.cond(
-                        (c.user_vote_history == ReckoningTypes.up_vote), #| (c.user_id == state.user.id),
-                        rx.fragment(
-                            up_vote_concept_button (
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.id, ReckoningTypes.up_vote)
-                            ),
-                            rx.text(c.up_votes),
-                            no_down_vote_concept_button (
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.id, ReckoningTypes.down_vote)
-                            ),
-                            rx.text(c.down_votes),
-                        ),
-                        None
-                    ),
-                    rx.cond(
-                        (c.user_vote_history == ReckoningTypes.down_vote),
-                        rx.fragment(
-                            no_up_vote_concept_button(
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.id, ReckoningTypes.up_vote)
-                            ),
-                            rx.text(c.up_votes),
-                            down_vote_concept_button(
-                                height="15%",
-                                width="15%",
-                                on_click=state.vote_on_concept(c.id, ReckoningTypes.down_vote)
-                            ),
-                            rx.text(c.down_votes),
-                        ),
-                        None
-                    ),
-                    rx.spacer(),
-                    view_concept_button(
-                        height="15%",
-                        width="15%",
-                        on_click=state.view_comments(c.id),
-                    ),
-                    rx.cond(
-                        (state.rerender),
-                        rx.text(c.total_comments),
-                        rx.text(c.total_comments),
-                    ),
-                    grid_template_columns="1fr 1fr 1fr 1fr 8fr 1fr 2fr 1fr 1fr 1fr 1fr 2fr 1fr 1fr",
-                    py=1,
-                    px=1,
-                    gap=1,
-                    **control_panel_text_style,
-            ),
-            border="2px solid #ededed",
-            border_radius="10px",
-            padding=2,
-            gap=4,
-            mt=2
-        )
+    return render_concept_template(state, c, attributes_for_concept)  # To render a concept
+    
+def render_vote(state, c: Reckoning):
+    return render_concept_template(state, c, attributes_for_vote)  # To render a vote
 
 def reckoning(state, r: Reckoning):
     return rx.match(
@@ -1077,14 +1096,12 @@ def page(state, *args, **kwargs):
                 ),
                 h="100%",
             ),
-            grid_template_columns="1fr",
             h="100vh",
             gap=4,
         ),
         comment_modal(on_close=state.close_modal, on_close_complete=state.close_complete_modal),
         concept_modal(on_close=state.close_modal, on_close_complete=state.close_complete_modal),
         feedback_modal(reckoning_feedback_options, on_close=FeedbackModalState.close),
-        max_width="960px",
         **kwargs,
     )
 
