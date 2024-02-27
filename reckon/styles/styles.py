@@ -13,7 +13,7 @@ button_style = dict(
 )
 
 image_button_style = dict(
-    #_hover={"bg": "black"},
+    _hover={"bg": "rgba(255, 255, 255, 0)"},
     display="flex",
     align_items="center",
     justify_content="center",
@@ -29,45 +29,47 @@ page_footer_style = dict(
 )
 
 interior_grid_style = dict (
-    py=1,
-    px=1,
-    gap=1,
-    align_items="center",
-    justify_content="center",
+    # py=1,
+    # px=1,
+    # gap=1,
+    # padding="1",
+    padding="1px",
+    spacing="2",
+    align="center",
+    justify="center",
 )
 
 reckoning_grid_style = dict (
     border="2px solid #ededed",
     border_radius="10px",
-    padding=2,
-    gap=4,
-    mt=2
+    padding="4px",
+    # gap=4,
+    spacing="4",
+    margin="4px",
 )
 
 input_style = dict(
-     mb=4,
-    _focus={"borderColor": "#000000", "boxShadowColor": "#000000"}
-)
-
-input_style_focus = dict(
-    _focus={"borderColor": "#000000", "boxShadowColor": "#000000"}
+     margin="4px",
+     padding="4px",
+     size="1",
+    # _focus={"borderColor": "#000000", "boxShadowColor": "#000000"}
 )
 
 read_only_text_style = dict(
-    is_read_only=True,
+    read_only=True,
     overflow="hidden",
-    background_color="gray.50",
+    background="var(--gray-a2)",
     border_radius="10px",
     padding="1em",
-    font_size="sm"
+    size="1"
 )
 
 form_box_style = dict(
-    bg="white",
+    background="white",
     border="1px solid #eaeaea",
-    p=4,
-    max_width="400px",
-    border_radius="lg",
+    padding="8px",
+    max_width="600px",
+    border_radius="20px",
 )
 
 link_style = dict(
@@ -78,7 +80,7 @@ link_style = dict(
 info_text_style = dict (
     font_size="1xl",
     font_weight="normal",
-    mb=4,
+    margin="1em",
 )
 
 meta = [
@@ -92,3 +94,12 @@ page_params = dict(
     meta=meta
 )
 
+from reflex.components.datadisplay.dataeditor import (
+    DataEditorTheme,
+)
+
+reckon_data_editor_theme = {
+    "accent_color": reckon_dark_green,
+    "accent_light": reckon_green,
+
+}

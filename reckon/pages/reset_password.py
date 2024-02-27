@@ -12,21 +12,21 @@ from reckon.styles import page_params
 def reset_password():
     """The reset password page."""
     return profile_layout(
-        rx.box(
+        rx.flex(
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="Current Password",
                 on_blur=ProfileState.set_current_password,
                 **input_style,
             ),
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="New Password",
                 on_blur=ProfileState.set_password,
                 **input_style,
             ),
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="Confirm New Password",
                 on_blur=ProfileState.set_confirm_password,
                 **input_style,
@@ -38,7 +38,9 @@ def reset_password():
                     **button_style,
                 )
             ),
-            **form_box_style
+            **form_box_style,
+            direction="column",
+            spacing="2",
         ),
         rx.text(
             rx.link("Second thoughts?", href="/", **link_style),

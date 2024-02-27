@@ -5,12 +5,12 @@ from sqlmodel import select, delete, func
 from sqlalchemy.orm import aliased
 from sqlalchemy import and_ as _and, or_ as _or
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
-from reckon.styles import input_style, page_params, interior_grid_style, input_style_focus, read_only_text_style, reckoning_grid_style
+from reckon.styles import input_style, page_params, interior_grid_style, read_only_text_style, reckoning_grid_style
 from ..components import container, navbar
 from reckon.components.buttons import up_vote_concept_button, down_vote_concept_button, feedback_button, view_comments_button, compare_concepts_button, delete_button, support_comment_button, detract_from_comment_button, poo_comment_button, feedback_button, no_up_vote_concept_button, no_down_vote_concept_button, edit_button, view_concept_button, view_parent_comment_button
-from reckon.components.feedback_modal import feedback_modal, FeedbackModalState, reckoning_feedback_options
-from reckon.components.concept_modal import concept_modal, ConceptModalState
-from reckon.components.comment_modal import comment_modal, CommentModalState
+from reckon.components.feedback_dialog import feedback_dialog, FeedbackDialogState, reckoning_feedback_options
+from reckon.components.concept_dialog import concept_dialog, ConceptDialogState
+from reckon.components.comment_dialog import comment_dialog, CommentDialogState
 from reckon.utils.db import find_similar_texts_with_join
 
 
@@ -21,20 +21,20 @@ class ReckoningsPageState(AppState):
     rerender: bool = False
 
     def new_comment(self, subject, type, pid):
-        yield CommentModalState.new_comment(subject, type, pid)
-        yield CommentModalState.visible()
+        yield CommentDialogState.new_comment(subject, type, pid)
+        yield CommentDialogState.visible()
     
     def edit_comment(self, pid, type, cid, content):
-        yield CommentModalState.edit_comment(pid, type, cid, content)
-        yield CommentModalState.visible()
+        yield CommentDialogState.edit_comment(pid, type, cid, content)
+        yield CommentDialogState.visible()
 
     def edit_concept(self, cid):
-        yield ConceptModalState.set_concept(cid)
-        yield ConceptModalState.visible()
+        yield ConceptDialogState.set_concept(cid)
+        yield ConceptDialogState.visible()
 
     def provide_feedback_on_reckoning(self, rid):
-        yield FeedbackModalState.set_reckoning(rid)
-        yield FeedbackModalState.visible()
+        yield FeedbackDialogState.set_reckoning(rid)
+        yield FeedbackDialogState.visible()
 
     def close_modal(self):
         pass
@@ -519,8 +519,8 @@ def parent_reckoning(state):
                     gap=2,
                     place_items="center",
                 ),
-                rx.text_area(key=state.parent.id, default_value=state.parent.content, **read_only_text_style),
-                grid_template_columns="1fr 12fr",
+                rx.text_area(key=state.parent.id, value=state.parent.content, **read_only_text_style),
+                grid_template_columns="1fr 22fr",
                 **interior_grid_style,
 
             ),
@@ -592,21 +592,21 @@ def parent_reckoning(state):
                     on_click=state.new_comment(state.parent.content, ReckoningTypes.detract, state.reckoning_id)
                 ),
                 rx.text(state.parent.detracts),
-                grid_template_columns="10fr 1fr 1fr 1fr 1fr 2fr 1fr 0.5fr 1fr 0.5fr 1fr 0.5fr",
+                grid_template_columns="11fr 1fr 1fr 1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr",#"10fr 1fr 1fr 1fr 1fr 2fr 1fr 0.5fr 1fr 0.5fr 1fr 0.5fr",
                 **interior_grid_style,
             ),
             **reckoning_grid_style
         ),
-        rx.input(on_change=state.set_search, placeholder="Search comments", **input_style_focus),
+        rx.input(on_change=state.set_search, placeholder="Search comments", **input_style),
         **interior_grid_style,
     )
 
 def search(state):
     """The search component of the navbar."""
-    return rx.hstack(
+    return rx.grid(
         rx.input(on_change=state.set_search, placeholder="Search reckonings", **input_style),
-        justify="space-between",
-        p=4,
+        **interior_grid_style,
+        margin="8px 0 0 0"
     )
 
 def render_comment(state, c: Reckoning):
@@ -665,7 +665,7 @@ def render_comment(state, c: Reckoning):
                             
                             on_click=rx.redirect(f"/comments/{c.parent_id}"),
                         ),
-                        grid_template_columns="9fr 1fr 1fr 1fr 1fr 1fr",
+                        grid_template_columns="18fr 1fr 1fr 1fr 1fr 1fr",
                         **interior_grid_style,
                     ),
                     rx.grid(
@@ -679,7 +679,7 @@ def render_comment(state, c: Reckoning):
                         view_parent_comment_button(
                             on_click=rx.redirect(f"/comments/{c.parent_reckoning_id}"),
                         ),
-                        grid_template_columns="12fr 1fr 1fr",
+                        grid_template_columns="21fr 1fr 1fr",
                         **interior_grid_style,
                     ),
 
@@ -697,7 +697,7 @@ def render_comment(state, c: Reckoning):
                 view_comments_button(
                     on_click=state.view_comments(c.id),
                 ),
-                grid_template_columns="12fr 1fr 1fr",
+                grid_template_columns="21fr 1fr 1fr",
                 **interior_grid_style,
             ),
             rx.grid (
@@ -736,7 +736,7 @@ def render_comment(state, c: Reckoning):
                         on_click=state.new_comment(c.content, ReckoningTypes.detract, c.id)
                     ),
                     rx.text(c.detracts),
-                    grid_template_columns="1fr 1fr 2fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr",
+                    grid_template_columns="1fr 1fr 7fr 1fr 7fr 1fr 1fr 1fr 1fr 1fr 1fr",
                     **interior_grid_style,
                 ),
                 **interior_grid_style,
@@ -1099,9 +1099,9 @@ def page(state, *args, **kwargs):
             h="100vh",
             gap=4,
         ),
-        comment_modal(on_close=state.close_modal, on_close_complete=state.close_complete_modal),
-        concept_modal(on_close=state.close_modal, on_close_complete=state.close_complete_modal),
-        feedback_modal(reckoning_feedback_options, on_close=FeedbackModalState.close),
+        comment_dialog(),
+        concept_dialog(),
+        feedback_dialog(reckoning_feedback_options),
         **kwargs,
     )
 

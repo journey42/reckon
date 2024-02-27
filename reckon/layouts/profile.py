@@ -10,5 +10,5 @@ def profile_layout(*args):
             display="flex",
             flex_direction="column",
             align_items="center",
-            gap=4,
+            grid_gap=4,
         )

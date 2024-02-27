@@ -12,10 +12,10 @@ def signup():
             """Thank you for agreeing to test Reckon. Reckon is currently an invite-only platform. Please create an account, and we'll contact you once we're ready to welcome you aboard. By signing up, you agree to keep any information you learn during the testing confidential. This means not sharing details about our forum with others. After an initial small run you will have an opportunity to invite up to 5 people to participate.""",
             font_size="0.75em",
             font_weight="normal",
-            mb=4,
+            margin="1em",
             max_width="600px"
         ),
-        rx.box(
+        rx.flex(
             rx.input(
                 placeholder="Email",
                 on_blur=AuthState.set_email,
@@ -27,13 +27,13 @@ def signup():
                 **input_style,
             ),
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="Password",
                 on_blur=AuthState.set_password,
                 **input_style,
             ),
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="Confirm password",
                 on_blur=AuthState.set_confirm_password,
                 **input_style,
@@ -45,7 +45,9 @@ def signup():
                     **button_style,
                 )
             ),
-            **form_box_style
+            **form_box_style,
+            direction="column",
+            spacing="2",
         ),
         rx.text(
             rx.link("Already have an account?", href="/login", **link_style),

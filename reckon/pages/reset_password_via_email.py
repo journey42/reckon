@@ -8,26 +8,26 @@ from reckon.styles import link_style, button_style, input_style, form_box_style,
 def reset_password_via_email():
     """The reset password page."""
     return auth_layout(
-        rx.box(
+        rx.flex(
             rx.input(
                 placeholder="Username",
                 on_blur=AuthState.set_username,
                 **input_style,
             ),
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="Current Password",
                 on_blur=AuthState.set_current_password,
                 **input_style,
             ),
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="New Password",
                 on_blur=AuthState.set_password,
                 **input_style,
             ),
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="Confirm New Password",
                 on_blur=AuthState.set_confirm_password,
                 **input_style,
@@ -39,7 +39,9 @@ def reset_password_via_email():
                     **button_style,
                 )
             ),
-            **form_box_style
+            **form_box_style,
+            direction="column",
+            spacing="2",
         ),
         rx.text(
             rx.link("Change your mind?", href="/login", **link_style),

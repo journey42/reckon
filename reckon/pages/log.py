@@ -3,7 +3,7 @@ import reflex as rx
 from sqlmodel import select
 from typing import Any, List
 from reckon.state.base import Log, AppState
-from reckon.styles import button_style, page_params
+from reckon.styles import button_style, page_params, reckon_data_editor_theme
 from reckon.layouts import profile_layout
 from dataclasses import dataclass
 
@@ -140,9 +140,11 @@ def log():
                 on_cell_edited=LogEditorState.on_cell_edited,
                 on_delete=LogEditorState.on_delete,
                 on_column_resize=LogEditorState.on_column_resize,
-                width="80vw",
+                width="65vw",
                 height="40vh",
+                theme=reckon_data_editor_theme,
             ),
             rx.button("Refresh", on_click=LogEditorState.refresh, **button_style),
+            align="center"
         ),
     )

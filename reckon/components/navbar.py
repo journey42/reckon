@@ -1,85 +1,51 @@
 """Navbar component for the app."""
 import reflex as rx
 from .buttons import trending_concepts_button, your_reckonings_button, logo_button
-from reckon.components.feedback_modal import feedback_modal, FeedbackModalState, general_feedback_options
+from reckon.components.feedback_dialog import feedback_dialog, FeedbackDialogState, general_feedback_options
 from reckon.state.base import AppState, UserTypes
 from reckon.styles import interior_grid_style
 
 def user_menu() -> rx.Component:
     """User menu."""
-    return rx.menu(
-            rx.menu_button(
-                rx.avatar(src="/wind_rose.svg", size="sm", border_color="black.900"),
+    return rx.menu.root(
+            rx.menu.trigger(
+                rx.avatar(src="/wind_rose.svg", border_color="black.900"),
             ),
-            rx.menu_list(
-                rx.link(
-                    rx.menu_item("Drafts"),
-                    href="/your_drafts"
-                ),
-                rx.link(
-                    rx.menu_item("Profile"),
-                    href="/profile"
-                ),
-                rx.menu_item("Feedback", on_click=FeedbackModalState.visible),
-                rx.link(
-                    rx.menu_item("About"),
-                    href="/about"
-                ),
-                rx.link(
-                    rx.menu_item("Guidelines"),
-                    href="/guidelines"
-                ),
-                rx.link(
-                    rx.menu_item("Terms"),
-                    href="/terms"
-                ),
-                rx.link(
-                    rx.menu_item("Privacy"),
-                    href="/privacy"
+            rx.menu.content(
+                rx.menu.item("Drafts", on_click=rx.redirect("/your_drafts")),
+                rx.menu.item("Profile", on_click=rx.redirect("/profile")),
+                rx.menu.item("Feedback", on_click=FeedbackDialogState.visible),
+                rx.menu.item("About", on_click=rx.redirect("/about")),
+                rx.menu.item("Guidelines", on_click=rx.redirect("/guidelines")),
+                rx.menu.item("Terms", on_click=rx.redirect("/terms")),
+                rx.menu.item("Privacy", on_click=rx.redirect("/privacy")),
+                rx.cond(
+                    AppState.user.role == UserTypes.admin,
+                    rx.menu.separator(),
                 ),
                 rx.cond(
                     AppState.user.role == UserTypes.admin,
-                    rx.menu_divider(),
+                    rx.menu.item("Log", on_click=rx.redirect("/log")),
                 ),
                 rx.cond(
                     AppState.user.role == UserTypes.admin,
-                    rx.link(
-                        rx.menu_item("Log"),
-                        href="/log"
-                    )
+                    rx.menu.item("Users", on_click=rx.redirect("/users")),
                 ),
                 rx.cond(
                     AppState.user.role == UserTypes.admin,
-                    rx.link(
-                        rx.menu_item("Users"),
-                        href="/users"
-                    )
+                    rx.menu.item("Feedback", on_click=rx.redirect("/feedback")),
                 ),
                 rx.cond(
                     AppState.user.role == UserTypes.admin,
-                    rx.link(
-                        rx.menu_item("Feedback"),
-                        href="/feedback"
-                    )
+                    rx.menu.item("New Concepts", on_click=rx.redirect("/new_concepts")),
                 ),
                 rx.cond(
                     AppState.user.role == UserTypes.admin,
-                    rx.link(
-                        rx.menu_item("New Concepts"),
-                        href="/new_concepts"
-                    )
+                    rx.menu.separator(),
                 ),
-                rx.cond(
-                    AppState.user.role == UserTypes.admin,
-                    rx.menu_divider(),
-                ),
-                rx.link(
-                    rx.menu_item("Log out"),
-                    href="/logged_out"
-                )
+                rx.menu.item("Log out", on_click=rx.redirect("/logged_out")),
             ),
         )
-
 
 def app_logo() -> rx.Component:
     """App logo."""
@@ -94,10 +60,11 @@ def app_logo() -> rx.Component:
     )
 
 navbar_styles = dict(
-    bg="white",
+    background="white",
     backdrop_filter="auto",
     backdrop_blur="lg",
-    p="4",
+    margin="16px 0 8px 0",
+    padding="4px",
     border_bottom=f"1px solid {'#fff3'}",
     position="sticky",
     top="0",
@@ -110,7 +77,7 @@ def navbar(*args, **kwargs) -> rx.Component:
     return rx.box(
         rx.grid(
             app_logo(),
-            feedback_modal(options=general_feedback_options, on_close=FeedbackModalState.close),
+            feedback_dialog(options=general_feedback_options),
             *args,
         ),
         **navbar_styles

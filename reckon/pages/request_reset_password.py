@@ -10,9 +10,9 @@ def request_reset_password():
     return auth_layout(
         rx.text(
             "Enter your email address and we'll send you email with instructions to reset your password.",
-            **info_text_style
+            **info_text_style,
         ),
-        rx.box(
+        rx.flex(
             rx.input(
                 placeholder="Email",
                 on_blur=AuthState.set_email,
@@ -25,7 +25,9 @@ def request_reset_password():
                     **button_style,
                 )
             ),
-            **form_box_style
+            **form_box_style,
+            direction="column",
+            spacing="2",
         ),
         rx.text(
             rx.link("Change your mind?", href="/login", **link_style),

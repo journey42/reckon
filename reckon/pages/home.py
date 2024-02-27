@@ -33,24 +33,20 @@ class HomePageState(AppState):
 
 def composer():
     """The composer for new concepts."""
-    return rx.grid(
-        rx.box(
-            rx.text_area(
-                w="100%",
-                h="50vh",
-                placeholder="What do you Reckon?",
-                on_blur=HomePageState.set_concept,
-                **input_style,
-            ),
-            rx.hstack(
-                submit_button(
-                    max_width="48px",
-                    max_height="48px",
-                    on_click=HomePageState.post_concept
-                ),
-                justify_content="flex-end",
-            ),
+    return rx.vstack(
+        rx.text_area(
+            width="100%",
+            height="50vh",
+            placeholder="What do you Reckon?",
+            on_change=HomePageState.set_concept,
         ),
+        submit_button(
+            max_width="36px",
+            max_height="36px",
+            on_click=HomePageState.post_concept
+        ),
+        align="end",
+        margin="4px",
     )
 
 
@@ -59,7 +55,5 @@ def home():
     """The home page."""
     return container(
         navbar(),
-        rx.grid(
-            composer(),
-        ),
+        composer(),
     )

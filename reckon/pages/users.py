@@ -4,7 +4,7 @@ from sqlmodel import select
 from typing import Any, List
 from reckon.state.base import User, Log, AppState
 from datetime import datetime
-from reckon.styles import button_style
+from reckon.styles import button_style, reckon_data_editor_theme
 from reckon.layouts import profile_layout
 from reckon.utils.validations import validate_username, validate_email, validate_role
 from dataclasses import dataclass
@@ -44,7 +44,6 @@ def get_users() -> List[List]:
                 str(user.updated_at),
             ]
             user_data_list.append(user_data)
-    print(user_data_list)
     return user_data_list
 
 class UserEditorState(AppState):
@@ -141,7 +140,6 @@ class UserEditorState(AppState):
 
     def on_delete(self, selection):
         """Delete selected users."""
-        print(selection)
         if selection['current'] is None:
             return
 
@@ -187,10 +185,12 @@ def users():
                 on_cell_edited=UserEditorState.on_cell_edited,
                 on_delete=UserEditorState.on_delete,
                 on_column_resize=UserEditorState.on_column_resize,
-                width="80vw",
+                width="65vw",
                 height="40vh",
+                theme=reckon_data_editor_theme,
             ),
             rx.button("Refresh", on_click=UserEditorState.refresh, **button_style),
+            align="center"
         ),
     )
 

@@ -3,9 +3,11 @@ import reflex as rx
 from sqlmodel import select
 from typing import Any, List
 from reckon.state.base import Feedback, AppState
-from reckon.styles import button_style, page_params
+from reckon.styles import button_style, page_params, reckon_data_editor_theme
 from reckon.layouts import profile_layout
 from dataclasses import dataclass
+
+
 
 @dataclass(frozen=True)
 class ColumnNames:
@@ -93,7 +95,6 @@ class FeedbackEditorState(AppState):
 
     def on_delete(self, selection):
         """Delete feedback from the feedback editor."""
-        print(selection)
         if selection['current'] is None:
             return
 
@@ -137,9 +138,11 @@ def feedback():
                 on_cell_edited=FeedbackEditorState.on_cell_edited,
                 on_delete=FeedbackEditorState.on_delete,
                 on_column_resize=FeedbackEditorState.on_column_resize,
-                width="80vw",
+                width="65vw",
                 height="40vh",
+                theme=reckon_data_editor_theme,
             ),
             rx.button("Refresh", on_click=FeedbackEditorState.refresh, **button_style),
+            align="center"
         ),
     )

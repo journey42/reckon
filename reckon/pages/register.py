@@ -12,7 +12,7 @@ from reckon.styles import page_params
 def register():
     """The register page."""
     return auth_layout(
-        rx.box(
+        rx.flex(
             rx.input(
                 placeholder="Email",
                 on_blur=AuthState.set_email,
@@ -24,13 +24,13 @@ def register():
                 **input_style,
             ),
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="Password",
                 on_blur=AuthState.set_password,
                 **input_style,
             ),
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="Confirm password",
                 on_blur=AuthState.set_confirm_password,
                 **input_style,
@@ -42,7 +42,9 @@ def register():
                     **button_style,
                 )
             ),
-            **form_box_style
+            **form_box_style,
+            direction="column",
+            spacing="2",
         ),
         rx.text(
             rx.link("Already have an account?", href="/login", **link_style),

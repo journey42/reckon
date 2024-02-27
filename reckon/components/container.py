@@ -9,12 +9,12 @@ def container(*children, **props):
         dict(
             width="100%",
             max_width="960px",
-            bg="white",
-            h="100%",
-            px=[4, 12],
+            background="white",
+            height="100%",
+            padding="0, 0, 4px, 4px",
             margin="0 auto",
             position="relative",
         )
         | props
     )
-    return rx.box(*children, **props)
+    return rx.box(*children, rx.script(src="/posthog.js"), **props)

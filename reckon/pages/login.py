@@ -8,14 +8,14 @@ from reckon.styles import button_style, input_style, form_box_style, link_style,
 def login():
     """The login page."""
     return auth_layout(
-        rx.box(
+        rx.flex(
             rx.input(
                 placeholder="Username",
                 on_blur=AuthState.set_username,
                 **input_style,
             ),
             rx.input(
-                type_="password",
+                type="password",
                 placeholder="Password",
                 on_blur=AuthState.set_password,
                 **input_style,
@@ -27,7 +27,9 @@ def login():
                     **button_style,
                 )
             ),
-            **form_box_style
+            **form_box_style,
+            direction="column",
+            spacing="2",
         ),
         rx.text(
             rx.link("Forgot password?", href="/request_reset_password", **link_style),
@@ -35,5 +37,5 @@ def login():
         rx.text(
             rx.link("Don't have an account yet?", href="/signup", **link_style),
         ),
-        rx.text("Copyright 2024 - Reckon Forum LLC.", **page_footer_style)
+        #rx.text("Copyright 2024 - Reckon Forum LLC.", **page_footer_style)
     )

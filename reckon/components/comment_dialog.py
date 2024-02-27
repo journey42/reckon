@@ -6,7 +6,7 @@ from reckon.styles import input_style, read_only_text_style
 from reckon.components.buttons import support_comment_button, detract_from_comment_button, poo_comment_button, close_button
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
 
-class CommentModalState(AppState):
+class CommentDialogState(AppState):
     """Comment state."""
     show: bool = False
     subject: str = ""
@@ -63,59 +63,54 @@ class CommentModalState(AppState):
                 #yield rx.redirect(f"/comments/{comment.id}")
 
 
-def comment_modal(*args, **kwargs):
+def comment_dialog(*args, **kwargs):
     """Feedback component."""
-    return rx.box(
-        rx.modal(
-            rx.modal_overlay(
-                rx.modal_content(
-                    rx.modal_header(
+    return rx.dialog.root(
+                rx.dialog.content(
+                    rx.dialog.title(
                         rx.grid(
-                            rx.heading("Comment", size="md"),
+                            rx.heading("Comment", size="5"),
                             rx.spacer(),
-                            rx.modal_close_button(
+                            rx.dialog.close(
                                 close_button(
-                                    on_click=CommentModalState.visible
+                                    on_click=CommentDialogState.visible
                                 ),
                             ),
-                            grid_template_columns="3fr 5fr 0.25fr",
+                            grid_template_columns="3fr 5fr 1fr",
                         ),
                     ),
-                    rx.modal_body(
-                        rx.form(
-                            rx.vstack(
-                                rx.text_area(
-                                    value=CommentModalState.subject,
-                                    height="30vh",
-                                    **read_only_text_style,
-                                ),
-                                rx.text_area(
-                                    default_value=CommentModalState.content,
-                                    placeholder="Comment",
-                                    height="30vh",
-                                    width="100%",
-                                    **input_style,
-                                    on_blur=CommentModalState.set_content,
-                                ),
-                                rx.match(
-                                    CommentModalState.type,
-                                    (ReckoningTypes.support, support_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentModalState.submit)),
-                                    (ReckoningTypes.point_of_order, poo_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentModalState.submit)),
-                                    (ReckoningTypes.detract, detract_from_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentModalState.submit)),
-                                ),
-                                id="tacontainer",
-                                width="90%",
+                    rx.form(
+                        rx.vstack(
+                            rx.text_area(
+                                value=CommentDialogState.subject,
+                                height="30vh",
+                                width="100%",
+                                style=read_only_text_style,
                             ),
-                            display="flex",
-                            justify_content="center",
-                            align_items="center",
+                            rx.text_area(
+                                value=CommentDialogState.content,
+                                placeholder="Comment",
+                                height="30vh",
+                                width="100%",
+                                **input_style,
+                                on_change=CommentDialogState.set_content,
+                            ),
+                            rx.match(
+                                CommentDialogState.type,
+                                (ReckoningTypes.support, support_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentDialogState.submit)),
+                                (ReckoningTypes.point_of_order, poo_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentDialogState.submit)),
+                                (ReckoningTypes.detract, detract_from_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentDialogState.submit)),
+                            ),
+                            id="tacontainer",
+                            width="90%",
                         ),
+                        display="flex",
+                        justify_content="center",
+                        align_items="center",
                     ),
-                )
-            ),
-            is_open=CommentModalState.show,
-            size="full",
-            *args,
-            **kwargs
-        ),
-    )
+                ),
+                open=CommentDialogState.show,
+                size="4",
+                *args,
+                **kwargs
+            )
