@@ -2,3 +2,4 @@ reflex
 psycopg2
 sentence-transformers
 torch
+posthog
