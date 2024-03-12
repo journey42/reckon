@@ -8,28 +8,33 @@ from reckon.styles import button_style, input_style, form_box_style, link_style,
 def login():
     """The login page."""
     return auth_layout(
-        rx.flex(
-            rx.input(
-                placeholder="Username",
-                on_blur=AuthState.set_username,
-                **input_style,
+        rx.form(
+            rx.flex(
+                rx.input(
+                    name="username",
+                    placeholder="Username",
+                    on_blur=AuthState.set_username,
+                    **input_style,
+                ),
+                rx.input(
+                    name="password",
+                    type="password",
+                    placeholder="Password",
+                    on_blur=AuthState.set_password,
+                    **input_style,
+                ),
+                rx.center(
+                    rx.button(
+                        "Log in",
+                        type="submit",
+                        **button_style,
+                    )
+                ),
+                **form_box_style,
+                direction="column",
+                spacing="2",
             ),
-            rx.input(
-                type="password",
-                placeholder="Password",
-                on_blur=AuthState.set_password,
-                **input_style,
-            ),
-            rx.center(
-                rx.button(
-                    "Log in",
-                    on_click=AuthState.login,
-                    **button_style,
-                )
-            ),
-            **form_box_style,
-            direction="column",
-            spacing="2",
+            on_submit=AuthState.login
         ),
         rx.text(
             rx.link("Forgot password?", href="/request_reset_password", **link_style),

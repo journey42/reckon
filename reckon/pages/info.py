@@ -18,6 +18,15 @@ about_text = """
 **About**
 
 Reckon was founded with the goal of encouraging both independent thought and broad consensus. The aim is to reduce political polarity and allow people to find common ground wherever possible. The hope is that destructive and harmful ideology aimed at groups or individuals will naturally be ratioed by our users, in the event this is not how the site functions automatically, we encourage you to make us of our red flag system. This is the first attempt at testing this system of discourse, the final product will have more and different features when deployed at scale. This system is entirely anonymous between users. It was designed this way to way to afford people the opportunity to express themselves without risk of being singled out. Your concepts will only be uncovered if people have ideas along the same lines. We encourage you to submit any thoughts you feel strongly about, even if they don’t presently have traction.  While the obvious application of this system is politics, if you choose to fight over the blue or gold dress or the particular merits of food groups or music genres the site will raise no objection.
+"""
+
+@rx.page(on_load=AppState.check_login(), **page_params)
+def about():
+    """The about page."""
+    return info_page(about_text)
+
+how_to_text = """
+**How To**
 
 Instructions:
 
@@ -34,10 +43,10 @@ The trending icon at the top of the page will take you to the most popular conce
 Under the navigation menu there is an option to submit any concerns or suggestions regarding the rhetorical process of the site, or to report a technical problem. If you have concerns about the content of a particular concept or comment please use the red flag feature.
 """
 
-@rx.page(on_load=AppState.check_login(), **page_params)
-def about():
-    """The about page."""
-    return info_page(about_text)
+@rx.page(route="/how_to", on_load=AppState.check_login(), **page_params)
+def how_to():
+    """The how to page."""
+    return info_page(how_to_text)
 
 guidelines_text = """
 **Guidelines**

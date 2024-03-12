@@ -6,6 +6,7 @@ from .info import about
 from .info import guidelines
 from .info import privacy
 from .info import terms
+from .info import how_to
 from .signup import signup
 from .register import register
 from .request_reset_password import request_reset_password
@@ -20,7 +21,8 @@ from .profile_updated import profile_updated
 from .users import users
 from .log import log
 from .reckonings import new_concepts
-from .reckonings import trending_concepts
+from .reckonings import trending_concepts_by_support
+from .reckonings import trending_concepts_by_upvotes
 from .reckonings import your_reckonings
 from .reckonings import comments
 from .reckonings import concept

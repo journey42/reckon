@@ -12,8 +12,14 @@ button_style = dict(
     border_radius="full",
 )
 
+dialog_button_style = dict(
+    max_width="36px",
+    max_height="36px",
+)
+
 image_button_style = dict(
     _hover={"bg": "rgba(255, 255, 255, 0)"},
+    _focus={"bg": "rgba(255, 255, 255, 0)"},
     display="flex",
     align_items="center",
     justify_content="center",
@@ -55,12 +61,36 @@ input_style = dict(
     # _focus={"borderColor": "#000000", "boxShadowColor": "#000000"}
 )
 
+comment_badge_style = dict(
+    position="absolute",
+    top="5px",
+    left="5px",
+    z_index="20",
+    # width="15px",
+    height="15px",
+)
+
+vote_count_and_timestamp_style = dict(
+    position="absolute",
+    right="5px",
+    bottom="5px",
+    white_space="nowrap", #Prevents the text from wrapping
+    overflow="hidden", #Hides overflow
+    text_overflow="ellipsis", #Adds an ellipsis for text that overflows the container width
+    max_width="100%",
+)
+
+popover_button_style = dict(
+    max_width="32px",
+    max_height="32px",
+)
+
 read_only_text_style = dict(
     read_only=True,
     overflow="hidden",
     background="var(--gray-a2)",
     border_radius="10px",
-    padding="1em",
+    padding="2em",
     size="1"
 )
 

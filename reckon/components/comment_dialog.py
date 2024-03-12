@@ -2,9 +2,10 @@
 import reflex as rx
 from sqlmodel import select
 from datetime import datetime
-from reckon.styles import input_style, read_only_text_style
+from reckon.styles import read_only_text_style, dialog_button_style
 from reckon.components.buttons import support_comment_button, detract_from_comment_button, poo_comment_button, close_button
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
+from reckon.components.editor import editor
 
 class CommentDialogState(AppState):
     """Comment state."""
@@ -44,19 +45,21 @@ class CommentDialogState(AppState):
     def submit(self):
         """Submit feedback."""
         with rx.session() as session:
-            comment_content = "This reckoning did not include a comment. Feel free to add one."
+            if self.content == "":
+               return
+            # comment_content = "This reckoning did not include a comment. Feel free to add one."
 
-            if self.content != "":
-                comment_content = self.content
+            # if self.content != "":
+            #     comment_content = self.content
 
             if self.is_editing:
                 comment = session.exec(select(Reckoning).where(Reckoning.id == self.cid)).first()
-                comment.content = comment_content
+                comment.content = self.content
                 comment.updated_at = datetime.utcnow()
                 session.commit()
                 self.show = not (self.show)
             else:
-                comment = Reckoning(content=comment_content, parent_reckoning_id=self.pid, type=self.type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
+                comment = Reckoning(content=self.content, parent_reckoning_id=self.pid, type=self.type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
                 session.add(comment)
                 session.commit()
                 self.show = not (self.show)
@@ -73,6 +76,7 @@ def comment_dialog(*args, **kwargs):
                             rx.spacer(),
                             rx.dialog.close(
                                 close_button(
+                                    **dialog_button_style,
                                     on_click=CommentDialogState.visible
                                 ),
                             ),
@@ -81,25 +85,28 @@ def comment_dialog(*args, **kwargs):
                     ),
                     rx.form(
                         rx.vstack(
-                            rx.text_area(
-                                value=CommentDialogState.subject,
-                                height="30vh",
+                            editor(
+                                name="subject",
+                                default_value=CommentDialogState.subject,
+                                height="20vh",
                                 width="100%",
-                                style=read_only_text_style,
+                                hide_toolbar=True,
+                                disable=True,
+
                             ),
-                            rx.text_area(
-                                value=CommentDialogState.content,
+                            editor(
+                                name="comment_content",
+                                default_value=CommentDialogState.content,
                                 placeholder="Comment",
-                                height="30vh",
+                                height="25vh",
                                 width="100%",
-                                **input_style,
-                                on_change=CommentDialogState.set_content,
+                                on_blur=CommentDialogState.set_content,
                             ),
                             rx.match(
                                 CommentDialogState.type,
-                                (ReckoningTypes.support, support_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentDialogState.submit)),
-                                (ReckoningTypes.point_of_order, poo_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentDialogState.submit)),
-                                (ReckoningTypes.detract, detract_from_comment_button(max_width="48px", max_height="48px", align_self="flex-end", on_click=CommentDialogState.submit)),
+                                (ReckoningTypes.support, support_comment_button(**dialog_button_style, align_self="flex-end", on_click=CommentDialogState.submit)),
+                                (ReckoningTypes.point_of_order, poo_comment_button(**dialog_button_style, align_self="flex-end", on_click=CommentDialogState.submit)),
+                                (ReckoningTypes.detract, detract_from_comment_button(**dialog_button_style, align_self="flex-end", on_click=CommentDialogState.submit)),
                             ),
                             id="tacontainer",
                             width="90%",

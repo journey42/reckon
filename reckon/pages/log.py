@@ -1,6 +1,7 @@
 """logs page"""
 import reflex as rx
 from sqlmodel import select
+from zoneinfo import ZoneInfo
 from typing import Any, List
 from reckon.state.base import Log, AppState
 from reckon.styles import button_style, page_params, reckon_data_editor_theme
@@ -26,7 +27,7 @@ def get_logs() -> List[List]:
     
     # Querying the database for all logs
     with rx.session() as session: 
-        results = session.exec(select(Log))
+        results = session.exec(select(Log).order_by(Log.created_at.desc()))
         logs = results.all()
 
         for log in logs:
@@ -37,7 +38,7 @@ def get_logs() -> List[List]:
                 log.user.email if log.user is not None else "",
                 log.type,
                 log.content,
-                str(log.created_at),
+                str(log.created_at.astimezone(ZoneInfo('America/Los_Angeles'))),
             ]
             logs_data_list.append(logs_data)
     

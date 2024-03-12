@@ -136,10 +136,13 @@ class AuthState(AppState):
         """Password reset email sent."""
         pass
 
-    def login(self):
+    def login(self, form_data: dict):
         """Log in a user."""
         with rx.session() as session:
             session.expire_on_commit = False
+
+            self.username = form_data.get("username")
+            self.password = form_data.get("password")
 
             user = session.exec(
                 select(User).where(User.username == self.username)

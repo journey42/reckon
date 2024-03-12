@@ -4,6 +4,7 @@ from sqlmodel import select
 from typing import Any, List
 from reckon.state.base import User, Log, AppState
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from reckon.styles import button_style, reckon_data_editor_theme
 from reckon.layouts import profile_layout
 from reckon.utils.validations import validate_username, validate_email, validate_role
@@ -29,7 +30,7 @@ def get_users() -> List[List]:
     
     # Querying the database for all users
     with rx.session() as session: 
-        results = session.exec(select(User))
+        results = session.exec(select(User).order_by(User.created_at.desc()))
         users = results.all()
 
         for user in users:
@@ -40,8 +41,8 @@ def get_users() -> List[List]:
                 user.email,
                 user.enabled,
                 user.role,
-                str(user.created_at),
-                str(user.updated_at),
+                str(user.created_at.astimezone(ZoneInfo('America/Los_Angeles'))),
+                str(user.updated_at.astimezone(ZoneInfo('America/Los_Angeles'))),
             ]
             user_data_list.append(user_data)
     return user_data_list

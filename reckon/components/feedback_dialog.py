@@ -2,7 +2,7 @@
 import reflex as rx
 from datetime import datetime
 from typing import List, Optional
-from reckon.styles import input_style
+from reckon.styles import input_style, dialog_button_style
 from reckon.state.base import AppState, Feedback, Reckoning
 from reckon.components.buttons import submit_button, close_button
 
@@ -56,6 +56,7 @@ def feedback_dialog(options: List[str], *args, **kwargs):
                         rx.spacer(),
                         rx.dialog.close(
                             close_button(
+                                **dialog_button_style,
                                 on_click=FeedbackDialogState.visible
                             ),
                         ),
@@ -91,8 +92,7 @@ def feedback_dialog(options: List[str], *args, **kwargs):
                             on_change=FeedbackDialogState.set_content,
                         ),
                         submit_button(
-                            max_width="48px",
-                            max_height="48px",
+                            **dialog_button_style,
                             padding_top=4,
                             align_self="flex-end",
                             type="submit"

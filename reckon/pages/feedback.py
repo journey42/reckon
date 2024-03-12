@@ -2,6 +2,7 @@
 import reflex as rx
 from sqlmodel import select
 from typing import Any, List
+from zoneinfo import ZoneInfo
 from reckon.state.base import Feedback, AppState
 from reckon.styles import button_style, page_params, reckon_data_editor_theme
 from reckon.layouts import profile_layout
@@ -28,7 +29,7 @@ def get_feedback() -> List[List]:
     
     # Querying the database for all feedback
     with rx.session() as session: 
-        results = session.exec(select(Feedback))
+        results = session.exec(select(Feedback).order_by(Feedback.created_at.desc()))
         feedback = results.all()
 
         for feedback in feedback:
@@ -39,7 +40,7 @@ def get_feedback() -> List[List]:
                 feedback.user.email,
                 feedback.type,
                 feedback.content,
-                str(feedback.created_at),
+                str(feedback.created_at.astimezone(ZoneInfo('America/Los_Angeles'))),
             ]
             feedback_data_list.append(feedback_data)
     

@@ -2,18 +2,24 @@
 import reflex as rx
 from datetime import datetime
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
-from reckon.styles import page_params, input_style
+from reckon.styles import page_params, dialog_button_style
 from reckon.components.buttons import submit_button
-from ..components import container, navbar
+from reckon.components.container import container
+from reckon.components.navbar import navbar
+from reckon.components.editor import editor
 from reckon.utils.db import insert_text_with_embedding
+from reckon.utils.parsing import remove_html_tags
 
 class HomePageState(AppState):
     concept: str
 
-    def post_concept(self):
+    def post_concept(self, form_data: dict):
         """Post an new reckoning of type concept."""
         if not self.logged_in:
             return rx.window_alert("Please log in to post.")
+        if self.concept == "":
+            return rx.window_alert("A concept cannot be blank.")
+        self.concept = form_data.get("concept")
         with rx.session() as session:
             session.expire_on_commit = False
             #session.execute(text("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;"))
@@ -27,26 +33,32 @@ class HomePageState(AppState):
             session.add(concept)
             session.commit()
             
-        insert_text_with_embedding(concept.content, concept.id)
+        insert_text_with_embedding(remove_html_tags(concept.content), concept.id)
         self._db_updated = True
         return rx.redirect(f"/compare/{concept.id}")
 
 def composer():
     """The composer for new concepts."""
-    return rx.vstack(
-        rx.text_area(
-            width="100%",
-            height="50vh",
-            placeholder="What do you Reckon?",
-            on_change=HomePageState.set_concept,
+    return rx.form(
+        rx.vstack(
+            editor(
+                name="concept",
+                mode="balloon",
+                width="100%",
+                height="50vh",
+                placeholder="What do you Reckon?",
+                on_blur=HomePageState.set_concept,
+            ),
+            submit_button(
+                type="submit",
+                **dialog_button_style,
+            ),
+            align="end",
+            spacing="4",
+            margin="4px",
         ),
-        submit_button(
-            max_width="36px",
-            max_height="36px",
-            on_click=HomePageState.post_concept
-        ),
-        align="end",
-        margin="4px",
+        on_submit=HomePageState.post_concept,
+        reset_on_submit=True,        
     )
 
 

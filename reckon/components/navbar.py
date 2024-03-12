@@ -1,7 +1,8 @@
 """Navbar component for the app."""
 import reflex as rx
-from .buttons import trending_concepts_button, your_reckonings_button, logo_button
+from reckon.components.buttons import legend_button, trending_concepts_button, your_reckonings_button, logo_button
 from reckon.components.feedback_dialog import feedback_dialog, FeedbackDialogState, general_feedback_options
+from reckon.components.legend_dialog import legend_dialog, LegendDialogState
 from reckon.state.base import AppState, UserTypes
 from reckon.styles import interior_grid_style
 
@@ -9,13 +10,17 @@ def user_menu() -> rx.Component:
     """User menu."""
     return rx.menu.root(
             rx.menu.trigger(
-                rx.avatar(src="/wind_rose.svg", border_color="black.900"),
+                rx.avatar(src="/menu.svg", border_color="black.900"),
             ),
             rx.menu.content(
-                rx.menu.item("Drafts", on_click=rx.redirect("/your_drafts")),
+                rx.menu.item(AppState.user.username, disabled=True),
+                # rx.menu.item(AppState.user.email, disabled=True),
+                rx.menu.separator(),
+                # rx.menu.item("Drafts", on_click=rx.redirect("/your_drafts")),
                 rx.menu.item("Profile", on_click=rx.redirect("/profile")),
                 rx.menu.item("Feedback", on_click=FeedbackDialogState.visible),
                 rx.menu.item("About", on_click=rx.redirect("/about")),
+                rx.menu.item("How To", on_click=rx.redirect("/how_to")),
                 rx.menu.item("Guidelines", on_click=rx.redirect("/guidelines")),
                 rx.menu.item("Terms", on_click=rx.redirect("/terms")),
                 rx.menu.item("Privacy", on_click=rx.redirect("/privacy")),
@@ -53,9 +58,10 @@ def app_logo() -> rx.Component:
         logo_button(),
         trending_concepts_button(),
         your_reckonings_button(),
+        legend_button(on_click=LegendDialogState.visible),
         rx.spacer(),
         user_menu(),
-        grid_template_columns="1fr 1fr 1fr 20fr 1fr",
+        grid_template_columns="1fr 1fr 1fr 1fr 19fr 1fr",
         **interior_grid_style
     )
 
@@ -78,6 +84,7 @@ def navbar(*args, **kwargs) -> rx.Component:
         rx.grid(
             app_logo(),
             feedback_dialog(options=general_feedback_options),
+            legend_dialog(),
             *args,
         ),
         **navbar_styles

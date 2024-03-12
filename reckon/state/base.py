@@ -6,6 +6,7 @@ from datetime import datetime
 import asyncio
 from dataclasses import dataclass
 from math import gcd
+from reckon.utils.time import calculate_elapsed_time
 
 @dataclass(frozen=True)
 class UserTypes:
@@ -102,6 +103,9 @@ class Reckoning(rx.Model, table=True):
         sa_relationship_kwargs={"lazy": "selectin"}
     )
 
+    #temp variable used in rendering
+    depth : str = Field(nullable=True)
+
     # Cache variables, not stored in the database
     supports_detracts_ratio: Optional[str] = None
     up_votes: Optional[int] = 0
@@ -110,6 +114,7 @@ class Reckoning(rx.Model, table=True):
     detracts: Optional[int] = 0
     points_of_order: Optional[int] = 0
     total_comments: Optional[int] = 0
+    elapsed_time: Optional[str] = ""
     user_vote_history: Optional[int] = ReckoningTypes.no_vote
     similarity: Optional[float] = 0.0
     parent_content: Optional[str] = ""
@@ -118,7 +123,11 @@ class Reckoning(rx.Model, table=True):
     parent_user_vote_history: Optional[int] = ReckoningTypes.no_vote
     parent_up_votes: Optional[int] = 0
     parent_down_votes: Optional[int] = 0
+    parent_supports: Optional[int] = 0
+    parent_detracts: Optional[int] = 0
+    parent_points_of_order: Optional[int] = 0
     parent_total_comments: Optional[int] = 0
+    parent_elapsed_time: Optional[str] = ""
 
     def cache_parent_details(self, uid: int):
         try:
@@ -128,12 +137,17 @@ class Reckoning(rx.Model, table=True):
                 self.parent_content = parent.content
                 self.parent_id = parent.id
                 self.parent_type = parent.type
-                if parent.type == ReckoningTypes.concept:
-                    parent.compute_tallies(uid)
+                parent.compute_tallies(uid)
+                if parent.type == ReckoningTypes.concept:                    
                     self.parent_down_votes = parent.down_votes
                     self.parent_up_votes = parent.up_votes
+
                     self.parent_user_vote_history = parent.user_vote_history
                     self.parent_total_comments = parent.total_comments
+                self.parent_supports = parent.supports
+                self.parent_detracts = parent.detracts
+                self.parent_points_of_order = parent.points_of_order
+                self.parent_elapsed_time = calculate_elapsed_time(parent.created_at)
         except:
             pass
 
@@ -179,6 +193,7 @@ class Reckoning(rx.Model, table=True):
                 self.points_of_order+=1
         
         self.total_comments = self.tally_child_comments(self)
+        self.elapsed_time = calculate_elapsed_time(self.created_at)
         # # Calculate GCD for simplifying the ratio, avoid division by zero
         # if self.detracts != 0 and self.supports != 0:
         #     ratio_gcd = gcd(self.supports, self.detracts)

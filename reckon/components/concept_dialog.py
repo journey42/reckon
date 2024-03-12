@@ -3,9 +3,12 @@ import reflex as rx
 from datetime import datetime
 from sqlmodel import select
 from typing import Optional
-from reckon.styles import input_style
+from reckon.styles import dialog_button_style
 from reckon.state.base import AppState, Reckoning
 from reckon.components.buttons import submit_button, close_button
+from reckon.utils.db import insert_text_with_embedding
+from reckon.utils.parsing import remove_html_tags
+from reckon.components.editor import editor
 
 class ConceptDialogState(AppState):
     """Concept modal state."""
@@ -35,6 +38,9 @@ class ConceptDialogState(AppState):
             self.concept.content = self.content
             self.concept.updated_at = datetime.utcnow()
             session.commit()
+        
+        print(remove_html_tags(self.concept.content))
+        insert_text_with_embedding(remove_html_tags(self.concept.content), self.concept.id)
         self.visible()
         return rx.redirect("/your_drafts")
 
@@ -49,24 +55,24 @@ def concept_dialog(*args, **kwargs):
                                 rx.spacer(),
                                 rx.dialog.close(
                                     close_button(
+                                        **dialog_button_style,
+                                        align_self="flex-end",
                                         on_click=ConceptDialogState.visible
                                     ),
                                 ),
-                                grid_template_columns="3fr 5fr 1fr",
+                                grid_template_columns="4fr 9fr 1fr",
                             ),
                         ),
-                        rx.text_area(
-                            id="autoresizing",
-                            value=ConceptDialogState.content,
+                        editor(
+                            name="concept_content",
+                            default_value=ConceptDialogState.content,
                             placeholder="Concept",
-                            height="60vh",
+                            height="40vh",
                             width="100%",
-                            **input_style,
-                            on_change=ConceptDialogState.set_content,
+                            on_blur=ConceptDialogState.set_content,
                         ),
                         submit_button(
-                            max_width="48px",
-                            max_height="48px",
+                            **dialog_button_style,
                             on_click=ConceptDialogState.submit,
                             align_self="flex-end",
                         ),

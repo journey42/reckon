@@ -22,7 +22,7 @@ commands = [
     """
     CREATE TABLE IF NOT EXISTS embeddings (
         id SERIAL PRIMARY KEY,
-        reckoning_id INTEGER NOT NULL,
+        reckoning_id INTEGER NOT NULL UNIQUE,
         embedding VECTOR(384), -- Adjust the dimension based on your model's output
         FOREIGN KEY (reckoning_id) REFERENCES reckoning(id) ON DELETE CASCADE
     );
