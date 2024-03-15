@@ -27,10 +27,10 @@ class WelcomeEmailConfirmationDialogState(AppState):
     def yes(self):
         with rx.session() as session:
             try:
+                self.visible()
                 send_result = send_welcome_email(session, self.username, self.email, 'https://reckon.cc')
                 if not send_result:
                     raise
-                self.visible()
             except Exception as e:
                 rx.window.alert(f"Email not sent. Error {str(e)}")
 
