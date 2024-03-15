@@ -8,7 +8,7 @@ from reckon.styles import input_style
 from reckon.styles import form_box_style
 from reckon.styles import page_params
 
-@rx.page(route="/reset_password", **page_params)
+@rx.page(route="/reset_password", on_load=ProfileState.check_login(), **page_params)
 def reset_password():
     """The reset password page."""
     return profile_layout(

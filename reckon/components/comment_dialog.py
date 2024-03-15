@@ -1,7 +1,7 @@
 """comment modal component."""
 import reflex as rx
 from sqlmodel import select
-from datetime import datetime
+from datetime import datetime, timezone
 from reckon.styles import read_only_text_style, dialog_button_style
 from reckon.components.buttons import support_comment_button, detract_from_comment_button, poo_comment_button, close_button
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
@@ -55,11 +55,11 @@ class CommentDialogState(AppState):
             if self.is_editing:
                 comment = session.exec(select(Reckoning).where(Reckoning.id == self.cid)).first()
                 comment.content = self.content
-                comment.updated_at = datetime.utcnow()
+                comment.updated_at = datetime.now(timezone.utc)
                 session.commit()
                 self.show = not (self.show)
             else:
-                comment = Reckoning(content=self.content, parent_reckoning_id=self.pid, type=self.type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
+                comment = Reckoning(content=self.content, parent_reckoning_id=self.pid, type=self.type, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc), user_id=self.user.id)
                 session.add(comment)
                 session.commit()
                 self.show = not (self.show)

@@ -12,7 +12,7 @@ from .register import register
 from .request_reset_password import request_reset_password
 from .reset_password import reset_password
 from .reset_password_via_email import reset_password_via_email
-from .reset_password_email_sent import reset_password_email_sent
+from .reset_password_via_email_request_result import reset_password_via_email_request_result
 from .reset_password_successful import reset_password_successful
 from .reset_password_via_email_successful import reset_password_via_email_successful
 from .signup_successful import signup_successful

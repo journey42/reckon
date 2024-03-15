@@ -1,6 +1,6 @@
 """The home page."""
 import reflex as rx
-from datetime import datetime
+from datetime import datetime, timezone
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
 from reckon.styles import page_params, dialog_button_style
 from reckon.components.buttons import submit_button
@@ -27,8 +27,8 @@ class HomePageState(AppState):
                 user_id=self.user.id,
                 content=self.concept,
                 type=ReckoningTypes.draft,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
             )
             session.add(concept)
             session.commit()

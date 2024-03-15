@@ -1,6 +1,6 @@
 """concept modal component."""
 import reflex as rx
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlmodel import select
 from typing import Optional
 from reckon.styles import dialog_button_style
@@ -36,7 +36,7 @@ class ConceptDialogState(AppState):
             session.expire_on_commit = False
             self.concept = session.merge(self.concept)
             self.concept.content = self.content
-            self.concept.updated_at = datetime.utcnow()
+            self.concept.updated_at = datetime.now(timezone.utc)
             session.commit()
         
         print(remove_html_tags(self.concept.content))

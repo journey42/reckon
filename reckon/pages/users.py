@@ -1,14 +1,61 @@
 """users page."""
 import reflex as rx
 from sqlmodel import select
-from typing import Any, List
+from typing import Any, List, Optional
 from reckon.state.base import User, Log, AppState
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from reckon.styles import button_style, reckon_data_editor_theme
 from reckon.layouts import profile_layout
 from reckon.utils.validations import validate_username, validate_email, validate_role
 from dataclasses import dataclass
+from reckon.utils.comms import send_welcome_email
+
+class WelcomeEmailConfirmationDialogState(AppState):
+    show: bool = False
+    username: Optional[str] = None
+    email: Optional[str] = None
+
+    def visible(self):
+        """Change the visibility of the dialog."""
+        self.show = not (self.show)
+
+    def set_recipient(self, target_user: User):
+        print(target_user)
+        self.target_user = target_user
+
+    def yes(self):
+        with rx.session() as session:
+            try:
+                send_result = send_welcome_email(session, self.username, self.email, 'https://reckon.cc')
+                if not send_result:
+                    raise
+                self.visible()
+            except Exception as e:
+                rx.window.alert(f"Email not sent. Error {str(e)}")
+
+def send_welcome_email_confirmation_dialog():
+    return rx.alert_dialog.root(
+        rx.alert_dialog.content(
+            rx.alert_dialog.title("Email Confirmation"),
+            rx.alert_dialog.description(
+                "Send welcome email?",
+            ),
+            rx.flex(
+                rx.alert_dialog.action(
+                    rx.button("Yes", on_click=WelcomeEmailConfirmationDialogState.yes),
+                ),
+                rx.alert_dialog.cancel(
+                    rx.button("No", on_click=WelcomeEmailConfirmationDialogState.visible),
+                ),
+                spacing="3",
+                margin_top="16px",
+                justify="end",
+            ),
+            style={"max_width": 450},
+        ),
+        open=WelcomeEmailConfirmationDialogState.show,
+    )
 
 @dataclass(frozen=True)
 class ColumnNames:
@@ -123,19 +170,24 @@ class UserEditorState(AppState):
                         user.email = val["data"]
                     elif (col == column_names.enabled):
                         user.enabled = val["data"]
+                        if user.enabled == True:
+                            yield WelcomeEmailConfirmationDialogState.set_username(user.username)
+                            yield WelcomeEmailConfirmationDialogState.set_email(user.email)
+                            yield WelcomeEmailConfirmationDialogState.visible()       
                     elif (col == column_names.role):
                         is_valid, message = validate_role(val["data"])
                         if not is_valid:
                             return rx.window_alert(message)
                         user.role = val["data"]
-                    user.updated_at = datetime.utcnow()
+                    user.updated_at = datetime.now(timezone.utc)
                     session.add(user)
-                    log = Log(user_id=self.user.id, content=f"user with username:{user.username} and id:{user.id} updated", type="admin", created_at=datetime.utcnow())
+                    log = Log(user_id=self.user.id, content=f"user with username:{user.username} and id:{user.id} updated", type="admin", created_at=datetime.now(timezone.utc))
                     session.add(log)
                     #session.expire_on_commit = False
                     session.commit()
                     self.users[row][col] = val["data"]
         except Exception as e:
+            print(f"An error occurred: {e}")
             rx.window_alert(f"An error occurred: {e}")
             return
 
@@ -156,7 +208,7 @@ class UserEditorState(AppState):
                 user = session.exec(select(User).where(User.id == user_id)).first()
                 if user:
                     session.delete(user)
-                    log = Log(user_id=self.user.id, content=f"user with username:{user.username} and id:{user.id} deleted", type="admin", created_at=datetime.utcnow())
+                    log = Log(user_id=self.user.id, content=f"user with username:{user.username} and id:{user.id} deleted", type="admin", created_at=datetime.now(timezone.utc))
                     session.add(log)
                     #session.expire_on_commit = False
                     session.commit()
@@ -193,5 +245,6 @@ def users():
             rx.button("Refresh", on_click=UserEditorState.refresh, **button_style),
             align="center"
         ),
+        send_welcome_email_confirmation_dialog(),
     )
 

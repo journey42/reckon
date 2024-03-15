@@ -1,6 +1,6 @@
 """general feedback modal component."""
 import reflex as rx
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from reckon.styles import input_style, dialog_button_style
 from reckon.state.base import AppState, Feedback, Reckoning
@@ -37,9 +37,9 @@ class FeedbackDialogState(AppState):
             return
         with rx.session() as session:
             if self.reckoning_id:
-                feedback = Feedback(content=self.content, type=self.type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id, subject_reckoning_id=self.reckoning_id)
+                feedback = Feedback(content=self.content, type=self.type, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc), user_id=self.user.id, subject_reckoning_id=self.reckoning_id)
             else:
-                feedback = Feedback(content=self.content, type=self.type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
+                feedback = Feedback(content=self.content, type=self.type, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc), user_id=self.user.id)
             session.add(feedback)
             #session.expire_on_commit = False
             session.commit()

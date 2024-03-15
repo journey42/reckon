@@ -1,7 +1,7 @@
 """The state for the profile page."""
 import reflex as rx
 from sqlmodel import select
-from datetime import datetime
+from datetime import datetime, timezone
 from .base import AppState,  User, Log
 from reckon.utils.validations import validate_email, validate_password
 
@@ -32,7 +32,7 @@ class ProfileState(AppState):
             self.user.password = self.password
             session.add(self.user)
             
-            log = Log(user_id=self.user.id, content="password reset", type="user", created_at=datetime.utcnow())
+            log = Log(user_id=self.user.id, content="password reset", type="user", created_at=datetime.now(timezone.utc))
             session.add(log)
             #session.expire_on_commit = False
             session.commit()
@@ -52,7 +52,7 @@ class ProfileState(AppState):
                 self.user.email = self.email
                 session.add(self.user)
 
-                log = Log(user_id=self.user.id, content="email address updated", type="user", created_at=datetime.utcnow())
+                log = Log(user_id=self.user.id, content="email address updated", type="user", created_at=datetime.now(timezone.utc))
                 session.add(log)
                 #session.expire_on_commit = False
                 session.commit()

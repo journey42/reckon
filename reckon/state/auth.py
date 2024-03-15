@@ -1,9 +1,10 @@
 """The authentication state."""
 import reflex as rx
 from sqlmodel import select
-from datetime import datetime
+from datetime import datetime, timezone
 from .base import AppState, User, Log
 from reckon.utils.validations import validate_username, validate_email, validate_password
+from reckon.utils.comms import send_password_reset_email
 
 class AuthState(AppState):
     """The authentication state for sign up, register, and login page."""
@@ -39,10 +40,10 @@ class AuthState(AppState):
             if session.exec(select(User).where(User.email == self.email)).first():
                 return rx.window_alert("User with that email already exists.")
             
-            self.user = User(email=self.email, username=self.username, password=self.password, created_at=datetime.utcnow(), updated_at=datetime.utcnow())
+            self.user = User(email=self.email, username=self.username, password=self.password, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
             session.add(self.user)
 
-            log = Log(user_id=self.user.id, content="signed up", type="user", created_at=datetime.utcnow())
+            log = Log(user_id=self.user.id, content="signed up", type="user", created_at=datetime.now(timezone.utc))
             session.add(log)
             
             session.commit()
@@ -75,10 +76,10 @@ class AuthState(AppState):
             if session.exec(select(User).where(User.email == self.email)).first():
                 return rx.window_alert("User with that email already exists.")
             
-            user = User(email=self.email, username=self.username, password=self.password, created_at=datetime.utcnow(), updated_at=None)
+            user = User(email=self.email, username=self.username, password=self.password, created_at=datetime.now(timezone.utc), updated_at=None)
             session.add(user)
 
-            log = Log(user_id=self.user.id, content="registered", type="user", created_at=datetime.utcnow())
+            log = Log(user_id=self.user.id, content="registered", type="user", created_at=datetime.now(timezone.utc))
             session.add(log)
             
             session.commit()
@@ -107,28 +108,41 @@ class AuthState(AppState):
                 return rx.window_alert("Invalid username or password.")
             
             self.user.password = self.password
-            self.user.updated_at = datetime.utcnow()
+            self.user.updated_at = datetime.now(timezone.utc)
             #session.add(self.user)
 
-            log = Log(user_id=self.user.id, content="reset password", type="user", created_at=datetime.utcnow())
+            log = Log(user_id=self.user.id, content="reset password", type="user", created_at=datetime.now(timezone.utc))
             session.add(log)
             session.commit()
 
             return rx.redirect("/reset_password_successful")
         
     def request_reset_password(self):
-        """Reqeuest reset password."""
+        """Request reset password."""
         with rx.session() as session:
             user = session.exec(
                 select(User).where(User.email == self.email)
             ).first()
 
+            result = False
+
             if user:
-                log = Log(user_id=user.id, content="password reset requested", type="user", created_at=datetime.utcnow())
-                session.add(log)
+                try:
+                    result = send_password_reset_email(session, user, "https://reckon.cc/reset_password_via_email")  
+                except Exception as e:
+                    except_log = Log(user_id=user.id, content=f"password reset failed due to: {str(e)}", type="system", created_at=datetime.now(timezone.utc))
+                    session.add(except_log)
+
+                if result:
+                    log = Log(user_id=user.id, content="password reset requested", type="user", created_at=datetime.now(timezone.utc))
+                    session.add(log)
+                else:
+                    log = Log(user_id=user.id, content="password reset failed", type="user", created_at=datetime.now(timezone.utc))
+                    session.add(log)
                 #session.expire_on_commit = False
                 session.commit()
-                return rx.redirect("/reset_password_email_sent")
+
+                return rx.redirect(f"/reset_password_via_email_request_result/{result}")
             else:
                 return rx.window_alert("There is no user with that email address.")
 
@@ -152,7 +166,7 @@ class AuthState(AppState):
                     return rx.window_alert("Account not enabled. We will send you an email when your account is ready.")
                 self.user = user
 
-                log = Log(user_id=self.user.id, content="login", type="user", created_at=datetime.utcnow())
+                log = Log(user_id=self.user.id, content="login", type="user", created_at=datetime.now(timezone.utc))
                 session.add(log)
 
                 session.commit()

@@ -4,7 +4,7 @@ from reckon.layouts import auth_layout
 from reckon.state.auth import AuthState
 from reckon.styles import link_style, button_style, input_style, form_box_style, page_params
 
-@rx.page(route="/reset_password_via_email", on_load=AuthState.check_login(), **page_params)
+@rx.page(route="/reset_password_via_email", **page_params)
 def reset_password_via_email():
     """The reset password page."""
     return auth_layout(

@@ -1,6 +1,6 @@
 """The your reckonings page."""
 import reflex as rx
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlmodel import select, delete, func
 from sqlalchemy.orm import aliased
 from sqlalchemy import and_ as _and, or_ as _or
@@ -81,7 +81,7 @@ class ReckoningsPageState(AppState):
             else:
                 if concept.user_id == self.user.id:
                     concept.type = ReckoningTypes.concept
-                comment = Reckoning(content="n/a", parent_reckoning_id=cid, type=type, created_at=datetime.utcnow(), updated_at=datetime.utcnow(), user_id=self.user.id)
+                comment = Reckoning(content="n/a", parent_reckoning_id=cid, type=type, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc), user_id=self.user.id)
                 session.add(comment)
                 session.commit()
                 return rx.redirect(f"/comments/{cid}")    
