@@ -10,6 +10,10 @@ def calculate_elapsed_time(past_datetime_utc):
     Returns:
     - A string representing the elapsed time in a more human-readable format.
     """
+    # Ensure past_datetime_utc is offset-aware
+    if past_datetime_utc.tzinfo is None or past_datetime_utc.tzinfo.utcoffset(past_datetime_utc) is None:
+        past_datetime_utc = past_datetime_utc.replace(tzinfo=timezone.utc)
+
     # Get the current datetime in UTC
     current_datetime_utc = datetime.now(timezone.utc)
 
@@ -23,5 +27,4 @@ def calculate_elapsed_time(past_datetime_utc):
     minutes, seconds = divmod(seconds, 60)
     
     # Return a formatted string (example)
-    return f"{days}d, {hours}h, {minutes}m ago" #, {seconds}s ago"
-
+    return f"{days}d, {hours}h, {minutes}m ago" # Optionally include seconds: ", {seconds}s ago"
