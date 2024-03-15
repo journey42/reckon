@@ -5,19 +5,13 @@ staging to prod migration script
 documentation
 get off lets encrypt?
 
-reckon.cc->reckonforum.com
-
-
 dev todo:
-stats - posthog
 paging on admin pages
-email hookup azure commuication services (identify verification?)
+paging on user pages
 automatic log off
 background tallies
 compare variables
 trending variables - trending limits (20% of all results sorted by popularity), history, date search
-user history page
-feedback to user history search
 
 not yet sanctioned:
 dapp
@@ -25,16 +19,12 @@ sso
 localization
 
 bugs todo:
-navbar does not remain sticky
-refresh vote count without redirect
+
 
 refactor todo:
-transparency on favicon
 feedback types to int?
 refactor reckonings state classes
-style consolidation for buttons and grids
-reflex 0.4 upgrade
-radix upgrade
+
 
 prohibit hard deletes on comments - replace comment
 
