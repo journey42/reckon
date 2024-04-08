@@ -21,6 +21,9 @@ class ReckoningsPageState(AppState):
     rerender: bool = False
 
     def new_comment(self, subject, type, pid):
+        result = self.check_login()
+        if result:
+            return result
         yield CommentDialogState.new_comment(subject, type, pid)
         yield CommentDialogState.visible()
     
@@ -33,6 +36,9 @@ class ReckoningsPageState(AppState):
         yield ConceptDialogState.visible()
 
     def provide_feedback_on_reckoning(self, rid):
+        result = self.check_login()
+        if result:
+            return result
         yield FeedbackDialogState.set_reckoning(rid)
         yield FeedbackDialogState.visible()
 
@@ -49,6 +55,9 @@ class ReckoningsPageState(AppState):
         self.rerender = not (self.rerender)
     
     def vote_on_concept(self, cid, type):
+        result = self.check_login()
+        if result:
+            return result
         with rx.session() as session:
             session.expire_on_commit = False
             concept = session.exec(select(Reckoning).where(Reckoning.id == cid)).first()
@@ -84,7 +93,7 @@ class ReckoningsPageState(AppState):
                 comment = Reckoning(content="n/a", parent_reckoning_id=cid, type=type, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc), user_id=self.user.id)
                 session.add(comment)
                 session.commit()
-                return rx.redirect(f"/comments/{cid}")    
+                return rx.redirect(self.router.page.raw_path) #return rx.redirect(f"/comments/{cid}")    
 
 class YourDraftsPageState(ReckoningsPageState):
 
@@ -491,9 +500,9 @@ class CommentsPageState(ReckoningsPageState):
     
     def on_load(self):
         self.page_type = 7
-        result = self.check_login()
-        if result:
-            return result
+        # result = self.check_login()
+        # if result:
+        #     return result
         self.get_reckonings()
 
     def fetch_children(self, session, parent_id: int, depth: int = 0, max_depth: int = -1):
@@ -520,7 +529,7 @@ class CommentsPageState(ReckoningsPageState):
 
         for child in children:
             child.depth = ("4px" if depth == 0 else (str(depth*20) + "px"))  # Set the depth for each child
-            child.compute_tallies(self.user.id)
+            child.compute_tallies(self.user.id if self.user else None)
             self.reckonings.append(child)
             if max_depth == -1 or depth < max_depth - 1:
                 self.fetch_children(session, child.id, depth + 1, max_depth)
@@ -531,7 +540,7 @@ class CommentsPageState(ReckoningsPageState):
         with rx.session() as session:
             self.parent = session.exec(select(Reckoning).where(Reckoning.id == self.reckoning_id)).first()
             if self.parent is not None:
-                self.parent.compute_tallies(self.user.id)
+                self.parent.compute_tallies(self.user.id if self.user else None)
 
                 # Recursively fetch children with conditions applied
                 max_depth = 3
@@ -605,7 +614,7 @@ def parent_reckoning(state):
                     feedback_button(
                         on_click=state.provide_feedback_on_reckoning(state.parent.id),
                     ),
-                    rx.spacer()
+                    disabled_feedback_button(),
                 ),
                 rx.cond(
                     state.parent.parent_reckoning_id,
