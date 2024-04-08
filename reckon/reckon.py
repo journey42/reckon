@@ -7,8 +7,8 @@ from posthog import Posthog
 posthog = Posthog(project_api_key='phc_rQPhVDnHM6wgc44Eq3lQayCH4rSOZH3jevGH2B4aFpo', host='https://app.posthog.com')
 
 # posthog.capture('test-id', 'test-event')
-
 app = rx.App(
+    head_components=[rx.script(src="/scrolling.js")],
     theme=rx.theme(
         appearance="light", has_background=True, radius="full", accent_color="gray"
     )

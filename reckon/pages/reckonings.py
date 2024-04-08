@@ -19,13 +19,14 @@ class ReckoningsPageState(AppState):
     search: str
     page_type: int = 0
     rerender: bool = False
-
+    
     def new_comment(self, subject, type, pid):
         result = self.check_login()
         if result:
             return result
         yield CommentDialogState.new_comment(subject, type, pid)
         yield CommentDialogState.visible()
+        yield self.save_scroll_position()
     
     def edit_comment(self, pid, type, cid, content):
         yield CommentDialogState.edit_comment(pid, type, cid, content)
@@ -85,15 +86,15 @@ class ReckoningsPageState(AppState):
                 else:
                     vote.type = type
                 session.commit()
-                #yield ReckoningsPageState.trigger_rerender()
-                return rx.redirect(self.router.page.raw_path)
             else:
                 if concept.user_id == self.user.id:
                     concept.type = ReckoningTypes.concept
                 comment = Reckoning(content="n/a", parent_reckoning_id=cid, type=type, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc), user_id=self.user.id)
                 session.add(comment)
                 session.commit()
-                return rx.redirect(self.router.page.raw_path) #return rx.redirect(f"/comments/{cid}")    
+
+            yield self.save_scroll_position()
+            return rx.redirect(self.router.page.raw_path) #return rx.redirect(f"/comments/{cid}")    
 
 class YourDraftsPageState(ReckoningsPageState):
 
@@ -118,6 +119,7 @@ class YourDraftsPageState(ReckoningsPageState):
         if result:
             return result
         self.get_reckonings()
+        yield self.scroll_to_saved_position()
 
     def get_reckonings(self):
         """Get reckonings of type concept for this user from the database."""
@@ -163,6 +165,7 @@ class NewConceptsPageState(ReckoningsPageState):
         if result:
             return result
         self.get_reckonings()
+        yield self.scroll_to_saved_position()
 
     def get_reckonings(self):
         """Get reckonings of type concept for this user from the database."""
@@ -208,6 +211,7 @@ class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
         if result:
             return result
         self.get_reckonings()
+        yield self.scroll_to_saved_position()
 
 
     def get_reckonings(self):
@@ -277,6 +281,7 @@ class TrendingConceptsBySupportPageState(ReckoningsPageState):
         if result:
             return result
         self.get_reckonings()
+        yield self.scroll_to_saved_position()
 
 
     def get_reckonings(self):
@@ -346,6 +351,7 @@ class YourReckoningsPageState(ReckoningsPageState):
         if result:
             return result
         self.get_reckonings()
+        yield self.scroll_to_saved_position()
 
     """The state for the your reckonings page."""
     def get_reckonings(self):
@@ -399,6 +405,7 @@ class ComparePageState(ReckoningsPageState):
         if result:
             return result
         self.get_reckonings()
+        yield self.scroll_to_saved_position()
 
     @rx.var
     def reckoning_id(self) -> str:
@@ -504,6 +511,7 @@ class CommentsPageState(ReckoningsPageState):
         # if result:
         #     return result
         self.get_reckonings()
+        yield self.scroll_to_saved_position()
 
     def fetch_children(self, session, parent_id: int, depth: int = 0, max_depth: int = -1):
         """Recursive function to fetch children of a reckoning, setting depth accordingly, up to max_depth."""

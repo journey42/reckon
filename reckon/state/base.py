@@ -250,6 +250,12 @@ class AppState(rx.State):
     user: Optional[User] = None
     is_running: bool = False
 
+    def scroll_to_saved_position(self):
+        return rx.call_script('scrollToSavedPosition();')
+    
+    def save_scroll_position(self):
+        return rx.call_script('saveScrollPosition();')
+
     def logout(self):
         """Log out a user."""
         self.reset()
