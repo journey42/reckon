@@ -610,9 +610,9 @@ def parent_reckoning(state):
         rx.grid(
             rx.match(
                 state.parent.type,
-                (ReckoningTypes.support, rx.image(src="/support_comment.webp", **comment_badge_style)),
-                (ReckoningTypes.detract, rx.image(src="/detract_from_comment.webp", **comment_badge_style)),
-                (ReckoningTypes.point_of_order, rx.image(src="/poo_comment.webp", **comment_badge_style)),
+                (ReckoningTypes.support, rx.image(src="/support_comment.svg", **comment_badge_style)),
+                (ReckoningTypes.detract, rx.image(src="/detract_from_comment.svg", **comment_badge_style)),
+                (ReckoningTypes.point_of_order, rx.image(src="/poo_comment.svg", **comment_badge_style)),
             ),
             editor(
                 key=state.parent.id,
@@ -644,9 +644,9 @@ def parent_reckoning(state):
                         rx.cond(
                             (state.parent.user_vote_history == ReckoningTypes.no_vote), #& (state.parent.user_id != state.user.id),
                             rx.fragment(
-                                no_upvote_concept_button (
-                                    on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
-                                ),
+                                    no_upvote_concept_button (
+                                        on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
+                                    ),
                                 rx.text(state.parent.up_votes),
                                 no_downvote_concept_button(
                                     on_click=state.vote_on_concept(state.parent.id, ReckoningTypes.down_vote)
@@ -814,9 +814,9 @@ def render_comment(state, c: Reckoning):
                             rx.flex(
                                 rx.match(
                                     c.parent_type,
-                                    (ReckoningTypes.support, rx.image(src="/support_comment.webp")),
-                                    (ReckoningTypes.detract, rx.image(src="/detract_from_comment.webp")),
-                                    (ReckoningTypes.point_of_order, rx.image(src="/poo_comment.webp")),
+                                    (ReckoningTypes.support, rx.image(src="/support_comment.svg", width="24px", height="24px")),
+                                    (ReckoningTypes.detract, rx.image(src="/detract_from_comment.svg", width="24px", height="24px")),
+                                    (ReckoningTypes.point_of_order, rx.image(src="/poo_comment.svg", width="24px", height="24px")),
                                 ),
                                 **comment_badge_style,
                             ),                     
@@ -852,9 +852,9 @@ def render_comment(state, c: Reckoning):
                     rx.flex(
                         rx.match(
                             c.type,
-                            (ReckoningTypes.support, rx.image(src="/support_comment.webp")),
-                            (ReckoningTypes.detract, rx.image(src="/detract_from_comment.webp")),
-                            (ReckoningTypes.point_of_order, rx.image(src="/poo_comment.webp")),
+                            (ReckoningTypes.support, rx.image(src="/support_comment.svg", width="24px", height="24px")),
+                            (ReckoningTypes.detract, rx.image(src="/detract_from_comment.svg", width="24px", height="24px")),
+                            (ReckoningTypes.point_of_order, rx.image(src="/poo_comment.svg", width="24px", height="24px")),
                         ),
                         **comment_badge_style,
                     ),                     

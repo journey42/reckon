@@ -67,8 +67,8 @@ comment_badge_style = dict(
     top="5px",
     left="5px",
     z_index="20",
-    # width="15px",
-    height="15px",
+    width="24px",
+    height="24px",
 )
 
 vote_count_and_timestamp_style = dict(

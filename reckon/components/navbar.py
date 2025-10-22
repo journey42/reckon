@@ -4,7 +4,6 @@ from reckon.components.buttons import legend_button, trending_concepts_button, y
 from reckon.components.feedback_dialog import feedback_dialog, FeedbackDialogState, general_feedback_options
 from reckon.components.legend_dialog import legend_dialog, LegendDialogState
 from reckon.state.base import AppState, UserTypes
-from reckon.styles import interior_grid_style
 
 def user_menu() -> rx.Component:
     """User menu."""
@@ -54,15 +53,25 @@ def user_menu() -> rx.Component:
 
 def app_logo() -> rx.Component:
     """App logo."""
-    return rx.grid(
-        logo_button(),
-        trending_concepts_button(),
-        your_reckonings_button(),
-        legend_button(on_click=LegendDialogState.visible),
-        rx.spacer(),
+    return rx.hstack(
+        rx.hstack(
+            logo_button(),
+            spacing="2",
+        ),
+        rx.spacer(flex="1"),
+        rx.hstack(
+            trending_concepts_button(),
+            your_reckonings_button(),
+            legend_button(on_click=LegendDialogState.visible),
+            spacing="8",
+            gap="24px",
+            align="center",
+        ),
+        rx.spacer(flex="1"),
         user_menu(),
-        grid_template_columns="1fr 1fr 1fr 1fr 19fr 1fr",
-        **interior_grid_style
+        spacing="12",
+        align="center",
+        width="100%",
     )
 
 navbar_styles = dict(
