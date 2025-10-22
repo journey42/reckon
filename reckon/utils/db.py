@@ -28,6 +28,29 @@ def get_matching_count():
 #         # Commit the transaction
 #         session.commit()
 
+def _ensure_embeddings_schema(session):
+    """Make sure the vector extension and embeddings table exist."""
+    session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    session.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS embeddings (
+                reckoning_id INTEGER PRIMARY KEY REFERENCES reckoning(id) ON DELETE CASCADE,
+                embedding vector(384)
+            )
+            """
+        )
+    )
+    session.execute(
+        text(
+            """
+            CREATE INDEX IF NOT EXISTS idx_embeddings_embedding
+            ON embeddings USING ivfflat (embedding vector_cosine_ops)
+            """
+        )
+    )
+
+
 def insert_text_with_embedding(text_to_embed, reckoning_id):
     # Load the model
     model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -38,6 +61,7 @@ def insert_text_with_embedding(text_to_embed, reckoning_id):
 
     # Connect to the database using SQLAlchemy session
     with rx.session() as session:
+        _ensure_embeddings_schema(session)
         # Prepare the SQL query with UPSERT functionality
         query = text("""
         INSERT INTO embeddings (embedding, reckoning_id) 
@@ -53,6 +77,7 @@ def insert_text_with_embedding(text_to_embed, reckoning_id):
 
 def find_similar_texts_with_join(rid, threshold, limit):
     with rx.session() as session:
+        _ensure_embeddings_schema(session)
         # Prepare the SQL query
         query = text("""
         WITH target_embedding AS (

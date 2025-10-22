@@ -5,3 +5,4 @@ torch
 posthog
 beautifulsoup4
 azure-communication-email
+reflex==0.8.16

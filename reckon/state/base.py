@@ -256,6 +256,23 @@ class AppState(rx.State):
     def save_scroll_position(self):
         return rx.call_script('saveScrollPosition();')
 
+    def get_path_param(self, name: str, default: str = "") -> str:
+        """Fetch a dynamic route parameter or query parameter."""
+        # Prefer explicit query parameters.
+        query_value = self.router.url.query_parameters.get(name)  # type: ignore[attr-defined]
+        if query_value:
+            return query_value
+
+        path_segments = [segment for segment in self.router.url.path.split("/") if segment]  # type: ignore[attr-defined]
+        template_segments = [segment for segment in self.router.route_id.split("/") if segment]
+
+        for idx, segment in enumerate(template_segments):
+            if segment.startswith("[") and segment.endswith("]") and segment[1:-1] == name:
+                if idx < len(path_segments):
+                    return path_segments[idx]
+
+        return path_segments[-1] if path_segments else default
+
     def logout(self):
         """Log out a user."""
         self.reset()
@@ -268,11 +285,11 @@ class AppState(rx.State):
         #return State.check_if_user_enabled
 
     @rx.var
-    def logged_in(self):
+    def logged_in(self) -> bool:
         """Check if a user is logged in."""
         return self.user is not None
     
-    @rx.background
+    @rx.event(background=True)
     async def check_if_user_enabled(self):
         """Check if a user is enabled."""
         if self.is_running:
@@ -313,7 +330,7 @@ class AppState(rx.State):
     #                 self._db_updated = False
 
     @rx.var
-    def db_updated(self):
+    def db_updated(self) -> bool:
         return self._db_updated
 
     # @rx.var

@@ -6,10 +6,26 @@ from .base import AppState,  User, Log
 from reckon.utils.validations import validate_email, validate_password
 
 class ProfileState(AppState):
-    email: str
-    current_password: str
-    password: str
-    confirm_password: str
+    email: str = ""
+    current_password: str = ""
+    password: str = ""
+    confirm_password: str = ""
+
+    @rx.event
+    def set_email(self, value: str) -> None:
+        self.email = value or ""
+
+    @rx.event
+    def set_current_password(self, value: str) -> None:
+        self.current_password = value or ""
+
+    @rx.event
+    def set_password(self, value: str) -> None:
+        self.password = value or ""
+
+    @rx.event
+    def set_confirm_password(self, value: str) -> None:
+        self.confirm_password = value or ""
 
     def reset_password(self):
         """Reset password."""

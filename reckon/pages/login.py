@@ -23,17 +23,17 @@ def login():
                     on_blur=AuthState.set_password,
                     **input_style,
                 ),
-                rx.center(
-                    rx.button(
-                        "Log in",
-                        type="submit",
-                        **button_style,
-                    )
+                rx.button(
+                    "Log in",
+                    type="submit",
+                    width="100%",
+                    **button_style,
                 ),
                 **form_box_style,
                 direction="column",
-                spacing="2",
+                spacing="4",
             ),
+            width="100%",
             on_submit=AuthState.login
         ),
         rx.text(

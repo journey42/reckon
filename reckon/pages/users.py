@@ -15,24 +15,36 @@ class WelcomeEmailConfirmationDialogState(AppState):
     show: bool = False
     username: Optional[str] = None
     email: Optional[str] = None
+    target_user: Optional[User] = None
 
+    @rx.event
     def visible(self):
         """Change the visibility of the dialog."""
         self.show = not (self.show)
 
+    @rx.event
+    def set_username(self, value: str) -> None:
+        self.username = value or None
+
+    @rx.event
+    def set_email(self, value: str) -> None:
+        self.email = value or None
+
+    @rx.event
     def set_recipient(self, target_user: User):
         print(target_user)
         self.target_user = target_user
 
+    @rx.event
     def yes(self):
         with rx.session() as session:
             try:
                 self.visible()
-                send_result = send_welcome_email(session, self.username, self.email, 'https://reckon.cc')
+                send_result = send_welcome_email(session, self.username, self.email, 'https://reckon.cc')  
                 if not send_result:
-                    raise
+                    raise ValueError("Email not sent")
             except Exception as e:
-                rx.window.alert(f"Email not sent. Error {str(e)}")
+                return rx.window_alert(f"Email not sent. Error {str(e)}")
 
 def send_welcome_email_confirmation_dialog():
     return rx.alert_dialog.root(
@@ -247,4 +259,3 @@ def users():
         ),
         send_welcome_email_confirmation_dialog(),
     )
-

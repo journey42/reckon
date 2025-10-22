@@ -1,6 +1,7 @@
 """The your reckonings page."""
 import reflex as rx
 from datetime import datetime, timezone
+from typing import Optional
 from sqlmodel import select, delete, func
 from sqlalchemy.orm import aliased
 from sqlalchemy import and_ as _and, or_ as _or
@@ -16,7 +17,7 @@ from reckon.utils.db import find_similar_texts_with_join
 
 class ReckoningsPageState(AppState):
     reckonings: list[Reckoning] = []
-    search: str
+    search: str = ""
     page_type: int = 0
     rerender: bool = False
     
@@ -94,7 +95,8 @@ class ReckoningsPageState(AppState):
                 session.commit()
 
             yield self.save_scroll_position()
-            return rx.redirect(self.router.page.raw_path) #return rx.redirect(f"/comments/{cid}")    
+            current_path = self.router.url.path or "/"
+            return rx.redirect(current_path) #return rx.redirect(f"/comments/{cid}")    
 
 class YourDraftsPageState(ReckoningsPageState):
 
@@ -409,7 +411,7 @@ class ComparePageState(ReckoningsPageState):
 
     @rx.var
     def reckoning_id(self) -> str:
-        return self.router.page.params.get('rid', 'no rid')
+        return self.get_path_param('rid', 'no rid')
     
     def get_reckonings(self):
         """Get reckonings of type concept for this user from the database."""
@@ -483,12 +485,12 @@ class ConceptPageState(ReckoningsPageState):
 
     @rx.var
     def concept_id(self) -> str:
-        return self.router.page.params.get('rid', 'no rid')
+        return self.get_path_param('rid', 'no rid')
     
 
 class CommentsPageState(ReckoningsPageState):
     """The state for the comments page."""
-    parent: Reckoning = None
+    parent: Optional[Reckoning] = None
 
     def close_complete_modal(self):
         yield self.get_reckonings()
@@ -597,11 +599,13 @@ class CommentsPageState(ReckoningsPageState):
 
     @rx.var
     def reckoning_id(self) -> str:
-        return self.router.page.params.get('rid', 'no rid')
+        return self.get_path_param('rid', 'no rid')
     
 
 def parent_reckoning(state):
     """The parent reckoning component."""
+    if state.parent is None:
+        return rx.box()
     return rx.grid(
         rx.grid(
             rx.match(
@@ -748,7 +752,12 @@ def render_comment(state, c: Reckoning):
                 rx.cond(
                     (c.parent_type == ReckoningTypes.concept),
                     rx.fragment(
-                        rx.html(c.parent_content, class_name='prose', max_width="100%", **read_only_text_style),
+                        rx.markdown(
+                            c.parent_content,
+                            class_name="prose",
+                            max_width="100%",
+                            **read_only_text_style,
+                        ),
                         rx.grid(
                             view_parent_button(
                                 on_click=rx.redirect(f"/comments/{c.parent_id}"),
@@ -811,7 +820,12 @@ def render_comment(state, c: Reckoning):
                                 ),
                                 **comment_badge_style,
                             ),                     
-                            rx.html(c.parent_content, class_name='prose', max_width="100%", **read_only_text_style),
+                        rx.markdown(
+                            c.parent_content,
+                            class_name="prose",
+                            max_width="100%",
+                            **read_only_text_style,
+                        ),
                             rx.flex(
                                 rx.text(c.parent_elapsed_time, size="1", flex_grow="1"),
                                 **vote_count_and_timestamp_style,
@@ -844,7 +858,12 @@ def render_comment(state, c: Reckoning):
                         ),
                         **comment_badge_style,
                     ),                     
-                    rx.html(c.content, class_name='prose', max_width="100%", **read_only_text_style),
+                    rx.markdown(
+                        c.content,
+                        class_name="prose",
+                        max_width="100%",
+                        **read_only_text_style,
+                    ),
                     rx.flex(
                         rx.text(c.elapsed_time, size="1", flex_grow="1"),
                         **vote_count_and_timestamp_style,
@@ -936,7 +955,12 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
     
     return rx.grid(
                 rx.box(                 
-                    rx.html(content, class_name='prose', max_width="100%", **read_only_text_style),
+                    rx.markdown(
+                        content,
+                        class_name="prose",
+                        max_width="100%",
+                        **read_only_text_style,
+                    ),
                     rx.flex(
                         rx.text(elapsed_time, size="1", flex_grow="1"),
                         **vote_count_and_timestamp_style,

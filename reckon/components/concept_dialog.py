@@ -14,33 +14,44 @@ class ConceptDialogState(AppState):
     """Concept modal state."""
     show: bool = False
     content: str = ""
-    concept: Optional["Reckoning"]
+    concept: Optional["Reckoning"] = None
 
+    @rx.event
     def set_concept(self, cid):
         """Set the concept."""
         with rx.session() as session:
-                self.concept = session.exec(select(Reckoning).where(Reckoning.id == cid)).first()
-                self.content = self.concept.content
+                concept = session.exec(select(Reckoning).where(Reckoning.id == cid)).first()
+                self.concept = concept
+                self.content = concept.content if concept else ""
         
+    @rx.event
     def visible(self):
         """Change the visibility of the modal."""
         self.show = not (self.show)
+
+    @rx.event
+    def set_content(self, value: str) -> None:
+        self.content = value or ""
 
     def resize_textarea(self):
         """Resize the textarea."""
         return [rx.call_script('resizeTextarea("autoresizing");')]
 
+    @rx.event
     def submit(self):
         """Submit."""
         with rx.session() as session:
             session.expire_on_commit = False
-            self.concept = session.merge(self.concept)
-            self.concept.content = self.content
-            self.concept.updated_at = datetime.now(timezone.utc)
+            if self.concept is None:
+                return
+            concept = session.merge(self.concept)
+            concept.content = self.content
+            concept.updated_at = datetime.now(timezone.utc)
             session.commit()
-        
-        print(remove_html_tags(self.concept.content))
-        insert_text_with_embedding(remove_html_tags(self.concept.content), self.concept.id)
+
+        cleaned = remove_html_tags(self.concept.content) if self.concept else ""
+        if self.concept:
+            insert_text_with_embedding(cleaned, self.concept.id)
         self.visible()
         return rx.redirect("/your_drafts")
 

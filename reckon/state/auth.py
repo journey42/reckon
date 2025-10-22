@@ -9,11 +9,31 @@ from reckon.utils.comms import send_password_reset_email
 class AuthState(AppState):
     """The authentication state for sign up, register, and login page."""
 
-    email: str
-    username: str
-    current_password: str
-    password: str
-    confirm_password: str
+    email: str = ""
+    username: str = ""
+    current_password: str = ""
+    password: str = ""
+    confirm_password: str = ""
+
+    @rx.event
+    def set_email(self, value: str) -> None:
+        self.email = value or ""
+
+    @rx.event
+    def set_username(self, value: str) -> None:
+        self.username = value or ""
+
+    @rx.event
+    def set_password(self, value: str) -> None:
+        self.password = value or ""
+
+    @rx.event
+    def set_confirm_password(self, value: str) -> None:
+        self.confirm_password = value or ""
+
+    @rx.event
+    def set_current_password(self, value: str) -> None:
+        self.current_password = value or ""
 
     def signup(self):
         """Sign up a user."""

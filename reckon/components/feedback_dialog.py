@@ -12,25 +12,37 @@ reckoning_feedback_options: List[str] = ["Community Guidelines Violation", "Othe
 class FeedbackDialogState(AppState):
     """Feedback state."""
     show: bool = False
-    content: str
-    type: str
+    content: str = ""
+    type: str = ""
     reckoning_id: Optional[int] = None
 
+    @rx.event
     def visible(self):
         """Change the visibility of the feedback modal."""
         self.show = not (self.show)
-
+    
+    @rx.event
     def close(self):
         pass
 
+    @rx.event
     def set_reckoning(self, rid):
         """Set the content of the feedback."""
         self.reckoning_id = rid
+
+    @rx.event
+    def set_type(self, value: str) -> None:
+        self.type = (value or "").strip()
+
+    @rx.event
+    def set_content(self, value: str) -> None:
+        self.content = value or ""
 
     @rx.var
     def is_error(self) -> bool:
         return self.type == ""
     
+    @rx.event
     def submit(self, form_data: dict):
         """submit feedback."""
         if(self.is_error):
@@ -76,8 +88,10 @@ def feedback_dialog(options: List[str], *args, **kwargs):
                             ),
                             rx.cond(
                                 FeedbackDialogState.is_error,
-                                rx.chakra.form_error_message(
-                                    "Feedback type is required."
+                                rx.text(
+                                    "Feedback type is required.",
+                                    color="red",
+                                    font_size="0.9em",
                                 ),
                             ),
                             server_invalid=FeedbackDialogState.is_error,
@@ -87,7 +101,6 @@ def feedback_dialog(options: List[str], *args, **kwargs):
                             id="autoresizing",
                             placeholder="Feedback",
                             height="60vh",
-                            width="100%",
                             **input_style,
                             on_change=FeedbackDialogState.set_content,
                         ),

@@ -6,18 +6,18 @@ from reckon.state.base import AppState
 
 class ResetPasswordViaEmailRequestResultPageState(AppState):
     @rx.var
-    def result(self) -> str:
-        if self.router.page.params.get('result', 'no result') == 'True':
+    def result_message(self) -> str:
+        result_param = self.get_path_param("result").lower()
+        if result_param == "true":
             return "Your password has been reset."
-        else:
-            return "Your password has not been reset. Please try again."
+        return "Your password has not been reset. Please try again."
 
 @rx.page(route="/reset_password_via_email_request_result/[result]", **page_params)
 def reset_password_via_email_request_result():
     """The password reset via email result page."""
     return auth_layout(
         rx.text(
-            ResetPasswordViaEmailRequestResultPageState.result,
+            ResetPasswordViaEmailRequestResultPageState.result_message,
             **info_text_style,
         ),
         rx.text(

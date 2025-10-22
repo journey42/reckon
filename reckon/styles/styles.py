@@ -58,6 +58,7 @@ input_style = dict(
      margin="4px",
      padding="4px",
      size="1",
+     width="100%",
     # _focus={"borderColor": "#000000", "boxShadowColor": "#000000"}
 )
 
@@ -97,9 +98,11 @@ read_only_text_style = dict(
 form_box_style = dict(
     background="white",
     border="1px solid #eaeaea",
-    padding="8px",
-    max_width="600px",
+    padding="24px",
+    width="100%",
+    max_width="420px",
     border_radius="20px",
+    box_shadow="0 20px 45px rgba(15, 23, 42, 0.12)",
 )
 
 link_style = dict(

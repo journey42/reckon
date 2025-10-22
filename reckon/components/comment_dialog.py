@@ -17,6 +17,7 @@ class CommentDialogState(AppState):
     cid: int = 0
     is_editing: bool = False
 
+    @rx.event
     def new_comment(self, subject, type, pid):
         self.is_editing = False
         self.subject = subject
@@ -26,6 +27,7 @@ class CommentDialogState(AppState):
         self.cid = 0
         self.content = ""
 
+    @rx.event
     def edit_comment(self, pid, type, cid, content):
         """Set the comment."""
         self.is_editing = True
@@ -38,10 +40,16 @@ class CommentDialogState(AppState):
         self.content = content
         self.cid = cid
 
+    @rx.event
     def visible(self):
         """Change the visibility of the comment modal."""
         self.show = not (self.show)
 
+    @rx.event
+    def set_content(self, value: str) -> None:
+        self.content = value or ""
+
+    @rx.event
     def submit(self):
         """Submit feedback."""
         with rx.session() as session:

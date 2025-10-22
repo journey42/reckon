@@ -11,15 +11,20 @@ from reckon.utils.db import insert_text_with_embedding
 from reckon.utils.parsing import remove_html_tags
 
 class HomePageState(AppState):
-    concept: str
+    concept: str = ""
+
+    @rx.event
+    def set_concept(self, value: str) -> None:
+        self.concept = value or ""
 
     def post_concept(self, form_data: dict):
         """Post an new reckoning of type concept."""
         if not self.logged_in:
             return rx.window_alert("Please log in to post.")
-        if self.concept == "":
+        content = (form_data.get("concept") or "").strip()
+        if content == "":
             return rx.window_alert("A concept cannot be blank.")
-        self.concept = form_data.get("concept")
+        self.concept = content
         with rx.session() as session:
             session.expire_on_commit = False
             #session.execute(text("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;"))

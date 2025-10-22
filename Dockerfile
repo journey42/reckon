@@ -1,5 +1,5 @@
 # Stage 1: init
-FROM python:3.11 as init
+FROM python:3.13 as init
 
 # Pass `--build-arg API_URL=http://app.example.com:8000` during build 
 ARG API_URL
@@ -14,7 +14,7 @@ ENV HOME=/app
 # Create virtualenv which will be copied into final container
 ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-RUN python3.11 -m venv $VIRTUAL_ENV
+RUN python -m venv $VIRTUAL_ENV
 
 # Install app requirements and reflex inside virtualenv
 RUN pip install -r requirements.txt
@@ -31,7 +31,7 @@ RUN reflex export --frontend-only --no-zip
 #RUN mv /tmp/_static .web/_static
 
 # Stage 2: copy artifacts into slim image 
-FROM python:3.11-slim
+FROM python:3.13-slim
 ARG API_URL
 RUN apt-get update && apt-get install -y curl && apt-get update && apt-get install -y unzip && apt-get update && apt-get install -y libpq-dev
 WORKDIR /app

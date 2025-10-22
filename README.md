@@ -8,6 +8,18 @@ reflex db init
 reflex db migrate
 ```
 
+### Local Postgres with pgvector
+
+A Docker image for Postgres 16 with the `pgvector` extension is available at `docker/db/Dockerfile`. Start it together with the app using Compose:
+
+Run this from the repository root:
+
+```
+docker compose up db
+```
+
+The container exposes Postgres on `localhost:5432` with the `reckon` database and credentials `postgres` / `password`. The app service is already configured to use the connection string `postgresql://postgres:password@db:5432/reckon`. To connect from outside Compose, set the `DB_URL` environment variable accordingly (for example when running Reflex commands locally).
+
 Azure Setup
 
 run the following script via the Azure CLI to create the resource group and supporting resources
