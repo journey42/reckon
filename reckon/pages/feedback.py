@@ -139,11 +139,12 @@ def feedback():
                 on_cell_edited=FeedbackEditorState.on_cell_edited,
                 on_delete=FeedbackEditorState.on_delete,
                 on_column_resize=FeedbackEditorState.on_column_resize,
-                width="65vw",
+                width="100%",
                 height="40vh",
                 theme=reckon_data_editor_theme,
             ),
             rx.button("Refresh", on_click=FeedbackEditorState.refresh, **button_style),
-            align="center"
+            width="100%",
+            spacing="4",
         ),
     )

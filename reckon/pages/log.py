@@ -141,11 +141,12 @@ def log():
                 on_cell_edited=LogEditorState.on_cell_edited,
                 on_delete=LogEditorState.on_delete,
                 on_column_resize=LogEditorState.on_column_resize,
-                width="65vw",
+                width="100%",
                 height="40vh",
                 theme=reckon_data_editor_theme,
             ),
             rx.button("Refresh", on_click=LogEditorState.refresh, **button_style),
-            align="center"
+            width="100%",
+            spacing="4",
         ),
     )

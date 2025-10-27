@@ -1,8 +1,10 @@
-reflex
 psycopg2
 sentence-transformers
 torch
 posthog
 beautifulsoup4
 azure-communication-email
-reflex==0.8.16
+reflex=>0.8.17
+typer==0.9.0
+reflex-suneditor
+bcrypt

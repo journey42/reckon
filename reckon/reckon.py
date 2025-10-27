@@ -17,7 +17,9 @@ posthog = _init_posthog()
 
 # posthog.capture('test-id', 'test-event')
 app = rx.App(
-    head_components=[rx.script(src="/scrolling.js")],
+    head_components=[
+        rx.script(src="/scrolling.js"),
+    ],
     theme=rx.theme(
         appearance="light", has_background=True, radius="full", accent_color="gray"
     )

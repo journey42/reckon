@@ -11,7 +11,7 @@ def container(*children, **props):
             max_width="960px",
             background="white",
             height="100%",
-            padding="0 0 4px 4px",
+            padding="0",
             margin="0 auto",
             position="relative",
         )

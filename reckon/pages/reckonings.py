@@ -418,7 +418,7 @@ class ComparePageState(ReckoningsPageState):
         primary_keys = []
         with rx.session() as session:
             session.expire_on_commit = False
-            concept = self.reckonings = session.exec(
+            concept = session.exec(
                 select(Reckoning)
                 .where(
                     Reckoning.id == self.reckoning_id

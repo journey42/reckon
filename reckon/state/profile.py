@@ -4,6 +4,7 @@ from sqlmodel import select
 from datetime import datetime, timezone
 from .base import AppState,  User, Log
 from reckon.utils.validations import validate_email, validate_password
+from reckon.utils.security import hash_password, verify_password
 
 class ProfileState(AppState):
     email: str = ""
@@ -40,13 +41,17 @@ class ProfileState(AppState):
             user = session.exec(
                 select(User).where(User.username == self.user.username)
             ).first()
-            if user and user.password == self.current_password:
-                self.user = user
-            else:
+            match, needs_upgrade = verify_password(self.current_password, user.password if user else None)
+            if not (user and match):
                 return rx.window_alert("Invalid username or password.")
-            
-            self.user.password = self.password
-            session.add(self.user)
+
+            if needs_upgrade:
+                user.password = hash_password(self.current_password)
+
+            user.password = hash_password(self.password)
+            user.updated_at = datetime.now(timezone.utc)
+            session.add(user)
+            self.user = user
             
             log = Log(user_id=self.user.id, content="password reset", type="user", created_at=datetime.now(timezone.utc))
             session.add(log)

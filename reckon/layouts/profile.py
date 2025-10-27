@@ -5,10 +5,11 @@ from ..components import container, navbar
 def profile_layout(*args):
     """The shared layout for profile related pages."""
     return container(
-            navbar(),
-            *args,
-            display="flex",
-            flex_direction="column",
-            align_items="center",
-            grid_gap=4,
-        )
+        navbar(),
+        rx.box(*args, width="100%"),
+        display="flex",
+        flex_direction="column",
+        align_items="stretch",
+        padding_x="24px",
+        gap="24px",
+    )

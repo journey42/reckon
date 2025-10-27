@@ -12,25 +12,33 @@ from reckon.styles import page_params
 def profile():
     """The profile page."""
     return profile_layout(
-        rx.flex(
-            rx.input(
-                default_value=ProfileState.user.email,
-                placeholder="Email",
-                on_blur=ProfileState.set_email,
-                **input_style,
+        rx.center(
+            rx.vstack(
+                rx.flex(
+                    rx.input(
+                        default_value=ProfileState.user.email,
+                        placeholder="Email",
+                        on_blur=ProfileState.set_email,
+                        **input_style,
+                    ),
+                    rx.center(
+                        rx.button(
+                            "Apply",
+                            on_click=ProfileState.update_profile,
+                            **button_style,
+                        )
+                    ),
+                    **form_box_style,
+                    direction="column",
+                    spacing="2",
+                ),
+                rx.text(
+                    rx.link("Need to reset your password?", href="/reset_password", **link_style),
+                ),
+                spacing="4",
+                max_width="480px",
+                align_items="center",
             ),
-            rx.center(
-                rx.button(
-                    "Apply",
-                    on_click=ProfileState.update_profile,
-                    **button_style,
-                )
-            ),
-            **form_box_style,
-            direction="column",
-            spacing="2",
-        ),
-        rx.text(
-            rx.link("Need to reset your password?", href="/reset_password", **link_style),
+            width="100%",
         ),
     )

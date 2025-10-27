@@ -1,1 +1,5 @@
-<svg height="512" viewBox="0 0 64 64" width="512" xmlns="http://www.w3.org/2000/svg"><g id="Wind_Rose" data-name="Wind Rose"><path d="m47.7 38.26-6.7 2.74 22-9-22-9 6.7 2.74 6.3-15.74-15.627 6.579-6.373-15.579-6.373 15.579-15.627-6.579 6.3 15.74 6.7-2.74-22 9 22 9-6.7-2.74-6.3 15.74 15.627-6.579 6.373 15.579 6.373-15.579 15.627 6.579z" fill="#2452e2"/><path d="m41 23-9-22-9 22-22 9 22 9 9 22 9-22 22-9z" fill="#48acff"/><g fill="#337fef"><path d="m32 32 9-9-9-22v31-31"/><path d="m32 32-9 9 9 22v-31 31"/><path d="m32 32 9 9 22-9h-31 31"/><path d="m32 32-9-9-22 9h31-31"/></g></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="menu-icon-title">
+  <title id="menu-icon-title">Info Menu Icon</title>
+  <circle cx="32" cy="32" r="28" fill="#48acff"/>
+  <text x="32" y="42" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="32" fill="#ffffff">I</text>
+</svg>

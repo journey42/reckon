@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from .base import AppState, User, Log
 from reckon.utils.validations import validate_username, validate_email, validate_password
 from reckon.utils.comms import send_password_reset_email
+from reckon.utils.security import hash_password, verify_password
 
 class AuthState(AppState):
     """The authentication state for sign up, register, and login page."""
@@ -60,7 +61,8 @@ class AuthState(AppState):
             if session.exec(select(User).where(User.email == self.email)).first():
                 return rx.window_alert("User with that email already exists.")
             
-            self.user = User(email=self.email, username=self.username, password=self.password, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
+            hashed_password = hash_password(self.password)
+            self.user = User(email=self.email, username=self.username, password=hashed_password, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
             session.add(self.user)
 
             log = Log(user_id=self.user.id, content="signed up", type="user", created_at=datetime.now(timezone.utc))
@@ -96,7 +98,8 @@ class AuthState(AppState):
             if session.exec(select(User).where(User.email == self.email)).first():
                 return rx.window_alert("User with that email already exists.")
             
-            user = User(email=self.email, username=self.username, password=self.password, created_at=datetime.now(timezone.utc), updated_at=None)
+            hashed_password = hash_password(self.password)
+            user = User(email=self.email, username=self.username, password=hashed_password, created_at=datetime.now(timezone.utc), updated_at=None)
             session.add(user)
 
             log = Log(user_id=self.user.id, content="registered", type="user", created_at=datetime.now(timezone.utc))
@@ -122,16 +125,19 @@ class AuthState(AppState):
                 select(User).where(User.username == self.username)
             ).first()
 
-            if user and user.password == self.current_password:
-                self.user = user
-            else:
+            match, needs_upgrade = verify_password(self.current_password, user.password if user else None)
+            if not (user and match):
                 return rx.window_alert("Invalid username or password.")
-            
-            self.user.password = self.password
-            self.user.updated_at = datetime.now(timezone.utc)
-            #session.add(self.user)
 
-            log = Log(user_id=self.user.id, content="reset password", type="user", created_at=datetime.now(timezone.utc))
+            if needs_upgrade:
+                user.password = hash_password(self.current_password)
+
+            user.password = hash_password(self.password)
+            user.updated_at = datetime.now(timezone.utc)
+            session.add(user)
+            self.user = user
+
+            log = Log(user_id=user.id, content="reset password", type="user", created_at=datetime.now(timezone.utc))
             session.add(log)
             session.commit()
 
@@ -181,7 +187,12 @@ class AuthState(AppState):
             user = session.exec(
                 select(User).where(User.username == self.username)
             ).first()
-            if user and user.password == self.password:
+            match, needs_upgrade = verify_password(self.password, user.password if user else None)
+
+            if user and match:
+                if needs_upgrade:
+                    user.password = hash_password(self.password)
+                    session.add(user)
                 if not user.enabled:
                     return rx.window_alert("Account not enabled. We will send you an email when your account is ready.")
                 self.user = user

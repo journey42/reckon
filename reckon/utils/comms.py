@@ -2,6 +2,7 @@ import reflex as rx
 from azure.communication.email import EmailClient
 from datetime import datetime, timezone
 from reckon.state.base import User  # Import the module where your SQLAlchemy models are defined
+from reckon.utils.security import hash_password
 import string
 import random
 
@@ -20,7 +21,7 @@ def send_password_reset_email(session: rx.session, user: User, reset_page_url: s
     temp_password = generate_temp_password()
 
     # Update the user's password and updated_at fields
-    user.password = temp_password  # Remember to hash this in a real application
+    user.password = hash_password(temp_password)
     user.updated_at = datetime.now(timezone.utc)
     session.commit()
 

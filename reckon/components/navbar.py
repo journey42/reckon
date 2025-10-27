@@ -53,25 +53,22 @@ def user_menu() -> rx.Component:
 
 def app_logo() -> rx.Component:
     """App logo."""
-    return rx.hstack(
+    return rx.flex(
         rx.hstack(
             logo_button(),
-            spacing="2",
-        ),
-        rx.spacer(flex="1"),
-        rx.hstack(
+            rx.spacer(width="5px"),  # Add spacer after logo
             trending_concepts_button(),
             your_reckonings_button(),
             legend_button(on_click=LegendDialogState.visible),
-            spacing="8",
-            gap="24px",
+            spacing="5",
+            style={"gap": "24px"},  # Increased from 18px to 24px
             align="center",
         ),
-        rx.spacer(flex="1"),
+        rx.spacer(),
         user_menu(),
-        spacing="12",
         align="center",
         width="100%",
+        gap="20px",
     )
 
 navbar_styles = dict(
@@ -79,7 +76,7 @@ navbar_styles = dict(
     backdrop_filter="auto",
     backdrop_blur="lg",
     margin="16px 0 8px 0",
-    padding="4px",
+    padding="12px 24px",
     border_bottom=f"1px solid {'#fff3'}",
     position="sticky",
     top="0",
@@ -90,11 +87,9 @@ navbar_styles = dict(
 def navbar(*args, **kwargs) -> rx.Component:
     """Navbar component."""
     return rx.box(
-        rx.grid(
-            app_logo(),
-            feedback_dialog(options=general_feedback_options),
-            legend_dialog(),
-            *args,
-        ),
+        app_logo(),
+        feedback_dialog(options=general_feedback_options),
+        legend_dialog(),
+        *args,
         **navbar_styles
     )

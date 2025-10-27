@@ -250,12 +250,13 @@ def users():
                 on_cell_edited=UserEditorState.on_cell_edited,
                 on_delete=UserEditorState.on_delete,
                 on_column_resize=UserEditorState.on_column_resize,
-                width="65vw",
+                width="100%",
                 height="40vh",
                 theme=reckon_data_editor_theme,
             ),
             rx.button("Refresh", on_click=UserEditorState.refresh, **button_style),
-            align="center"
+            width="100%",
+            spacing="4",
         ),
         send_welcome_email_confirmation_dialog(),
     )
