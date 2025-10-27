@@ -1,4 +1,5 @@
 """reset password page."""
+
 import reflex as rx
 from reckon.layouts import profile_layout
 from reckon.state.profile import ProfileState
@@ -7,6 +8,7 @@ from reckon.styles import button_style
 from reckon.styles import input_style
 from reckon.styles import form_box_style
 from reckon.styles import page_params
+
 
 @rx.page(route="/reset_password", on_load=ProfileState.check_login(), **page_params)
 def reset_password():

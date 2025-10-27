@@ -3,11 +3,14 @@ from sentence_transformers import SentenceTransformer
 from sqlalchemy.sql import text
 import numpy as np
 
+
 def get_matching_threshold():
     return 0.5
 
+
 def get_matching_count():
     return 10
+
 
 # def insert_text_with_embedding(text_to_embed, reckoning_id):
 #     # Load the model
@@ -27,6 +30,7 @@ def get_matching_count():
 #         session.execute(query, {'embedding': embedding_list, 'reckoning_id': reckoning_id})
 #         # Commit the transaction
 #         session.commit()
+
 
 def _ensure_embeddings_schema(session):
     """Make sure the vector extension and embeddings table exist."""
@@ -53,7 +57,7 @@ def _ensure_embeddings_schema(session):
 
 def insert_text_with_embedding(text_to_embed, reckoning_id):
     # Load the model
-    model = SentenceTransformer('all-MiniLM-L6-v2')
+    model = SentenceTransformer("all-MiniLM-L6-v2")
 
     # Generate the embedding
     embedding = model.encode(text_to_embed)
@@ -63,14 +67,18 @@ def insert_text_with_embedding(text_to_embed, reckoning_id):
     with rx.session() as session:
         _ensure_embeddings_schema(session)
         # Prepare the SQL query with UPSERT functionality
-        query = text("""
+        query = text(
+            """
         INSERT INTO embeddings (embedding, reckoning_id) 
         VALUES (:embedding, :reckoning_id)
         ON CONFLICT (reckoning_id) 
         DO UPDATE SET embedding = EXCLUDED.embedding
-        """)
+        """
+        )
         # Execute the query with parameters
-        session.execute(query, {'embedding': embedding_list, 'reckoning_id': reckoning_id})
+        session.execute(
+            query, {"embedding": embedding_list, "reckoning_id": reckoning_id}
+        )
         # Commit the transaction
         session.commit()
 
@@ -79,7 +87,8 @@ def find_similar_texts_with_join(rid, threshold, limit):
     with rx.session() as session:
         _ensure_embeddings_schema(session)
         # Prepare the SQL query
-        query = text("""
+        query = text(
+            """
         WITH target_embedding AS (
             SELECT embedding 
             FROM embeddings 
@@ -123,9 +132,12 @@ def find_similar_texts_with_join(rid, threshold, limit):
             reckoning_id = :id DESC
         LIMIT 
             :limit;
-        """)
+        """
+        )
         # Execute the query with parameters
-        result = session.execute(query, {'id': rid, 'threshold': threshold, 'limit': limit})
+        result = session.execute(
+            query, {"id": rid, "threshold": threshold, "limit": limit}
+        )
         results = result.fetchall()
         # Process results
         keys = [id for id, similarity in results]

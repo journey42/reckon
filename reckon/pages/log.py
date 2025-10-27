@@ -1,4 +1,5 @@
 """logs page"""
+
 import reflex as rx
 from sqlmodel import select
 from zoneinfo import ZoneInfo
@@ -8,25 +9,29 @@ from reckon.styles import button_style, page_params, reckon_data_editor_theme
 from reckon.layouts import profile_layout
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class ColumnNames:
     """The column name to index mapping for the logs editor."""
+
     id: int = 1
     username: int = 0
     email: int = 2
-    type: int = 3  
+    type: int = 3
     content: int = 4
     created_at: int = 5
 
+
 column_names = ColumnNames()
+
 
 def get_logs() -> List[List]:
     """Get all logs from the database and prepare them for display in the editor."""
 
     logs_data_list = []
-    
+
     # Querying the database for all logs
-    with rx.session() as session: 
+    with rx.session() as session:
         results = session.exec(select(Log).order_by(Log.created_at.desc()))
         logs = results.all()
 
@@ -38,11 +43,12 @@ def get_logs() -> List[List]:
                 log.user.email if log.user is not None else "",
                 log.type,
                 log.content,
-                str(log.created_at.astimezone(ZoneInfo('America/Los_Angeles'))),
+                str(log.created_at.astimezone(ZoneInfo("America/Los_Angeles"))),
             ]
             logs_data_list.append(logs_data)
-    
+
     return logs_data_list
+
 
 class LogEditorState(AppState):
     """The logs editor state."""
@@ -54,10 +60,7 @@ class LogEditorState(AppState):
             "title": "Username",
             "type": "str",
         },
-        {
-            "title": "ID",
-            "type": "str"
-        },
+        {"title": "ID", "type": "str"},
         {
             "title": "Email",
             "type": "str",
@@ -70,7 +73,7 @@ class LogEditorState(AppState):
             "title": "Content",
             "type": "str",
         },
-                {
+        {
             "title": "Created At",
             "type": "str",
         },
@@ -98,12 +101,12 @@ class LogEditorState(AppState):
     def on_delete(self, selection):
         """Delete the selected logs."""
 
-        if selection['current'] is None:
+        if selection["current"] is None:
             return
 
-        starting_row = selection['current']['range']['y']
-        num_rows_selected = selection['current']['range']['height']
-        
+        starting_row = selection["current"]["range"]["y"]
+        num_rows_selected = selection["current"]["range"]["height"]
+
         ending_row = starting_row + num_rows_selected
 
         for row in range(starting_row, ending_row):
@@ -113,9 +116,9 @@ class LogEditorState(AppState):
                 logs = session.exec(select(Log).where(Log.id == logs_id)).first()
                 if logs:
                     session.delete(logs)
-                    #session.expire_on_commit = False
+                    # session.expire_on_commit = False
                     session.commit()
-        
+
         for row in range(starting_row, ending_row):
             del self.logs[starting_row]
 

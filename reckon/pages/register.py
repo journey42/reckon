@@ -1,4 +1,5 @@
 """register page. Uses auth_layout to render UI shared with the login page."""
+
 import reflex as rx
 from reckon.layouts import auth_layout
 from reckon.state.auth import AuthState
@@ -7,6 +8,7 @@ from reckon.styles import input_style
 from reckon.styles import form_box_style
 from reckon.styles import link_style
 from reckon.styles import page_params
+
 
 @rx.page(**page_params)
 def register():

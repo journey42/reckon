@@ -1,8 +1,16 @@
 """Sign up page. Uses auth_layout to render UI shared with the login page."""
+
 import reflex as rx
 from reckon.layouts import auth_layout
 from reckon.state.auth import AuthState
-from reckon.styles import button_style, input_style, form_box_style, link_style, page_params
+from reckon.styles import (
+    button_style,
+    input_style,
+    form_box_style,
+    link_style,
+    page_params,
+)
+
 
 @rx.page(**page_params)
 def signup():
@@ -13,7 +21,7 @@ def signup():
             font_size="0.75em",
             font_weight="normal",
             margin="1em",
-            max_width="600px"
+            max_width="600px",
         ),
         rx.flex(
             rx.input(

@@ -1,4 +1,5 @@
 """The home page."""
+
 import reflex as rx
 from datetime import datetime, timezone
 from reckon.state.base import AppState, Reckoning, ReckoningTypes
@@ -9,6 +10,7 @@ from reckon.components.navbar import navbar
 from reflex_suneditor import Editor, EditorOptions, EditorButtonList
 from reckon.utils.db import insert_text_with_embedding
 from reckon.utils.parsing import remove_html_tags
+
 
 class HomePageState(AppState):
     concept: str = ""
@@ -23,10 +25,22 @@ class HomePageState(AppState):
         if not self.logged_in:
             return rx.window_alert("Please log in to post.")
 
-        content_html = self.concept.replace("&nbsp;", " ").replace("\u00a0", " ").strip()
+        content_html = (
+            self.concept.replace("&nbsp;", " ").replace("\u00a0", " ").strip()
+        )
 
         plain_text = remove_html_tags(content_html).strip()
-        has_media = any(tag in content_html.lower() for tag in ("<img", "<video", "<iframe", "<embed", "youtube.com", "youtu.be"))
+        has_media = any(
+            tag in content_html.lower()
+            for tag in (
+                "<img",
+                "<video",
+                "<iframe",
+                "<embed",
+                "youtube.com",
+                "youtu.be",
+            )
+        )
         if not plain_text and not has_media:
             return rx.window_alert("A concept cannot be blank.")
 
@@ -47,6 +61,7 @@ class HomePageState(AppState):
         self.concept = ""
         self._db_updated = True
         return rx.redirect(f"/compare/{concept.id}")
+
 
 def composer():
     """The composer for new concepts."""
@@ -118,4 +133,6 @@ def home():
             width="100%",
         ),
     )
+
+
 # Recompile trigger

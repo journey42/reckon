@@ -1,4 +1,5 @@
 """feedback page"""
+
 import reflex as rx
 from sqlmodel import select
 from typing import Any, List
@@ -9,26 +10,28 @@ from reckon.layouts import profile_layout
 from dataclasses import dataclass
 
 
-
 @dataclass(frozen=True)
 class ColumnNames:
     """The column name to index mapping for the feedback editor."""
+
     id: int = 1
     username: int = 0
     email: int = 2
-    type: int = 3  
+    type: int = 3
     content: int = 4
     created_at: int = 5
 
+
 column_names = ColumnNames()
+
 
 def get_feedback() -> List[List]:
     """Get all feedback from the database and prepare them for display in the editor."""
 
     feedback_data_list = []
-    
+
     # Querying the database for all feedback
-    with rx.session() as session: 
+    with rx.session() as session:
         results = session.exec(select(Feedback).order_by(Feedback.created_at.desc()))
         feedback = results.all()
 
@@ -40,11 +43,12 @@ def get_feedback() -> List[List]:
                 feedback.user.email,
                 feedback.type,
                 feedback.content,
-                str(feedback.created_at.astimezone(ZoneInfo('America/Los_Angeles'))),
+                str(feedback.created_at.astimezone(ZoneInfo("America/Los_Angeles"))),
             ]
             feedback_data_list.append(feedback_data)
-    
+
     return feedback_data_list
+
 
 class FeedbackEditorState(AppState):
     """The feedback editor state."""
@@ -56,10 +60,7 @@ class FeedbackEditorState(AppState):
             "title": "Username",
             "type": "str",
         },
-        {
-            "title": "ID",
-            "type": "str"
-        },
+        {"title": "ID", "type": "str"},
         {
             "title": "Email",
             "type": "str",
@@ -72,7 +73,7 @@ class FeedbackEditorState(AppState):
             "title": "Content",
             "type": "str",
         },
-                {
+        {
             "title": "Created At",
             "type": "str",
         },
@@ -96,24 +97,26 @@ class FeedbackEditorState(AppState):
 
     def on_delete(self, selection):
         """Delete feedback from the feedback editor."""
-        if selection['current'] is None:
+        if selection["current"] is None:
             return
 
-        starting_row = selection['current']['range']['y']
-        num_rows_selected = selection['current']['range']['height']
-        
+        starting_row = selection["current"]["range"]["y"]
+        num_rows_selected = selection["current"]["range"]["height"]
+
         ending_row = starting_row + num_rows_selected
 
         for row in range(starting_row, ending_row):
             with rx.session() as session:
                 feedback_id = self.feedback[row][column_names.id]
                 print(f"Deleting feedback with ID: {feedback_id}")
-                feedback = session.exec(select(Feedback).where(Feedback.id == feedback_id)).first()
+                feedback = session.exec(
+                    select(Feedback).where(Feedback.id == feedback_id)
+                ).first()
                 if feedback:
                     session.delete(feedback)
-                    #session.expire_on_commit = False
+                    # session.expire_on_commit = False
                     session.commit()
-        
+
         for row in range(starting_row, ending_row):
             del self.feedback[starting_row]
 

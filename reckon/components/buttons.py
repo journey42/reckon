@@ -52,6 +52,7 @@ def create_button(src, content=None, href=None, button_type="main_menu", **kwarg
     else:
         return button
 
+
 def logo_button(*args, **kwargs):
     kwargs.setdefault("icon_width", "auto")
     kwargs.setdefault("icon_height", _icon_sizes["main_menu"])
@@ -59,16 +60,36 @@ def logo_button(*args, **kwargs):
 
 
 def trending_concepts_button(*args, **kwargs):
-    return create_button("/trending_concepts.svg", content="Trending Concepts", href="/trending_concepts_by_upvotes", **kwargs)
+    return create_button(
+        "/trending_concepts.svg",
+        content="Trending Concepts",
+        href="/trending_concepts_by_upvotes",
+        **kwargs,
+    )
+
 
 def your_reckonings_button(*args, **kwargs):
-    return create_button("/your_reckonings.svg", content="Your Reckonings", href="/your_reckonings", **kwargs)
+    return create_button(
+        "/your_reckonings.svg",
+        content="Your Reckonings",
+        href="/your_reckonings",
+        **kwargs,
+    )
+
 
 def your_drafts_button(*args, **kwargs):
-    return create_button("/your_drafts.svg", content="Your Drafts", button_type="small", href="/your_drafts", **kwargs)
+    return create_button(
+        "/your_drafts.svg",
+        content="Your Drafts",
+        button_type="small",
+        href="/your_drafts",
+        **kwargs,
+    )
+
 
 def legend_button(*args, **kwargs):
     return create_button("/legend.svg", **kwargs)
+
 
 def submit_button(*args, **kwargs):
     return create_button("/submit.svg", button_type="small", **kwargs)
@@ -79,19 +100,30 @@ def close_button(*args, **kwargs):
 
 
 def view_parent_button(*args, **kwargs):
-    return create_button("/view_parent.svg", content="View Parent", button_type="small", **kwargs)
+    return create_button(
+        "/view_parent.svg", content="View Parent", button_type="small", **kwargs
+    )
 
 
 def view_comments_button(*args, **kwargs):
-    return create_button("/view_comments.svg", content="View Comments", button_type="small", **kwargs)
+    return create_button(
+        "/view_comments.svg", content="View Comments", button_type="small", **kwargs
+    )
 
 
 def disabled_view_comments_button(*args, **kwargs):
-    return create_button("/disabled_view_comments.svg", content="View Comments", button_type="small", **kwargs)
+    return create_button(
+        "/disabled_view_comments.svg",
+        content="View Comments",
+        button_type="small",
+        **kwargs,
+    )
 
 
 def view_concept_button(*args, **kwargs):
-    return create_button("/view_concept.svg", content="View Concept", button_type="small", **kwargs)
+    return create_button(
+        "/view_concept.svg", content="View Concept", button_type="small", **kwargs
+    )
 
 
 def edit_button(*args, **kwargs):
@@ -103,51 +135,75 @@ def delete_button(*args, **kwargs):
 
 
 def disabled_edit_button(*args, **kwargs):
-    return create_button("/disabled_edit.svg", content="Edit", button_type="small", **kwargs)
+    return create_button(
+        "/disabled_edit.svg", content="Edit", button_type="small", **kwargs
+    )
 
 
 def disabled_delete_button(*args, **kwargs):
-    return create_button("/disabled_delete.svg", content="Delete", button_type="small", **kwargs)
+    return create_button(
+        "/disabled_delete.svg", content="Delete", button_type="small", **kwargs
+    )
 
 
 def compare_concepts_button(*args, **kwargs):
-    return create_button("/compare_concepts.svg", content="Compare", button_type="small", **kwargs)
+    return create_button(
+        "/compare_concepts.svg", content="Compare", button_type="small", **kwargs
+    )
 
 
 def upvote_concept_button(*args, **kwargs):
-    return create_button("/upvote_concept.svg", content="Support", button_type="small", **kwargs)
+    return create_button(
+        "/upvote_concept.svg", content="Support", button_type="small", **kwargs
+    )
 
 
 def no_upvote_concept_button(*args, **kwargs):
-    return create_button("/no_upvote_concept.svg", content="Support", button_type="small", **kwargs)
+    return create_button(
+        "/no_upvote_concept.svg", content="Support", button_type="small", **kwargs
+    )
 
 
 def downvote_concept_button(*args, **kwargs):
-    return create_button("/downvote_concept.svg", content="Detract", button_type="small", **kwargs)
+    return create_button(
+        "/downvote_concept.svg", content="Detract", button_type="small", **kwargs
+    )
 
 
 def no_downvote_concept_button(*args, **kwargs):
-    return create_button("/no_downvote_concept.svg", content="Detract", button_type="small", **kwargs)
+    return create_button(
+        "/no_downvote_concept.svg", content="Detract", button_type="small", **kwargs
+    )
 
 
 def support_comment_button(*args, **kwargs):
-    return create_button("/support_comment.svg", content="Support", button_type="small", **kwargs)
+    return create_button(
+        "/support_comment.svg", content="Support", button_type="small", **kwargs
+    )
 
 
 def detract_from_comment_button(*args, **kwargs):
-    return create_button("/detract_from_comment.svg", content="Detract", button_type="small", **kwargs)
+    return create_button(
+        "/detract_from_comment.svg", content="Detract", button_type="small", **kwargs
+    )
 
 
 def poo_comment_button(*args, **kwargs):
-    return create_button("/poo_comment.svg", content="Point of Order", button_type="small", **kwargs)
+    return create_button(
+        "/poo_comment.svg", content="Point of Order", button_type="small", **kwargs
+    )
 
 
 def feedback_button(*args, **kwargs):
-    return create_button("/feedback.svg", content="Feedback", button_type="small", **kwargs)
+    return create_button(
+        "/feedback.svg", content="Feedback", button_type="small", **kwargs
+    )
 
 
 def disabled_feedback_button(*args, **kwargs):
-    return create_button("/disabled_feedback.svg", content="Feedback", button_type="small", **kwargs)
+    return create_button(
+        "/disabled_feedback.svg", content="Feedback", button_type="small", **kwargs
+    )
 
 
 def more_button(*args, **kwargs):
@@ -155,8 +211,20 @@ def more_button(*args, **kwargs):
 
 
 def sort_by_upvotes_button(*args, **kwargs):
-    return create_button("/sort_by_upvotes.svg", content="Sort by Upvotes", button_type="small", href="/trending_concepts_by_upvotes", **kwargs)
+    return create_button(
+        "/sort_by_upvotes.svg",
+        content="Sort by Upvotes",
+        button_type="small",
+        href="/trending_concepts_by_upvotes",
+        **kwargs,
+    )
 
 
 def sort_by_support_button(*args, **kwargs):
-    return create_button("/sort_by_support.svg", content="Sort by Support", button_type="small", href="/trending_concepts_by_support", **kwargs)
+    return create_button(
+        "/sort_by_support.svg",
+        content="Sort by Support",
+        button_type="small",
+        href="/trending_concepts_by_support",
+        **kwargs,
+    )

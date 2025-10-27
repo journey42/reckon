@@ -1,8 +1,17 @@
 """request reset password page. Uses auth_layout to render UI shared with the login page."""
+
 import reflex as rx
 from reckon.layouts import auth_layout
 from reckon.state.auth import AuthState
-from reckon.styles import button_style, input_style, form_box_style, link_style, page_params, info_text_style
+from reckon.styles import (
+    button_style,
+    input_style,
+    form_box_style,
+    link_style,
+    page_params,
+    info_text_style,
+)
+
 
 @rx.page(route="/request_reset_password", **page_params)
 def request_reset_password():

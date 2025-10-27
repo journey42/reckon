@@ -2,10 +2,10 @@ import psycopg2
 
 # Database connection parameters - adjust these according to your environment
 db_params = {
-    'dbname': 'reckon',
-    'user': 'reckon', #postgres
-    'password': '+bX2NBT~;oa?', #password
-    'host': 'reckon-db.postgres.database.azure.com' #localhost
+    "dbname": "reckon",
+    "user": "reckon",  # postgres
+    "password": "+bX2NBT~;oa?",  # password
+    "host": "reckon-db.postgres.database.azure.com",  # localhost
 }
 
 # SQL commands to be executed
@@ -29,13 +29,14 @@ commands = [
     """
 ]
 
+
 def create_tables(commands, db_params):
     # Establishing the connection to the database
     conn = None
     try:
         conn = psycopg2.connect(**db_params)
         cur = conn.cursor()
-        
+
         # Execute each command
         for command in commands:
             cur.execute(command)
@@ -50,6 +51,7 @@ def create_tables(commands, db_params):
     finally:
         if conn is not None:
             conn.close()
+
 
 if __name__ == "__main__":
     create_tables(commands, db_params)

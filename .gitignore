@@ -5,3 +5,8 @@ assets/external/
 .web
 __pycache__/
 reflex.db
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.ruff_cache
+.mypy_cache

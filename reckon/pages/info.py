@@ -1,18 +1,21 @@
 """help page."""
+
 import reflex as rx
 from reckon.layouts import info_layout
 from reckon.state.base import AppState
 from reckon.styles import page_params, info_text_style
 
+
 def info_page(*args, **kwargs):
     return info_layout(
-            rx.markdown(
-                *args,
-                **info_text_style,
-                border_x="1px solid #ededed",
-                h="100%",
-            )
+        rx.markdown(
+            *args,
+            **info_text_style,
+            border_x="1px solid #ededed",
+            h="100%",
+        )
     )
+
 
 about_text = """
 **About**
@@ -20,10 +23,12 @@ about_text = """
 Reckon was founded with the goal of encouraging both independent thought and broad consensus. The aim is to reduce political polarity and allow people to find common ground wherever possible. The hope is that destructive and harmful ideology aimed at groups or individuals will naturally be ratioed by our users, in the event this is not how the site functions automatically, we encourage you to make us of our red flag system. This is the first attempt at testing this system of discourse, the final product will have more and different features when deployed at scale. This system is entirely anonymous between users. It was designed this way to way to afford people the opportunity to express themselves without risk of being singled out. Your concepts will only be uncovered if people have ideas along the same lines. We encourage you to submit any thoughts you feel strongly about, even if they don’t presently have traction.  While the obvious application of this system is politics, if you choose to fight over the blue or gold dress or the particular merits of food groups or music genres the site will raise no objection.
 """
 
+
 @rx.page(on_load=AppState.check_login(), **page_params)
 def about():
     """The about page."""
     return info_page(about_text)
+
 
 how_to_text = """
 **How To**
@@ -43,10 +48,12 @@ The trending icon at the top of the page will take you to the most popular conce
 Under the navigation menu there is an option to submit any concerns or suggestions regarding the rhetorical process of the site, or to report a technical problem. If you have concerns about the content of a particular concept or comment please use the red flag feature.
 """
 
+
 @rx.page(route="/how_to", on_load=AppState.check_login(), **page_params)
 def how_to():
     """The how to page."""
     return info_page(how_to_text)
+
 
 guidelines_text = """
 **Guidelines**
@@ -58,10 +65,12 @@ A note on brigading courtesy of dictionary.com:
 The trouble with brigading is not that it’s mean, or that it targets individuals. The real trouble is that it clogs up forums choking out genuine discourse, dissuading the well intentioned from engaging. Reckon is refined brigading. This site will allow peoples better impulses to display themselves without risk of being viewed as cringe or corny. Reckon is safety in numbers. My hope is that those with malice will simply be ratioed into oblivion. The flip side of this is that if no one agrees with your position it will also vanish into oblivion. This frees everyone up to express their true beliefs. The bet I’m making is that a solid majority of humans have good intentions, and that this process will allow those intentions to shine through without any individual having to risk the judgement of the almighty internet.
 """
 
+
 @rx.page(on_load=AppState.check_login(), **page_params)
 def guidelines():
     """The guidlines page."""
     return info_page(guidelines_text)
+
 
 terms_text = """
 **Terms and Conditions**
@@ -254,10 +263,12 @@ BY USING SERVICE OR OTHER SERVICES PROVIDED BY US, YOU ACKNOWLEDGE THAT YOU HAVE
 Please send your feedback, comments, requests for technical support by email: **support@reckon.cc**.
 """
 
+
 @rx.page(on_load=AppState.check_login(), **page_params)
 def terms():
     """The terms page."""
     return info_page(terms_text)
+
 
 privacy_text = """
 **Privacy Policy**
@@ -545,8 +556,8 @@ If you have any questions about this Privacy Policy, please contact us by email:
 
 """
 
+
 @rx.page(on_load=AppState.check_login(), **page_params)
 def privacy():
     """The privacy page."""
     return info_page(privacy_text)
-

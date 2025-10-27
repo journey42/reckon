@@ -1,9 +1,9 @@
 """Reckon Styles"""
 
-favicon="/favicon.svg"
+favicon = "/favicon.svg"
 
-reckon_green="#16e073"
-reckon_dark_green="#01cc5d"
+reckon_green = "#16e073"
+reckon_dark_green = "#01cc5d"
 
 button_style = dict(
     bg=reckon_green,
@@ -34,7 +34,7 @@ page_footer_style = dict(
     bottom="0",
 )
 
-interior_grid_style = dict (
+interior_grid_style = dict(
     # py=1,
     # px=1,
     # gap=1,
@@ -45,7 +45,7 @@ interior_grid_style = dict (
     justify="center",
 )
 
-reckoning_grid_style = dict (
+reckoning_grid_style = dict(
     border="2px solid #ededed",
     border_radius="10px",
     padding="4px",
@@ -55,10 +55,10 @@ reckoning_grid_style = dict (
 )
 
 input_style = dict(
-     margin="4px",
-     padding="4px",
-     size="1",
-     width="100%",
+    margin="4px",
+    padding="4px",
+    size="1",
+    width="100%",
     # _focus={"borderColor": "#000000", "boxShadowColor": "#000000"}
 )
 
@@ -75,9 +75,9 @@ vote_count_and_timestamp_style = dict(
     position="absolute",
     right="5px",
     bottom="5px",
-    white_space="nowrap", #Prevents the text from wrapping
-    overflow="hidden", #Hides overflow
-    text_overflow="ellipsis", #Adds an ellipsis for text that overflows the container width
+    white_space="nowrap",  # Prevents the text from wrapping
+    overflow="hidden",  # Hides overflow
+    text_overflow="ellipsis",  # Adds an ellipsis for text that overflows the container width
     max_width="100%",
 )
 
@@ -92,7 +92,7 @@ read_only_text_style = dict(
     background="var(--gray-a2)",
     border_radius="10px",
     padding="2em",
-    size="1"
+    size="1",
 )
 
 form_box_style = dict(
@@ -106,25 +106,24 @@ form_box_style = dict(
 )
 
 link_style = dict(
-    color="gray.600",
-    _hover={"color": "gray.800", "textDecoration": "underline"}
+    color="gray.600", _hover={"color": "gray.800", "textDecoration": "underline"}
 )
 
-info_text_style = dict (
+info_text_style = dict(
     font_size="1xl",
     font_weight="normal",
     margin="1em",
 )
 
 meta = [
-    {"name":"viewport", "content":"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"}
+    {
+        "name": "viewport",
+        "content": "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no",
+    }
 ]
 
 page_params = dict(
-    title="Reckon",
-    description="Speak Together",
-    image=favicon,
-    meta=meta
+    title="Reckon", description="Speak Together", image=favicon, meta=meta
 )
 
 from reflex.components.datadisplay.dataeditor import (
@@ -134,5 +133,4 @@ from reflex.components.datadisplay.dataeditor import (
 reckon_data_editor_theme = {
     "accent_color": reckon_dark_green,
     "accent_light": reckon_green,
-
 }

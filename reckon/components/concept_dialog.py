@@ -1,4 +1,5 @@
 """concept modal component."""
+
 import reflex as rx
 from datetime import datetime, timezone
 from sqlmodel import select
@@ -10,8 +11,10 @@ from reckon.utils.db import insert_text_with_embedding
 from reckon.utils.parsing import remove_html_tags
 from reckon.components.editor import editor
 
+
 class ConceptDialogState(AppState):
     """Concept modal state."""
+
     show: bool = False
     content: str = ""
     concept: Optional["Reckoning"] = None
@@ -20,10 +23,10 @@ class ConceptDialogState(AppState):
     def set_concept(self, cid):
         """Set the concept."""
         with rx.session() as session:
-                concept = session.exec(select(Reckoning).where(Reckoning.id == cid)).first()
-                self.concept = concept
-                self.content = concept.content if concept else ""
-        
+            concept = session.exec(select(Reckoning).where(Reckoning.id == cid)).first()
+            self.concept = concept
+            self.content = concept.content if concept else ""
+
     @rx.event
     def visible(self):
         """Change the visibility of the modal."""
@@ -55,47 +58,48 @@ class ConceptDialogState(AppState):
         self.visible()
         return rx.redirect("/your_drafts")
 
+
 def concept_dialog(*args, **kwargs):
     """concept modal component."""
     return rx.dialog.root(
-            rx.dialog.content(
-                    rx.vstack(
-                        rx.dialog.title(
-                            rx.grid(
-                                rx.heading("Edit Concept", size="5"),
-                                rx.spacer(),
-                                rx.dialog.close(
-                                    close_button(
-                                        **dialog_button_style,
-                                        align_self="flex-end",
-                                        on_click=ConceptDialogState.visible
-                                    ),
-                                ),
-                                grid_template_columns="4fr 9fr 1fr",
+        rx.dialog.content(
+            rx.vstack(
+                rx.dialog.title(
+                    rx.grid(
+                        rx.heading("Edit Concept", size="5"),
+                        rx.spacer(),
+                        rx.dialog.close(
+                            close_button(
+                                **dialog_button_style,
+                                align_self="flex-end",
+                                on_click=ConceptDialogState.visible,
                             ),
                         ),
-                        editor(
-                            name="concept_content",
-                            default_value=ConceptDialogState.content,
-                            placeholder="Concept",
-                            height="40vh",
-                            width="100%",
-                            on_blur=ConceptDialogState.set_content,
-                        ),
-                        submit_button(
-                            **dialog_button_style,
-                            on_click=ConceptDialogState.submit,
-                            align_self="flex-end",
-                        ),
-                        id="tacontainer",
-                        width="90%",
+                        grid_template_columns="4fr 9fr 1fr",
+                    ),
                 ),
-                display="flex",
-                justify_content="center",
-                align_items="center",
+                editor(
+                    name="concept_content",
+                    default_value=ConceptDialogState.content,
+                    placeholder="Concept",
+                    height="40vh",
+                    width="100%",
+                    on_blur=ConceptDialogState.set_content,
+                ),
+                submit_button(
+                    **dialog_button_style,
+                    on_click=ConceptDialogState.submit,
+                    align_self="flex-end",
+                ),
+                id="tacontainer",
+                width="90%",
             ),
-            open=ConceptDialogState.show,
-            size="4",
-            *args,
-            **kwargs
-        )
+            display="flex",
+            justify_content="center",
+            align_items="center",
+        ),
+        open=ConceptDialogState.show,
+        size="4",
+        *args,
+        **kwargs,
+    )

@@ -1,4 +1,5 @@
-"""profile page. """
+"""profile page."""
+
 import reflex as rx
 from reckon.layouts import profile_layout
 from reckon.state.profile import ProfileState
@@ -7,6 +8,7 @@ from reckon.styles import button_style
 from reckon.styles import input_style
 from reckon.styles import form_box_style
 from reckon.styles import page_params
+
 
 @rx.page(on_load=ProfileState.check_login(), **page_params)
 def profile():
@@ -33,7 +35,11 @@ def profile():
                     spacing="2",
                 ),
                 rx.text(
-                    rx.link("Need to reset your password?", href="/reset_password", **link_style),
+                    rx.link(
+                        "Need to reset your password?",
+                        href="/reset_password",
+                        **link_style,
+                    ),
                 ),
                 spacing="4",
                 max_width="480px",

@@ -1,4 +1,5 @@
 """users page."""
+
 import reflex as rx
 from sqlmodel import select
 from typing import Any, List, Optional
@@ -10,6 +11,7 @@ from reckon.layouts import profile_layout
 from reckon.utils.validations import validate_username, validate_email, validate_role
 from dataclasses import dataclass
 from reckon.utils.comms import send_welcome_email
+
 
 class WelcomeEmailConfirmationDialogState(AppState):
     show: bool = False
@@ -40,11 +42,14 @@ class WelcomeEmailConfirmationDialogState(AppState):
         with rx.session() as session:
             try:
                 self.visible()
-                send_result = send_welcome_email(session, self.username, self.email, 'https://reckon.cc')  
+                send_result = send_welcome_email(
+                    session, self.username, self.email, "https://reckon.cc"
+                )
                 if not send_result:
                     raise ValueError("Email not sent")
             except Exception as e:
                 return rx.window_alert(f"Email not sent. Error {str(e)}")
+
 
 def send_welcome_email_confirmation_dialog():
     return rx.alert_dialog.root(
@@ -58,7 +63,9 @@ def send_welcome_email_confirmation_dialog():
                     rx.button("Yes", on_click=WelcomeEmailConfirmationDialogState.yes),
                 ),
                 rx.alert_dialog.cancel(
-                    rx.button("No", on_click=WelcomeEmailConfirmationDialogState.visible),
+                    rx.button(
+                        "No", on_click=WelcomeEmailConfirmationDialogState.visible
+                    ),
                 ),
                 spacing="3",
                 margin_top="16px",
@@ -69,26 +76,30 @@ def send_welcome_email_confirmation_dialog():
         open=WelcomeEmailConfirmationDialogState.show,
     )
 
+
 @dataclass(frozen=True)
 class ColumnNames:
     """The column name to index mapping for the user editor."""
+
     id: int = 1
     username: int = 0
     email: int = 2
-    enabled: int = 3  
+    enabled: int = 3
     role: int = 4
     created_at: int = 5
     updated_at: int = 6
 
+
 column_names = ColumnNames()
+
 
 def get_users() -> List[List]:
     """Get all users from the database and prepare them for display in the editor."""
 
     user_data_list = []
-    
+
     # Querying the database for all users
-    with rx.session() as session: 
+    with rx.session() as session:
         results = session.exec(select(User).order_by(User.created_at.desc()))
         users = results.all()
 
@@ -100,11 +111,12 @@ def get_users() -> List[List]:
                 user.email,
                 user.enabled,
                 user.role,
-                str(user.created_at.astimezone(ZoneInfo('America/Los_Angeles'))),
-                str(user.updated_at.astimezone(ZoneInfo('America/Los_Angeles'))),
+                str(user.created_at.astimezone(ZoneInfo("America/Los_Angeles"))),
+                str(user.updated_at.astimezone(ZoneInfo("America/Los_Angeles"))),
             ]
             user_data_list.append(user_data)
     return user_data_list
+
 
 class UserEditorState(AppState):
     """The user editor state."""
@@ -116,10 +128,7 @@ class UserEditorState(AppState):
             "title": "Username",
             "type": "str",
         },
-        {
-            "title": "ID",
-            "type": "str"
-        },
+        {"title": "ID", "type": "str"},
         {
             "title": "Email",
             "type": "str",
@@ -132,11 +141,11 @@ class UserEditorState(AppState):
             "title": "Role",
             "type": "int",
         },
-                {
+        {
             "title": "Created At",
             "type": "str",
         },
-                {
+        {
             "title": "Updated At",
             "type": "str",
         },
@@ -160,42 +169,57 @@ class UserEditorState(AppState):
         """Edit the selected cell."""
         col, row = pos
 
-        if val["data"] is None or val["data"] == "": #No deletes of individual cells
+        if val["data"] is None or val["data"] == "":  # No deletes of individual cells
             return
 
-        if (col in [column_names.id, column_names.created_at, column_names.updated_at]): #No ID or datetime editing
+        if col in [
+            column_names.id,
+            column_names.created_at,
+            column_names.updated_at,
+        ]:  # No ID or datetime editing
             return rx.window_alert("You cannot edit this field")
-        
+
         try:
             with rx.session() as session:
-                user = session.exec(select(User).where(User.id == self.users[row][column_names.id])).first()
+                user = session.exec(
+                    select(User).where(User.id == self.users[row][column_names.id])
+                ).first()
                 if user is not None:
-                    if (col == column_names.username):
+                    if col == column_names.username:
                         is_valid, message = validate_username(val["data"])
                         if not is_valid:
                             return rx.window_alert(message)
                         user.username = val["data"]
-                    elif (col == column_names.email):
+                    elif col == column_names.email:
                         is_valid, message = validate_email(val["data"])
                         if not is_valid:
                             return rx.window_alert(message)
                         user.email = val["data"]
-                    elif (col == column_names.enabled):
+                    elif col == column_names.enabled:
                         user.enabled = val["data"]
                         if user.enabled == True:
-                            yield WelcomeEmailConfirmationDialogState.set_username(user.username)
-                            yield WelcomeEmailConfirmationDialogState.set_email(user.email)
-                            yield WelcomeEmailConfirmationDialogState.visible()       
-                    elif (col == column_names.role):
+                            yield WelcomeEmailConfirmationDialogState.set_username(
+                                user.username
+                            )
+                            yield WelcomeEmailConfirmationDialogState.set_email(
+                                user.email
+                            )
+                            yield WelcomeEmailConfirmationDialogState.visible()
+                    elif col == column_names.role:
                         is_valid, message = validate_role(val["data"])
                         if not is_valid:
                             return rx.window_alert(message)
                         user.role = val["data"]
                     user.updated_at = datetime.now(timezone.utc)
                     session.add(user)
-                    log = Log(user_id=self.user.id, content=f"user with username:{user.username} and id:{user.id} updated", type="admin", created_at=datetime.now(timezone.utc))
+                    log = Log(
+                        user_id=self.user.id,
+                        content=f"user with username:{user.username} and id:{user.id} updated",
+                        type="admin",
+                        created_at=datetime.now(timezone.utc),
+                    )
                     session.add(log)
-                    #session.expire_on_commit = False
+                    # session.expire_on_commit = False
                     session.commit()
                     self.users[row][col] = val["data"]
         except Exception as e:
@@ -205,12 +229,12 @@ class UserEditorState(AppState):
 
     def on_delete(self, selection):
         """Delete selected users."""
-        if selection['current'] is None:
+        if selection["current"] is None:
             return
 
-        starting_row = selection['current']['range']['y']
-        num_rows_selected = selection['current']['range']['height']
-        
+        starting_row = selection["current"]["range"]["y"]
+        num_rows_selected = selection["current"]["range"]["height"]
+
         ending_row = starting_row + num_rows_selected
 
         for row in range(starting_row, ending_row):
@@ -220,11 +244,16 @@ class UserEditorState(AppState):
                 user = session.exec(select(User).where(User.id == user_id)).first()
                 if user:
                     session.delete(user)
-                    log = Log(user_id=self.user.id, content=f"user with username:{user.username} and id:{user.id} deleted", type="admin", created_at=datetime.now(timezone.utc))
+                    log = Log(
+                        user_id=self.user.id,
+                        content=f"user with username:{user.username} and id:{user.id} deleted",
+                        type="admin",
+                        created_at=datetime.now(timezone.utc),
+                    )
                     session.add(log)
-                    #session.expire_on_commit = False
+                    # session.expire_on_commit = False
                     session.commit()
-        
+
         for row in range(starting_row, ending_row):
             del self.users[starting_row]
 

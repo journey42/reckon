@@ -1,13 +1,17 @@
 """validations for common user inputs."""
+
 import re
 
+
 def validate_email(email):
-    pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
     if re.match(pattern, email):
         return True, "Email is valid."
     return False, "Email is invalid."
 
+
 foul_words = {"shit", "fuck", "tits", "balls"}  # Add your list of foul words
+
 
 def validate_username(username):
     if any(foul_word in username.lower() for foul_word in foul_words):
@@ -15,6 +19,7 @@ def validate_username(username):
     if not username.isalnum():
         return False, "Username must contain only letters and numbers."
     return True, "Username is valid."
+
 
 def validate_password(password):
     if len(password) < 8:
@@ -26,10 +31,17 @@ def validate_password(password):
     if not re.search("[0-9]", password):
         return False, "Password must contain at least one number."
     if not re.search("[_@$!%*?&#]", password):
-        return False, "Password must contain at least one special character (_@$!%*?&#)."
+        return (
+            False,
+            "Password must contain at least one special character (_@$!%*?&#).",
+        )
     return True, "Password is strong."
+
 
 def validate_role(role):
     if role not in {0, 1, 2}:
-        return False, "Role must be either 'user (0)' or 'moderator (1)' or 'admin (2)'."
+        return (
+            False,
+            "Role must be either 'user (0)' or 'moderator (1)' or 'admin (2)'.",
+        )
     return True, "Role is valid."

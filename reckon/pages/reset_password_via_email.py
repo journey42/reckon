@@ -1,8 +1,16 @@
 """reset page. Uses auth_layout to render UI shared with the login page."""
+
 import reflex as rx
 from reckon.layouts import auth_layout
 from reckon.state.auth import AuthState
-from reckon.styles import link_style, button_style, input_style, form_box_style, page_params
+from reckon.styles import (
+    link_style,
+    button_style,
+    input_style,
+    form_box_style,
+    page_params,
+)
+
 
 @rx.page(route="/reset_password_via_email", **page_params)
 def reset_password_via_email():

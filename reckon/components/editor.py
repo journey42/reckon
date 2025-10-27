@@ -4,6 +4,7 @@ import uuid
 
 import reflex as rx
 
+
 def editor(*args, **kwargs) -> rx.Component:
     """Return a plain textarea for simple text capture."""
     props = {

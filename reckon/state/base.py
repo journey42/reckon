@@ -1,4 +1,5 @@
 """Base state"""
+
 import reflex as rx
 from typing import Optional, List
 from sqlmodel import Field, Relationship, select
@@ -8,12 +9,15 @@ from dataclasses import dataclass
 from math import gcd
 from reckon.utils.time import calculate_elapsed_time
 
+
 @dataclass(frozen=True)
 class UserTypes:
     """Reckoning types name to index mapping."""
+
     regular: int = 0
     moderator: int = 1
     admin: int = 2
+
 
 class User(rx.Model, table=True):
     """A table of Users."""
@@ -26,17 +30,12 @@ class User(rx.Model, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(nullable=True)
 
-    reckonings: List["Reckoning"] = Relationship(
-        back_populates="user"
-    )
+    reckonings: List["Reckoning"] = Relationship(back_populates="user")
 
-    logs: List["Log"] = Relationship(
-        back_populates="user"
-    )
-    
-    feedback: List["Feedback"] = Relationship(
-        back_populates="user"
-    )
+    logs: List["Log"] = Relationship(back_populates="user")
+
+    feedback: List["Feedback"] = Relationship(back_populates="user")
+
 
 # from sqlalchemy.types import TypeDecorator, ARRAY
 # from sqlalchemy.dialects.postgresql import FLOAT
@@ -62,6 +61,7 @@ class User(rx.Model, table=True):
 @dataclass(frozen=True)
 class ReckoningTypes:
     """Reckoning types name to index mapping."""
+
     concept: int = 0
     support: int = 1
     detract: int = 2
@@ -70,6 +70,7 @@ class ReckoningTypes:
     up_vote: int = 5
     down_vote: int = 6
     no_vote: int = 7
+
 
 class Reckoning(rx.Model, table=True):
     """A table of Reckonings."""
@@ -80,31 +81,25 @@ class Reckoning(rx.Model, table=True):
     updated_at: datetime = Field(nullable=True)
 
     # textembedding: Optional[TextEmbedding] = Relationship(back_populates="reckoning")
-    
+
     user_id: int = Field(foreign_key="user.id", nullable=True)
 
-    user: Optional["User"] = Relationship(
-        back_populates="reckonings"
-    )
+    user: Optional["User"] = Relationship(back_populates="reckonings")
 
-    parent_reckoning_id: Optional[int] = Field(
-        default=None,
-        foreign_key="reckoning.id"
-    )
+    parent_reckoning_id: Optional[int] = Field(default=None, foreign_key="reckoning.id")
 
     # Define the relationship with remote_side
     parent_reckoning: Optional["Reckoning"] = Relationship(
         back_populates="child_reckonings",
-        sa_relationship_kwargs={"remote_side":"Reckoning.id"}
-    )
-    
-    child_reckonings: List["Reckoning"] = Relationship(
-        back_populates="parent_reckoning",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={"remote_side": "Reckoning.id"},
     )
 
-    #temp variable used in rendering
-    depth : str = Field(nullable=True)
+    child_reckonings: List["Reckoning"] = Relationship(
+        back_populates="parent_reckoning", sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    # temp variable used in rendering
+    depth: str = Field(nullable=True)
 
     # Cache variables, not stored in the database
     supports_detracts_ratio: Optional[str] = None
@@ -133,12 +128,14 @@ class Reckoning(rx.Model, table=True):
         try:
             with rx.session() as session:
                 # session.expire_on_commit = False
-                parent = session.exec(select(Reckoning).where(Reckoning.id == self.parent_reckoning_id)).first()
+                parent = session.exec(
+                    select(Reckoning).where(Reckoning.id == self.parent_reckoning_id)
+                ).first()
                 self.parent_content = parent.content
                 self.parent_id = parent.id
                 self.parent_type = parent.type
                 parent.compute_tallies(uid)
-                if parent.type == ReckoningTypes.concept:                    
+                if parent.type == ReckoningTypes.concept:
                     self.parent_down_votes = parent.down_votes
                     self.parent_up_votes = parent.up_votes
 
@@ -151,14 +148,13 @@ class Reckoning(rx.Model, table=True):
         except:
             pass
 
-
     def tally_child_comments(self, reckoning):
         """
         Recursively counts the total number of child reckonings for a given reckoning instance.
-        
+
         Parameters:
         - reckoning: Instance of Reckoning
-        
+
         Returns:
         - int: Total number of children and sub-children reckonings
         """
@@ -170,7 +166,10 @@ class Reckoning(rx.Model, table=True):
         total_children = 0
         for child in reckoning.child_reckonings:
             # Count the child itself plus any of its children
-            if child.type != ReckoningTypes.down_vote and child.type != ReckoningTypes.up_vote:
+            if (
+                child.type != ReckoningTypes.down_vote
+                and child.type != ReckoningTypes.up_vote
+            ):
                 total_children += 1 + self.tally_child_comments(child)
 
         return total_children
@@ -178,20 +177,20 @@ class Reckoning(rx.Model, table=True):
     def compute_tallies(self, uid: int) -> int:
         for child in self.child_reckonings:
             if child.type == ReckoningTypes.support:
-                self.supports+=1
+                self.supports += 1
             elif child.type == ReckoningTypes.detract:
-                self.detracts+=1
+                self.detracts += 1
             elif child.type == ReckoningTypes.up_vote:
-                self.up_votes+=1
+                self.up_votes += 1
                 if child.user_id == uid:
                     self.user_vote_history = ReckoningTypes.up_vote
             elif child.type == ReckoningTypes.down_vote:
-                self.down_votes+=1
+                self.down_votes += 1
                 if child.user_id == uid:
-                    self.user_vote_history = ReckoningTypes.down_vote        
+                    self.user_vote_history = ReckoningTypes.down_vote
             else:
-                self.points_of_order+=1
-        
+                self.points_of_order += 1
+
         self.total_comments = self.tally_child_comments(self)
         self.elapsed_time = calculate_elapsed_time(self.created_at)
         # # Calculate GCD for simplifying the ratio, avoid division by zero
@@ -207,7 +206,7 @@ class Reckoning(rx.Model, table=True):
 
         # self.supports_detracts_ratio = f"{self.supports} {ratio} {self.detracts}"
 
-  
+
 class Feedback(rx.Model, table=True):
     """A table of Feedback."""
 
@@ -216,19 +215,13 @@ class Feedback(rx.Model, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
     subject_reckoning_id: Optional[int] = Field(
-        default=None,
-        nullable=True,
-        foreign_key="reckoning.id"
-    )
-    
-    user_id: int = Field(
-        foreign_key="user.id",
-        nullable=True
+        default=None, nullable=True, foreign_key="reckoning.id"
     )
 
-    user: Optional["User"] = Relationship(
-        back_populates="feedback"
-    )
+    user_id: int = Field(foreign_key="user.id", nullable=True)
+
+    user: Optional["User"] = Relationship(back_populates="feedback")
+
 
 class Log(rx.Model, table=True):
     """A table of Logs."""
@@ -236,12 +229,10 @@ class Log(rx.Model, table=True):
     content: str = Field()
     type: str = Field()
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    
+
     user_id: int = Field(foreign_key="user.id", nullable=True)
 
-    user: Optional["User"] = Relationship(
-        back_populates="logs"
-    )       
+    user: Optional["User"] = Relationship(back_populates="logs")
 
 
 class AppState(rx.State):
@@ -251,10 +242,10 @@ class AppState(rx.State):
     is_running: bool = False
 
     def scroll_to_saved_position(self):
-        return rx.call_script('scrollToSavedPosition();')
-    
+        return rx.call_script("scrollToSavedPosition();")
+
     def save_scroll_position(self):
-        return rx.call_script('saveScrollPosition();')
+        return rx.call_script("saveScrollPosition();")
 
     def get_path_param(self, name: str, default: str = "") -> str:
         """Fetch a dynamic route parameter or query parameter."""
@@ -264,10 +255,16 @@ class AppState(rx.State):
             return query_value
 
         path_segments = [segment for segment in self.router.url.path.split("/") if segment]  # type: ignore[attr-defined]
-        template_segments = [segment for segment in self.router.route_id.split("/") if segment]
+        template_segments = [
+            segment for segment in self.router.route_id.split("/") if segment
+        ]
 
         for idx, segment in enumerate(template_segments):
-            if segment.startswith("[") and segment.endswith("]") and segment[1:-1] == name:
+            if (
+                segment.startswith("[")
+                and segment.endswith("]")
+                and segment[1:-1] == name
+            ):
                 if idx < len(path_segments):
                     return path_segments[idx]
 
@@ -282,13 +279,13 @@ class AppState(rx.State):
         """Check if a user is logged in."""
         if (not self.logged_in) or (not self.user.enabled):
             return rx.redirect("/login")
-        #return State.check_if_user_enabled
+        # return State.check_if_user_enabled
 
     @rx.var
     def logged_in(self) -> bool:
         """Check if a user is logged in."""
         return self.user is not None
-    
+
     @rx.event(background=True)
     async def check_if_user_enabled(self):
         """Check if a user is enabled."""
@@ -303,11 +300,15 @@ class AppState(rx.State):
 
             with rx.session() as session:
                 async with self:
-                    self.user = session.exec(select(User).where(User.id == self.user.id)).first()
+                    self.user = session.exec(
+                        select(User).where(User.id == self.user.id)
+                    ).first()
             if self.user and not self.user.enabled:
                 async with self:
                     self.reset()
-                    print("User is not enabled. Resetting and redirecting to /login. Exiting check_if_user_enabled.")
+                    print(
+                        "User is not enabled. Resetting and redirecting to /login. Exiting check_if_user_enabled."
+                    )
                     return rx.redirect("/login")
             await asyncio.sleep(1)
 

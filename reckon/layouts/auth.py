@@ -1,6 +1,8 @@
 """Shared auth layout."""
+
 import reflex as rx
 from ..components import container
+
 
 def auth_layout(*args, background_color: str = "white"):
     """The shared layout for auth related pages."""
@@ -26,9 +28,9 @@ def auth_layout(*args, background_color: str = "white"):
             padding="64px 16px",
         ),
         display="flex",
-            justify_content="center",
-            flex_direction="column",
-            align_items="center",
-            min_height="100vh",
-            background=background_color,
-        )
+        justify_content="center",
+        flex_direction="column",
+        align_items="center",
+        min_height="100vh",
+        background=background_color,
+    )
