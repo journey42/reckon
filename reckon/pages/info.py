@@ -1,6 +1,7 @@
 """help page."""
 
 import reflex as rx
+import re
 from reckon.layouts import info_layout
 from reckon.state.base import AppState
 from reckon.styles import page_params, info_text_style
@@ -15,6 +16,30 @@ def info_page(*args, **kwargs):
             h="100%",
         )
     )
+
+
+def _format_numbered_sections(text: str) -> str:
+    pattern = re.compile(r"(\d+)\.\s\*\*(.+?)\*\*")
+    matches = list(pattern.finditer(text))
+    if not matches:
+        return text.strip()
+
+    parts: list[str] = []
+    intro = text[: matches[0].start()].strip()
+    if intro:
+        parts.append(intro)
+
+    for index, match in enumerate(matches, start=1):
+        start = match.end()
+        end = matches[index].start() if index < len(matches) else len(text)
+        body = text[start:end].strip("\n")
+        title = match.group(2).strip()
+        section_parts = [f"**{index}. {title}**"]
+        if body.strip():
+            section_parts.append(body)
+        parts.append("\n\n".join(section_parts))
+
+    return "\n\n".join(parts).strip()
 
 
 about_text = """
@@ -72,7 +97,8 @@ def guidelines():
     return info_page(guidelines_text)
 
 
-terms_text = """
+terms_text = _format_numbered_sections(
+    """
 **Terms and Conditions**
 
 Last updated: 2024-01-24
@@ -262,6 +288,7 @@ BY USING SERVICE OR OTHER SERVICES PROVIDED BY US, YOU ACKNOWLEDGE THAT YOU HAVE
 
 Please send your feedback, comments, requests for technical support by email: **support@reckon.cc**.
 """
+)
 
 
 @rx.page(on_load=AppState.check_login(), **page_params)
@@ -270,7 +297,8 @@ def terms():
     return info_page(terms_text)
 
 
-privacy_text = """
+privacy_text = _format_numbered_sections(
+    """
 **Privacy Policy**
 
 Effective date: 2024-01-24
@@ -555,6 +583,7 @@ You are advised to review this Privacy Policy periodically for any changes. Chan
 If you have any questions about this Privacy Policy, please contact us by email: **support@reckon.cc**.
 
 """
+)
 
 
 @rx.page(on_load=AppState.check_login(), **page_params)
