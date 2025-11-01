@@ -29,9 +29,9 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Log in to ACR
-        uses: azure/cli@v1
-        with:
-          inlineScript: az acr login --name ${{ secrets.ACR_NAME }}
+        run: |
+          token=$(az acr login --name ${{ secrets.ACR_NAME }} --expose-token --output tsv --query accessToken)
+          echo "$token" | docker login ${{ secrets.ACR_LOGIN_SERVER }} --username 00000000-0000-0000-0000-000000000000 --password-stdin
 
       - name: Build backend image
         run: |
