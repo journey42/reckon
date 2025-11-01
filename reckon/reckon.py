@@ -48,10 +48,14 @@ def _init_posthog():
 posthog = _init_posthog()
 
 # posthog.capture('test-id', 'test-event')
+posthog_script = rx.script(src="/posthog.js") if os.getenv("POSTHOG_PROJECT_API_KEY") else None
+
+head_scripts = [rx.script(src="/scrolling.js")]
+if posthog_script is not None:
+    head_scripts.append(posthog_script)
+
 app = rx.App(
-    head_components=[
-        rx.script(src="/scrolling.js"),
-    ],
+    head_components=head_scripts,
     theme=rx.theme(
         appearance="light", has_background=True, radius="full", accent_color="gray"
     ),

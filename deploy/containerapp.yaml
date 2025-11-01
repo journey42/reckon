@@ -1,0 +1,57 @@
+# Template for Azure Container Apps deployment
+# Placeholders (e.g., __APP_IMAGE__) are substituted by scripts/deploy_containerapp.sh at deploy time.
+# Do not deploy this file directly without replacement.
+
+type: Microsoft.App/containerApps
+apiVersion: "2024-03-01"
+name: __ACA_NAME__
+location: __LOCATION__
+properties:
+  managedEnvironmentId: __MANAGED_ENV_ID__
+  configuration:
+    ingress:
+      external: true
+      targetPort: 80
+      traffic:
+        - latestRevision: true
+          weight: 100
+    registries:
+      - server: __ACR_SERVER__
+        username: __ACR_USERNAME__
+        passwordSecretRef: acr-password
+    secrets:
+      - name: acr-password
+        value: __ACR_PASSWORD__
+      - name: db-url
+        value: __DB_URL__
+  template:
+    containers:
+      - name: caddy
+        image: __CADDY_IMAGE__
+        env:
+          - name: DOMAIN
+            value: __DOMAIN__
+          - name: API_URL
+            value: 127.0.0.1:8000
+          - name: UI_URL
+            value: 127.0.0.1:3000
+        resources:
+          cpu: 0.25
+          memory: 0.5Gi
+      - name: app
+        image: __APP_IMAGE__
+        env:
+          - name: RUN_MIGRATIONS_ON_START
+            value: "0"
+          - name: DB_URL
+            secretRef: db-url
+          - name: API_URL
+            value: __PUBLIC_URL__
+          - name: TRANSFORMERS_CACHE
+            value: /tmp/.cache/huggingface/hub
+        resources:
+          cpu: 0.5
+          memory: 1Gi
+    scale:
+      minReplicas: 0
+      maxReplicas: 2

@@ -1,7 +1,15 @@
 import reflex as rx
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from sqlalchemy.sql import text
-import numpy as np
+
+_embedding_model: TextEmbedding | None = None
+
+
+def _get_embedding_model() -> TextEmbedding:
+    global _embedding_model
+    if _embedding_model is None:
+        _embedding_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    return _embedding_model
 
 
 def get_matching_threshold():
@@ -55,13 +63,20 @@ def _ensure_embeddings_schema(session):
     )
 
 
-def insert_text_with_embedding(text_to_embed, reckoning_id):
-    # Load the model
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+def _encode_text(text_to_embed: str) -> list[float]:
+    """Return a 384-dimension embedding for the supplied text."""
+    model = _get_embedding_model()
+    embedding_iter = model.embed([text_to_embed])
+    embedding = next(embedding_iter, None)
+    if embedding is None:
+        raise ValueError("Failed to generate embedding for supplied text")
+    if hasattr(embedding, "tolist"):
+        return embedding.tolist()
+    return list(embedding)
 
-    # Generate the embedding
-    embedding = model.encode(text_to_embed)
-    embedding_list = embedding.tolist()
+
+def insert_text_with_embedding(text_to_embed, reckoning_id):
+    embedding_list = _encode_text(text_to_embed)
 
     # Connect to the database using SQLAlchemy session
     with rx.session() as session:

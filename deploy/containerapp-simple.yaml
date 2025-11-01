@@ -1,0 +1,38 @@
+type: Microsoft.App/containerApps
+name: reckon-app
+location: eastus
+properties:
+  managedEnvironmentId: /subscriptions/ba96b303-2d6d-4450-82a1-50de5bb7b50e/resourceGroups/reckon-rg/providers/Microsoft.App/managedEnvironments/reckon-env
+  configuration:
+    ingress:
+      external: true
+      targetPort: 8000
+      traffic:
+        - latestRevision: true
+          weight: 100
+    registries:
+      - server: reckonregistry.azurecr.io
+        username: reckonregistry
+        passwordSecretRef: acr-pwd
+    secrets:
+      - name: acr-pwd
+        value: __ACR_PASSWORD__
+      - name: db-url
+        value: __DB_URL__
+  template:
+    containers:
+      - name: app
+        image: reckonregistry.azurecr.io/reckon-app:latest
+        env:
+          - name: DB_URL
+            secretRef: db-url
+          - name: API_URL
+            value: https://reckon.cc
+          - name: TRANSFORMERS_CACHE
+            value: /tmp/.cache/huggingface/hub
+        resources:
+          cpu: 0.5
+          memory: 1Gi
+    scale:
+      minReplicas: 0
+      maxReplicas: 2

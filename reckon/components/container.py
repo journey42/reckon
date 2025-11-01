@@ -18,4 +18,4 @@ def container(*children, **props):
         )
         | props
     )
-    return rx.box(*children, rx.script(src="/posthog.js"), **props)
+    return rx.box(*children, **props)

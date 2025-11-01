@@ -1,6 +1,13 @@
 # Getting Started
 Local Setup
 
+Install Python dependencies (suneditor is installed without pulling its pinned reflex):
+
+```
+pip install -r requirements.txt
+pip install reflex-suneditor==0.0.11 --no-deps
+```
+
 Initialize the database first:
 
 ```
@@ -20,7 +27,22 @@ docker compose up db
 
 The container exposes Postgres on `localhost:5432` with the `reckon` database and credentials `postgres` / `password`. The app service is already configured to use the connection string `postgresql://postgres:password@db:5432/reckon`. To connect from outside Compose, set the `DB_URL` environment variable accordingly (for example when running Reflex commands locally).
 
-Azure Setup
+### Azure Deployment (Container Apps)
+
+Use the automated script to deploy the Reflex app and Caddy proxy to Azure Container Apps while reusing the existing resource group and PostgreSQL flexible server.
+
+1. Log in to Azure (`az login`) and make sure the correct subscription is selected.
+2. Update the `.env` file in the repository root with the correct connection string (and any overrides). The committed template contains placeholders you can edit in place. To supply a different file, set `ENV_FILE=/path/to/file` before running the script.
+3. Set `POSTHOG_PROJECT_API_KEY` in your environment (or leave it unset to disable the client script).
+4. Run the deploy script from the repo root (the script will install the Azure Container Apps CLI extension automatically if needed):
+   ```bash
+   ./scripts/deploy_containerapp.sh
+   ```
+   The script reads `.env` by default (override with `ENV_FILE=/path/to/file`), builds and pushes fresh images, creates/updates the Container Apps environment, applies `deploy/containerapp.yaml`, and prints the command needed to run database migrations (`az containerapp exec ... reflex db migrate`).
+
+Once traffic is verified, you can update DNS to point at the Container App's external endpoint. The script is idempotent, so re-running it will roll out a new revision with the latest images.
+
+### Legacy VM Setup (manual)
 
 run the following script via the Azure CLI to create the resource group and supporting resources
 ./scripts/azure-create-vm.sh
@@ -38,11 +60,7 @@ connect to the host vm and run the following commands:
 az ssh vm --resource-group reckon-rg --vm-name reckon --subscription ba96b303-2d6d-4450-82a1-50de5bb7b50e
 
 type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-&& sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-&& sudo apt update \
-&& sudo apt install gh -y
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y
 
 gh auth login
 

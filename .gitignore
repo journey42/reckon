@@ -10,3 +10,4 @@ reflex.db
 .pytest_cache/
 .ruff_cache
 .mypy_cache
+.env

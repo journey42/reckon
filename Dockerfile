@@ -1,5 +1,5 @@
 # Stage 1: init
-FROM python:3.13 as init
+FROM python:3.13 AS init
 
 # Pass `--build-arg API_URL=http://app.example.com:8000` during build 
 ARG API_URL
@@ -18,6 +18,8 @@ RUN python -m venv $VIRTUAL_ENV
 
 # Install app requirements and reflex inside virtualenv
 RUN pip install -r requirements.txt
+# Install suneditor plugin without pulling old reflex dependency
+RUN pip install reflex-suneditor==0.0.11 --no-deps
 
 # Deploy templates and prepare app
 RUN reflex init
@@ -40,5 +42,4 @@ COPY --chown=reflex --from=init /app /app
 USER reflex
 ENV PATH="/app/.venv/bin:$PATH" API_URL=$API_URL
 
-CMD reflex db migrate && reflex run --env prod
-
+CMD ["sh", "-c", "if [ \"${RUN_MIGRATIONS_ON_START:-1}\" = \"1\" ]; then reflex db migrate; fi && reflex run --env prod"]

@@ -1,0 +1,51 @@
+name: Deploy Static Web App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install reflex==0.8.17
+
+      - name: Export frontend
+        env:
+          API_URL: https://reckon-backend-preview.ambitiouscliff-3f83656c.eastus.azurecontainerapps.io
+        run: reflex export --frontend-only --no-zip
+
+      - name: Prepare static artifacts
+        run: |
+          rm -rf swa-build
+          mkdir -p swa-build
+          cp -a .web/build/client/. swa-build/
+          cp deploy/staticwebapp.config.json swa-build/staticwebapp.config.json
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "swa-build"
+          skip_app_build: true
+          skip_api_build: true
+          is_static_export: true
+          production_branch: master
+          app_artifact_location: swa-build

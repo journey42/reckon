@@ -1,13 +1,17 @@
-{$DOMAIN}
-
-encode gzip
-
-@backend_routes path /_event/* /_upload /ping
-handle @backend_routes {
-        reverse_proxy {$API_URL}
+{
+    auto_https off
 }
 
-# Reverse proxy for all other requests
-handle {
-        reverse_proxy {$UI_URL}
+:80 {
+    encode gzip
+
+    @backend_routes path /_event/* /_upload /ping
+    handle @backend_routes {
+        reverse_proxy {$API_URL}
+    }
+
+    # Reverse proxy for all other requests through the Reflex app
+    handle {
+        reverse_proxy {$API_URL}
+    }
 }
