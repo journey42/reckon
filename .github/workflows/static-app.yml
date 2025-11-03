@@ -29,6 +29,7 @@ jobs:
       - name: Export frontend
         env:
           API_URL: https://reckon-backend-preview.ambitiouscliff-3f83656c.eastus.azurecontainerapps.io
+          SUNEDITOR_TOOLBAR_ENABLED: 0
         run: reflex export --frontend-only --no-zip
 
       - name: Prepare static artifacts

@@ -57,4 +57,4 @@ jobs:
               --name ${{ secrets.CONTAINERAPP_NAME }} \
               --resource-group ${{ secrets.RESOURCE_GROUP }} \
               --image ${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${TAG} \
-              --set-env-vars API_URL=${{ secrets.PUBLIC_API_URL }}
+              --set-env-vars API_URL=${{ secrets.PUBLIC_API_URL }} SUNEDITOR_TOOLBAR_ENABLED=0

@@ -1,5 +1,6 @@
 """Base state"""
 
+import os
 import reflex as rx
 from typing import Optional, List
 from sqlmodel import Field, Relationship, select
@@ -235,11 +236,19 @@ class Log(rx.Model, table=True):
     user: Optional["User"] = Relationship(back_populates="logs")
 
 
+def _is_toolbar_enabled() -> bool:
+    """Return True if the SunEditor toolbar should be enabled."""
+    value = os.getenv("SUNEDITOR_TOOLBAR_ENABLED", "1")
+    print(f"SUNEDITOR_TOOLBAR_ENABLED={value}")
+    return value.strip().lower() not in {"0", "false", "off"}
+
+
 class AppState(rx.State):
     """The base state for the app."""
 
     user: Optional[User] = None
     is_running: bool = False
+    suneditor_toolbar_enabled: bool = _is_toolbar_enabled()
 
     def scroll_to_saved_position(self):
         return rx.call_script("scrollToSavedPosition();")

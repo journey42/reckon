@@ -7,7 +7,7 @@ from reckon.styles import page_params, dialog_button_style
 from reckon.components.buttons import submit_button
 from reckon.components.container import container
 from reckon.components.navbar import navbar
-from reflex_suneditor import Editor, EditorOptions, EditorButtonList
+from reflex_suneditor import Editor, EditorOptions
 from reckon.utils.db import insert_text_with_embedding
 from reckon.utils.parsing import remove_html_tags
 
@@ -76,22 +76,42 @@ def composer():
         ["removeFormat"],  # Clear formatting
     ]
 
-    editor_options = EditorOptions(
+    editor_options_with_toolbar = EditorOptions(
         button_list=custom_button_list,
+        default_tag="p",
+        mode="classic",
+    )
+    editor_options_without_toolbar = EditorOptions(
         default_tag="p",
         mode="classic",
     )
 
     return rx.vstack(
         rx.box(
-            Editor.create(
-                set_options=editor_options,
-                set_contents=HomePageState.concept,
-                placeholder="What do you Reckon?",
-                on_change=HomePageState.set_concept,
-                height="320px",
-                width="100%",
-                set_all_plugins=True,
+            rx.cond(
+                HomePageState.suneditor_toolbar_enabled,
+                Editor.create(
+                    set_options=editor_options_with_toolbar,
+                    set_contents=HomePageState.concept,
+                    placeholder="What do you Reckon?",
+                    on_change=HomePageState.set_concept,
+                    height="320px",
+                    width="100%",
+                    set_all_plugins=True,
+                    hide_toolbar=False,
+                    disable_toolbar=False,
+                ),
+                Editor.create(
+                    set_options=editor_options_without_toolbar,
+                    set_contents=HomePageState.concept,
+                    placeholder="What do you Reckon?",
+                    on_change=HomePageState.set_concept,
+                    height="320px",
+                    width="100%",
+                    set_all_plugins=True,
+                    hide_toolbar=True,
+                    disable_toolbar=True,
+                ),
             ),
             class_name="editor-container",
             width="100%",

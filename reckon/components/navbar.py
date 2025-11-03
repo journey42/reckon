@@ -20,7 +20,7 @@ def user_menu() -> rx.Component:
     """User menu."""
     return rx.menu.root(
         rx.menu.trigger(
-            rx.avatar(src="/menu.svg", border_color="black.900"),
+            rx.image(src="/menu.svg", width="36px", height="36px", alt="Open menu"),
         ),
         rx.menu.content(
             rx.menu.item(AppState.user.username, disabled=True),
