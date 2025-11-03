@@ -239,7 +239,6 @@ class Log(rx.Model, table=True):
 def _is_toolbar_enabled() -> bool:
     """Return True if the SunEditor toolbar should be enabled."""
     value = os.getenv("SUNEDITOR_TOOLBAR_ENABLED", "1")
-    print(f"SUNEDITOR_TOOLBAR_ENABLED={value}")
     return value.strip().lower() not in {"0", "false", "off"}
 
 
@@ -249,6 +248,9 @@ class AppState(rx.State):
     user: Optional[User] = None
     is_running: bool = False
     suneditor_toolbar_enabled: bool = _is_toolbar_enabled()
+    show_support_nudge: bool = False
+    support_nudge_concept_id: Optional[int] = None
+    pending_support_message: Optional[str] = None
 
     def scroll_to_saved_position(self):
         return rx.call_script("scrollToSavedPosition();")
@@ -342,6 +344,20 @@ class AppState(rx.State):
     @rx.var
     def db_updated(self) -> bool:
         return self._db_updated
+
+    @rx.event
+    def set_support_nudge(self, concept_id: int, message: str):
+        """Show the support guidance for a just-submitted concept."""
+        self.show_support_nudge = True
+        self.support_nudge_concept_id = concept_id
+        self.pending_support_message = message
+
+    @rx.event
+    def dismiss_support_nudge(self):
+        """Hide the post-submission support guidance."""
+        self.show_support_nudge = False
+        self.support_nudge_concept_id = None
+        self.pending_support_message = None
 
     # @rx.var
     # def total(self):

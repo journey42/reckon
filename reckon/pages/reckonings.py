@@ -52,6 +52,75 @@ from reckon.components.comment_dialog import comment_dialog, CommentDialogState
 from reckon.utils.db import find_similar_texts_with_join
 
 
+def support_nudge_wrapper(button, on_support):
+    """Wrap the support button with guidance for newly submitted concepts."""
+
+    tooltip_style = {
+        "background": "white",
+        "border": "1px solid rgba(15, 23, 42, 0.1)",
+        "box_shadow": "0px 12px 32px rgba(15, 23, 42, 0.18)",
+        "border_radius": "12px",
+        "padding": "16px",
+        "width": "260px",
+        "z_index": "50",
+    }
+
+    arrow_style = {
+        "position": "absolute",
+        "width": "14px",
+        "height": "14px",
+        "background": "white",
+        "border_left": "1px solid rgba(15, 23, 42, 0.1)",
+        "border_top": "1px solid rgba(15, 23, 42, 0.1)",
+        "transform": "rotate(45deg)",
+        "left": "-7px",
+        "top": "36px",
+        "box_shadow": "0px 10px 24px rgba(15, 23, 42, 0.12)",
+    }
+
+    return rx.box(
+        button,
+        rx.box(
+            rx.vstack(
+                rx.text(
+                    "Support your concept to share it publicly.",
+                    weight="medium",
+                ),
+                rx.text(
+                    "Reckonings stay private until you support them yourself or someone else does.",
+                    size="2",
+                    style={"color": "#475569"},
+                ),
+                rx.hstack(
+                    rx.button(
+                        "Support it now",
+                        size="1",
+                        variant="solid",
+                        on_click=on_support,
+                    ),
+                    rx.button(
+                        "Maybe later",
+                        size="1",
+                        variant="soft",
+                        on_click=AppState.dismiss_support_nudge,
+                        color_scheme="gray",
+                    ),
+                    spacing="2",
+                ),
+                align="start",
+                spacing="3",
+            ),
+            rx.box(**arrow_style),
+            position="absolute",
+            top="-32px",
+            left="calc(100% + 16px)",
+            **tooltip_style,
+        ),
+        position="relative",
+        display="inline-flex",
+    )
+
+
 class ReckoningsPageState(AppState):
     reckonings: list[Reckoning] = []
     search: str = ""
@@ -62,6 +131,8 @@ class ReckoningsPageState(AppState):
         result = self.check_login()
         if result:
             return result
+        if type == ReckoningTypes.support:
+            self.dismiss_support_nudge()
         yield CommentDialogState.new_comment(subject, type, pid)
         yield CommentDialogState.visible()
         yield self.save_scroll_position()
@@ -150,6 +221,9 @@ class ReckoningsPageState(AppState):
                 )
                 session.add(comment)
                 session.commit()
+
+            if type == ReckoningTypes.up_vote:
+                self.dismiss_support_nudge()
 
             yield self.save_scroll_position()
             current_path = self.router.url.path or "/"
@@ -508,10 +582,28 @@ class ComparePageState(ReckoningsPageState):
         primary_keys = []
         with rx.session() as session:
             session.expire_on_commit = False
+            try:
+                rid = int(self.reckoning_id)
+            except ValueError:
+                self.dismiss_support_nudge()
+                self.reckonings = []
+                return
+
             concept = session.exec(
-                select(Reckoning).where(Reckoning.id == self.reckoning_id)
+                select(Reckoning).where(Reckoning.id == rid)
             ).one_or_none()
 
+            if concept is None:
+                self.dismiss_support_nudge()
+                self.reckonings = []
+                return
+
+            if concept.user_id != self.user.id:
+                self.dismiss_support_nudge()
+            else:
+                self.show_support_nudge = (
+                    self.support_nudge_concept_id == concept.id
+                )
             primary_keys, results = find_similar_texts_with_join(concept.id, 0.75, 10)
 
             # Construct the base query with the condition that applies in both cases
@@ -722,6 +814,19 @@ def parent_reckoning(state):
     """The parent reckoning component."""
     if state.parent is None:
         return rx.box()
+
+    should_show_nudge = (
+        state.show_support_nudge
+        & (state.support_nudge_concept_id == state.parent.id)
+    )
+    support_action = state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
+    support_button = no_upvote_concept_button(on_click=support_action)
+    support_button_with_nudge = rx.cond(
+        should_show_nudge,
+        support_nudge_wrapper(support_button, support_action),
+        support_button,
+    )
+
     return rx.grid(
         rx.grid(
             rx.match(
@@ -771,13 +876,9 @@ def parent_reckoning(state):
                         rx.cond(
                             (
                                 state.parent.user_vote_history == ReckoningTypes.no_vote
-                            ),  # & (state.parent.user_id != state.user.id),
+                            ),
                             rx.fragment(
-                                no_upvote_concept_button(
-                                    on_click=state.vote_on_concept(
-                                        state.parent.id, ReckoningTypes.up_vote
-                                    )
-                                ),
+                                support_button_with_nudge,
                                 rx.text(state.parent.up_votes),
                                 no_downvote_concept_button(
                                     on_click=state.vote_on_concept(
@@ -791,13 +892,9 @@ def parent_reckoning(state):
                         rx.cond(
                             (
                                 state.parent.user_vote_history == ReckoningTypes.up_vote
-                            ),  # | (state.parent.user_id == state.user.id),
+                            ),
                             rx.fragment(
-                                upvote_concept_button(
-                                    on_click=state.vote_on_concept(
-                                        state.parent.id, ReckoningTypes.up_vote
-                                    )
-                                ),
+                                upvote_concept_button(on_click=support_action),
                                 rx.text(state.parent.up_votes),
                                 no_downvote_concept_button(
                                     on_click=state.vote_on_concept(
@@ -814,11 +911,7 @@ def parent_reckoning(state):
                                 == ReckoningTypes.down_vote
                             ),
                             rx.fragment(
-                                no_upvote_concept_button(
-                                    on_click=state.vote_on_concept(
-                                        state.parent.id, ReckoningTypes.up_vote
-                                    )
-                                ),
+                                no_upvote_concept_button(on_click=support_action),
                                 rx.text(state.parent.up_votes),
                                 downvote_concept_button(
                                     on_click=state.vote_on_concept(
@@ -840,7 +933,9 @@ def parent_reckoning(state):
                 rx.spacer(),
                 support_comment_button(
                     on_click=state.new_comment(
-                        state.parent.content, ReckoningTypes.support, state.reckoning_id
+                        state.parent.content,
+                        ReckoningTypes.support,
+                        state.reckoning_id,
                     )
                 ),
                 rx.text(state.parent.supports),
@@ -907,6 +1002,10 @@ def trending_concepts_navbar(state):
 
 def render_comment(state, c: Reckoning):
     """Display for an individual comment in the feed."""
+    support_button_component = support_comment_button(
+        on_click=state.new_comment(c.content, ReckoningTypes.support, c.id)
+    )
+
     return rx.grid(
         rx.grid(
             rx.cond(
@@ -1165,11 +1264,7 @@ def render_comment(state, c: Reckoning):
                         rx.spacer(),
                     ),
                     rx.spacer(),
-                    support_comment_button(
-                        on_click=state.new_comment(
-                            c.content, ReckoningTypes.support, c.id
-                        )
-                    ),
+                    support_button_component,
                     rx.text(c.supports),
                     poo_comment_button(
                         on_click=state.new_comment(
@@ -1205,6 +1300,14 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
     down_votes = getattr(c, item_attributes["down_votes"])
     total_comments = getattr(c, item_attributes["total_comments"])
     elapsed_time = getattr(c, item_attributes["elapsed_time"])
+
+    support_action = state.vote_on_concept(item_id, ReckoningTypes.up_vote)
+    support_button = no_upvote_concept_button(on_click=support_action)
+
+    should_show_nudge = (
+        state.show_support_nudge
+        & (state.support_nudge_concept_id == item_id)
+    )
 
     return rx.grid(
         rx.box(
@@ -1278,8 +1381,13 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
             rx.cond(
                 (vote_history == ReckoningTypes.no_vote),
                 rx.fragment(
-                    no_upvote_concept_button(
-                        on_click=state.vote_on_concept(item_id, ReckoningTypes.up_vote)
+                    rx.cond(
+                        should_show_nudge,
+                        support_nudge_wrapper(
+                            support_button,
+                            support_action,
+                        ),
+                        support_button,
                     ),
                     rx.text(up_votes),
                     no_downvote_concept_button(
@@ -1294,9 +1402,7 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
             rx.cond(
                 (vote_history == ReckoningTypes.up_vote),
                 rx.fragment(
-                    upvote_concept_button(
-                        on_click=state.vote_on_concept(item_id, ReckoningTypes.up_vote)
-                    ),
+                    upvote_concept_button(on_click=support_action),
                     rx.text(up_votes),
                     no_downvote_concept_button(
                         on_click=state.vote_on_concept(
@@ -1310,9 +1416,7 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
             rx.cond(
                 (vote_history == ReckoningTypes.down_vote),
                 rx.fragment(
-                    no_upvote_concept_button(
-                        on_click=state.vote_on_concept(item_id, ReckoningTypes.up_vote)
-                    ),
+                    no_upvote_concept_button(on_click=support_action),
                     rx.text(up_votes),
                     downvote_concept_button(
                         on_click=state.vote_on_concept(
