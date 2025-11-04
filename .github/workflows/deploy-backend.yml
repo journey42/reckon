@@ -7,12 +7,12 @@ on:
       - Dockerfile
       - requirements.txt
       - rxconfig.py
-      - reckon/**
+      - rhiz/**
       - scripts/**
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: reckon-backend
+  IMAGE_NAME: rhiz-backend
 
 jobs:
   build-and-deploy:
