@@ -251,6 +251,8 @@ class AppState(rx.State):
     show_support_nudge: bool = False
     support_nudge_concept_id: Optional[int] = None
     nudge_has_matches: bool = False
+    support_nudge_collapsed: bool = False
+    support_button_pulsing: bool = False
 
     def scroll_to_saved_position(self):
         return rx.call_script("scrollToSavedPosition();")
@@ -351,6 +353,9 @@ class AppState(rx.State):
         self.show_support_nudge = True
         self.support_nudge_concept_id = concept_id
         self.nudge_has_matches = has_matches
+        self.support_nudge_collapsed = False
+        self.support_button_pulsing = True
+        yield type(self).start_support_nudge_timers(concept_id=concept_id)
 
     @rx.event
     def dismiss_support_nudge(self):
@@ -358,6 +363,48 @@ class AppState(rx.State):
         self.show_support_nudge = False
         self.support_nudge_concept_id = None
         self.nudge_has_matches = False
+        self.support_nudge_collapsed = False
+        self.support_button_pulsing = False
+
+    @rx.event
+    def collapse_support_nudge(self):
+        """Collapse the support nudge banner without dismissing it."""
+        if self.show_support_nudge:
+            self.support_nudge_collapsed = True
+
+    @rx.event
+    def expand_support_nudge(self):
+        """Expand the support nudge banner if it is collapsed."""
+        if self.show_support_nudge:
+            self.support_nudge_collapsed = False
+
+    @rx.event
+    def stop_support_nudge_pulse(self):
+        """Stop pulsing the support button highlight."""
+        self.support_button_pulsing = False
+
+    @rx.event(background=True)
+    async def start_support_nudge_timers(self, concept_id: int):
+        """Automatically collapse and stop pulsing after short delays."""
+
+        collapse_delay = 6
+        pulse_duration = 10
+
+        await asyncio.sleep(collapse_delay)
+        async with self:
+            if (
+                self.show_support_nudge
+                and self.support_nudge_concept_id == concept_id
+            ):
+                self.support_nudge_collapsed = True
+
+        remaining = pulse_duration - collapse_delay
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+
+        async with self:
+            if self.support_nudge_concept_id == concept_id:
+                self.support_button_pulsing = False
 
     # @rx.var
     # def total(self):

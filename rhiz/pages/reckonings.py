@@ -52,127 +52,125 @@ from rhiz.components.comment_dialog import comment_dialog, CommentDialogState
 from rhiz.utils.db import find_similar_texts_with_join
 
 
-def support_nudge_wrapper(button, on_support, has_match: bool):
-    """Wrap the support button with guidance for newly submitted concepts."""
+NUDGE_HEADING = "!Your idea has NOT been published yet!"
+NUDGE_RELATED_BODY = (
+    "Your comment is related to a previous entry. You can choose to\n"
+    "A) Upvote your own submission to make it “sticky”, or\n"
+    "😎 😎 Lend your vote to the previous entry\n"
+    "Nothing is public until you make that choice"
+)
+NUDGE_FIRST_TOPIC_BODY = (
+    "Your comment is the first to touch on this topic. Thank you!\n"
+    "Your comment will not be public unless you choose to upvote it, this is part of our "
+    "decision format in cases where your topic has come up before"
+)
+NUDGE_COLLAPSED_SUMMARY = (
+    "Your idea stays private until you choose how to support it."
+)
 
-    tooltip_style = {
+
+def support_nudge_banner(state):
+    """Sticky banner that guides users after they submit a concept."""
+
+    banner_style = {
+        "position": "sticky",
+        "top": "72px",
+        "z_index": "90",
+        "margin": "0 auto 16px",
+        "width": "min(720px, calc(100% - 32px))",
         "background": "white",
         "border": "1px solid rgba(15, 23, 42, 0.1)",
         "box_shadow": "0px 12px 32px rgba(15, 23, 42, 0.18)",
         "border_radius": "12px",
-        "padding": "16px",
-        "width": "calc(100vw - 32px)",
-        "max_width": "320px",
-        "position": "absolute",
-        "top": "calc(100% + 16px)",
-        "left": "50%",
-        "transform": "translateX(-50%)",
-        "z_index": "50",
-        "@media (max-width: 640px)": {
-            "position": "fixed",
-            "top": "auto",
-            "bottom": "48px",
-            "left": "50%",
-            "transform": "translateX(-50%)",
-            "width": "calc(100vw - 32px)",
-            "max_width": "360px",
-        },
+        "transition": "transform 0.3s ease, opacity 0.3s ease",
     }
 
-    arrow_style = {
-        "position": "absolute",
-        "width": "14px",
-        "height": "14px",
-        "background": "white",
-        "border_left": "1px solid rgba(15, 23, 42, 0.1)",
-        "border_top": "1px solid rgba(15, 23, 42, 0.1)",
-        "transform": "translateX(-50%) rotate(45deg)",
-        "left": "50%",
-        "top": "-7px",
-        "box_shadow": "0px -10px 24px rgba(15, 23, 42, 0.12)",
-        "@media (max-width: 640px)": {
-            "display": "none",
-        },
-    }
+    support_action = state.support_nudge_support()
 
-    heading = "!Your idea has NOT been published yet!"
-    related_body = (
-        "Your comment is related to a previous entry. You can choose to\n"
-        "A) Upvote your own submission to make it “sticky”, or\n"
-        "😎 😎 Lend your vote to the previous entry\n"
-        "Nothing is public until you make that choice"
-    )
-    first_topic_body = (
-        "Your comment is the first to touch on this topic. Thank you!\n"
-        "Your comment will not be public unless you choose to upvote it, "
-        "this is part of our decision format in cases where your topic has come up before"
-    )
-
-    return rx.box(
-        button,
-        rx.box(
-            rx.vstack(
-                rx.text(
-                    heading,
-                    weight="medium",
-                    size="3",
-                ),
-                rx.cond(
-                    has_match,
-                    rx.text(
-                        related_body,
-                        size="2",
-                        style={
-                            "color": "#475569",
-                            "whiteSpace": "pre-line",
-                        },
-                    ),
-                    rx.text(
-                        first_topic_body,
-                        size="2",
-                        style={
-                            "color": "#475569",
-                            "whiteSpace": "pre-line",
-                        },
-                    ),
-                ),
-                rx.hstack(
-                    rx.button(
-                        "Support it now",
-                        size="1",
-                        variant="solid",
-                        on_click=on_support,
-                    ),
-                    rx.button(
-                        "Maybe later",
-                        size="1",
-                        variant="soft",
-                        on_click=AppState.dismiss_support_nudge,
-                        color_scheme="gray",
-                    ),
-                    spacing="2",
-                    align_items="start",
-                    justify="start",
-                    style={
-                        "flexWrap": "wrap",
-                        "rowGap": "8px",
-                        "columnGap": "8px",
-                    },
-                ),
-                align="start",
-                spacing="3",
+    expanded_content = rx.vstack(
+        rx.text(NUDGE_HEADING, weight="medium", size="3"),
+        rx.cond(
+            getattr(state, "nudge_has_matches", False),
+            rx.text(
+                NUDGE_RELATED_BODY,
+                size="2",
+                style={"color": "#475569", "whiteSpace": "pre-line"},
             ),
-            rx.box(**arrow_style),
-            **tooltip_style,
+            rx.text(
+                NUDGE_FIRST_TOPIC_BODY,
+                size="2",
+                style={"color": "#475569", "whiteSpace": "pre-line"},
+            ),
         ),
-        position="relative",
-        display="flex",
-        justify_content="center",
-        style={
-            "width": "100%",
-            "maxWidth": "100%",
-            "minWidth": "0",
-        },
+        rx.hstack(
+            rx.button(
+                "Support it now",
+                size="1",
+                variant="solid",
+                on_click=support_action,
+            ),
+            rx.button(
+                "Maybe later",
+                size="1",
+                variant="soft",
+                color_scheme="gray",
+                on_click=AppState.dismiss_support_nudge,
+            ),
+            rx.button(
+                "Hide",
+                size="1",
+                variant="soft",
+                color_scheme="gray",
+                on_click=AppState.collapse_support_nudge,
+                style={"marginLeft": "auto"},
+            ),
+            spacing="3",
+            align_items="start",
+            justify="start",
+            style={"flexWrap": "wrap", "rowGap": "8px", "columnGap": "8px"},
+        ),
+        align="start",
+        spacing="3",
+    )
+
+    collapsed_content = rx.vstack(
+        rx.text(
+            NUDGE_COLLAPSED_SUMMARY,
+            size="2",
+            style={"color": "#475569"},
+        ),
+        rx.hstack(
+            rx.button(
+                "Show options",
+                size="1",
+                variant="solid",
+                on_click=AppState.expand_support_nudge,
+            ),
+            rx.button(
+                "Dismiss",
+                size="1",
+                variant="soft",
+                color_scheme="gray",
+                on_click=AppState.dismiss_support_nudge,
+            ),
+            spacing="2",
+            style={"flexWrap": "wrap", "rowGap": "8px", "columnGap": "8px"},
+        ),
+        align="start",
+        spacing="2",
+    )
+
+    return rx.cond(
+        state.show_support_nudge,
+        rx.box(
+            rx.cond(
+                state.support_nudge_collapsed,
+                rx.box(collapsed_content, padding="12px"),
+                rx.box(expanded_content, padding="16px"),
+            ),
+            style=banner_style,
+        ),
+        None,
     )
 
 
@@ -283,6 +281,17 @@ class ReckoningsPageState(AppState):
             yield self.save_scroll_position()
             current_path = self.router.url.path or "/"
             return rx.redirect(current_path)  # return rx.redirect(f"/comments/{cid}")
+
+
+    def support_nudge_support(self):
+        """Trigger an upvote via the nudge banner."""
+        if self.support_nudge_concept_id is None:
+            return
+        yield self.stop_support_nudge_pulse()
+        result = yield from self.vote_on_concept(
+            self.support_nudge_concept_id, ReckoningTypes.up_vote
+        )
+        return result
 
 
 class YourDraftsPageState(ReckoningsPageState):
@@ -872,20 +881,15 @@ def parent_reckoning(state):
     if state.parent is None:
         return rx.box()
 
-    should_show_nudge = (
+    support_action = state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
+    should_pulse = (
         state.show_support_nudge
         & (state.support_nudge_concept_id == state.parent.id)
+        & state.support_button_pulsing
     )
-    support_action = state.vote_on_concept(state.parent.id, ReckoningTypes.up_vote)
-    support_button = no_upvote_concept_button(on_click=support_action)
-    support_button_with_nudge = rx.cond(
-        should_show_nudge,
-        support_nudge_wrapper(
-            support_button,
-            support_action,
-            getattr(state, "nudge_has_matches", False),
-        ),
-        support_button,
+    support_button = no_upvote_concept_button(
+        on_click=support_action,
+        class_name=rx.cond(should_pulse, "support-pulse", ""),
     )
 
     return rx.grid(
@@ -939,7 +943,7 @@ def parent_reckoning(state):
                                 state.parent.user_vote_history == ReckoningTypes.no_vote
                             ),
                             rx.fragment(
-                                support_button_with_nudge,
+                support_button,
                                 rx.text(state.parent.up_votes),
                                 no_downvote_concept_button(
                                     on_click=state.vote_on_concept(
@@ -1363,11 +1367,14 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
     elapsed_time = getattr(c, item_attributes["elapsed_time"])
 
     support_action = state.vote_on_concept(item_id, ReckoningTypes.up_vote)
-    support_button = no_upvote_concept_button(on_click=support_action)
-
-    should_show_nudge = (
+    should_pulse = (
         state.show_support_nudge
         & (state.support_nudge_concept_id == item_id)
+        & state.support_button_pulsing
+    )
+    support_button = no_upvote_concept_button(
+        on_click=support_action,
+        class_name=rx.cond(should_pulse, "support-pulse", ""),
     )
 
     return rx.grid(
@@ -1442,15 +1449,7 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
             rx.cond(
                 (vote_history == ReckoningTypes.no_vote),
                 rx.fragment(
-                    rx.cond(
-                        should_show_nudge,
-                        support_nudge_wrapper(
-                            support_button,
-                            support_action,
-                            getattr(state, "nudge_has_matches", False),
-                        ),
-                        support_button,
-                    ),
+                    support_button,
                     rx.text(up_votes),
                     no_downvote_concept_button(
                         on_click=state.vote_on_concept(
@@ -1542,7 +1541,22 @@ def reckoning(state, r: Reckoning):
 
 def page(state, *args, **kwargs):
     return container(
+        rx.html(
+            """
+            <style>
+            @keyframes supportPulse {
+              0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(1, 204, 93, 0.45); }
+              50% { transform: scale(1.08); box-shadow: 0 0 0 14px rgba(1, 204, 93, 0); }
+              100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(1, 204, 93, 0); }
+            }
+            .support-pulse {
+              animation: supportPulse 1.2s ease-in-out infinite;
+            }
+            </style>
+            """
+        ),
         *args,
+        support_nudge_banner(state),
         rx.grid(
             rx.foreach(
                 state.reckonings,
