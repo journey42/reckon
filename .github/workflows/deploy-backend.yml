@@ -74,10 +74,14 @@ jobs:
               --resource-group ${{ secrets.RESOURCE_GROUP }} \
               --all --query "[].name" -o tsv | while read REV; do
               if [ -n "$REV" ] && [ "$REV" != "$LATEST_REV" ]; then
-                az containerapp revision deactivate \
-                  --name ${{ secrets.CONTAINERAPP_NAME }} \
-                  --resource-group ${{ secrets.RESOURCE_GROUP }} \
-                  --revision "$REV"
+                if ! az containerapp revision show --name ${{ secrets.CONTAINERAPP_NAME }} \
+                     --resource-group ${{ secrets.RESOURCE_GROUP }} \
+                     --revision "$REV" --query properties.active -o tsv | grep -q '^false$'; then
+                  az containerapp revision deactivate \
+                    --name ${{ secrets.CONTAINERAPP_NAME }} \
+                    --resource-group ${{ secrets.RESOURCE_GROUP }} \
+                    --revision "$REV"
+                fi
               fi
             done
             if [ -n "$LATEST_REV" ]; then
