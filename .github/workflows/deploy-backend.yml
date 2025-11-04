@@ -65,25 +65,24 @@ jobs:
               --set-env-vars API_URL=${{ secrets.PUBLIC_API_URL }} \
                              SUNEDITOR_TOOLBAR_ENABLED=0 \
                              DB_URL=secretref:db-url
+            LATEST_REV=$(az containerapp revision list \
+              --name ${{ secrets.CONTAINERAPP_NAME }} \
+              --resource-group ${{ secrets.RESOURCE_GROUP }} \
+              --query "[?properties.latestRevision==\`true\`].name" -o tsv | head -n 1)
             az containerapp revision list \
               --name ${{ secrets.CONTAINERAPP_NAME }} \
               --resource-group ${{ secrets.RESOURCE_GROUP }} \
               --all --query "[].name" -o tsv | while read REV; do
-              if [ -n "$REV" ]; then
+              if [ -n "$REV" ] && [ "$REV" != "$LATEST_REV" ]; then
                 az containerapp revision deactivate \
                   --name ${{ secrets.CONTAINERAPP_NAME }} \
                   --resource-group ${{ secrets.RESOURCE_GROUP }} \
                   --revision "$REV"
               fi
             done
-            az containerapp revision list \
-              --name ${{ secrets.CONTAINERAPP_NAME }} \
-              --resource-group ${{ secrets.RESOURCE_GROUP }} \
-              --query "[?properties.latestRevision==\`true\`].name" -o tsv | head -n 1 | while read REV; do
-              if [ -n "$REV" ]; then
-                az containerapp revision activate \
-                  --name ${{ secrets.CONTAINERAPP_NAME }} \
-                  --resource-group ${{ secrets.RESOURCE_GROUP }} \
-                  --revision "$REV"
-              fi
-            done
+            if [ -n "$LATEST_REV" ]; then
+              az containerapp revision activate \
+                --name ${{ secrets.CONTAINERAPP_NAME }} \
+                --resource-group ${{ secrets.RESOURCE_GROUP }} \
+                --revision "$LATEST_REV"
+            fi
