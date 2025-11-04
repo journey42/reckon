@@ -1,5 +1,5 @@
 type: Microsoft.App/containerApps
-name: reckon-app
+name: rhiz-app
 location: eastus
 properties:
   managedEnvironmentId: /subscriptions/ba96b303-2d6d-4450-82a1-50de5bb7b50e/resourceGroups/reckon-rg/providers/Microsoft.App/managedEnvironments/reckon-env
@@ -22,7 +22,7 @@ properties:
   template:
     containers:
       - name: app
-        image: reckonregistry.azurecr.io/reckon-app:latest
+        image: reckonregistry.azurecr.io/rhiz-app:latest
         env:
           - name: DB_URL
             secretRef: db-url

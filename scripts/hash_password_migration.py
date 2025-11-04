@@ -8,8 +8,8 @@ import reflex as rx
 from sqlalchemy.orm import Session
 from sqlmodel import select
 
-from reckon.state.base import User
-from reckon.utils.security import hash_password, is_hashed
+from rhiz.state.base import User
+from rhiz.utils.security import hash_password, is_hashed
 
 
 def migrate_passwords(session: Session, *, dry_run: bool = False) -> int:
