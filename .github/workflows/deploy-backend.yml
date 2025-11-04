@@ -53,10 +53,11 @@ jobs:
         with:
           inlineScript: |
             TAG=${GITHUB_SHA::7}
+            DB_CONN="${{ secrets.DB_URL }}"
             az containerapp secret set \
               --name ${{ secrets.CONTAINERAPP_NAME }} \
               --resource-group ${{ secrets.RESOURCE_GROUP }} \
-              --secrets db-url=${{ secrets.DB_URL }}
+              --secrets db-url="$DB_CONN"
             az containerapp update \
               --name ${{ secrets.CONTAINERAPP_NAME }} \
               --resource-group ${{ secrets.RESOURCE_GROUP }} \
@@ -64,3 +65,6 @@ jobs:
               --set-env-vars API_URL=${{ secrets.PUBLIC_API_URL }} \
                              SUNEDITOR_TOOLBAR_ENABLED=0 \
                              DB_URL=secretref:db-url
+            az containerapp restart \
+              --name ${{ secrets.CONTAINERAPP_NAME }} \
+              --resource-group ${{ secrets.RESOURCE_GROUP }}
