@@ -11,3 +11,4 @@ reflex.db
 .ruff_cache
 .mypy_cache
 .env
+AGENTS.md

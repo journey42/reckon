@@ -11,7 +11,7 @@ import random
 # Use the correct connection string or credential authentication as per your setup
 CONNECTION_STRING = "endpoint=https://reckon-acs.unitedstates.communication.azure.com/;accesskey=gdk42ovV9gaOJfMd/c1IkAa5bfJ09j6U/vxNWs/VE4QasjfDxDml33Os1u6JzVc7DSK2hDD0Z1joRufQxcVivg=="
 
-SUPPORT_EMAIL_ADDRESS = "support@reckon.cc"
+SUPPORT_EMAIL_ADDRESS = "DoNotReply@rhiz.ai"
 
 
 def generate_temp_password(length=12):

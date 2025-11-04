@@ -188,7 +188,7 @@ class AuthState(AppState):
             if user:
                 try:
                     result = send_password_reset_email(
-                        session, user, "https://reckon.cc/reset_password_via_email"
+                        session, user, "https://rhiz.ai/reset_password_via_email"
                     )
                 except Exception as e:
                     except_log = Log(

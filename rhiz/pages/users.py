@@ -43,7 +43,7 @@ class WelcomeEmailConfirmationDialogState(AppState):
             try:
                 self.visible()
                 send_result = send_welcome_email(
-                    session, self.username, self.email, "https://reckon.cc"
+                    session, self.username, self.email, "https://rhiz.ai"
                 )
                 if not send_result:
                     raise ValueError("Email not sent")
