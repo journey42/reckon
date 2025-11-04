@@ -92,6 +92,8 @@ def composer():
     editor_options_without_toolbar = EditorOptions(
         default_tag="p",
         mode="classic",
+        show_path_label=False,
+        char_counter=False,
     )
 
     return rx.vstack(
@@ -119,7 +121,6 @@ def composer():
                     set_all_plugins=True,
                     hide_toolbar=True,
                     disable_toolbar=True,
-                    options={"ResizingBar": False},
                 ),
             ),
             class_name="editor-container",
