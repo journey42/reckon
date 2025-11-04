@@ -52,7 +52,7 @@ from rhiz.components.comment_dialog import comment_dialog, CommentDialogState
 from rhiz.utils.db import find_similar_texts_with_join
 
 
-def support_nudge_wrapper(button, on_support):
+def support_nudge_wrapper(button, on_support, has_match: bool):
     """Wrap the support button with guidance for newly submitted concepts."""
 
     tooltip_style = {
@@ -61,8 +61,22 @@ def support_nudge_wrapper(button, on_support):
         "box_shadow": "0px 12px 32px rgba(15, 23, 42, 0.18)",
         "border_radius": "12px",
         "padding": "16px",
-        "width": "260px",
+        "width": "calc(100vw - 32px)",
+        "max_width": "320px",
+        "position": "absolute",
+        "top": "calc(100% + 16px)",
+        "left": "50%",
+        "transform": "translateX(-50%)",
         "z_index": "50",
+        "@media (max-width: 640px)": {
+            "position": "fixed",
+            "top": "auto",
+            "bottom": "48px",
+            "left": "50%",
+            "transform": "translateX(-50%)",
+            "width": "calc(100vw - 32px)",
+            "max_width": "360px",
+        },
     }
 
     arrow_style = {
@@ -72,24 +86,55 @@ def support_nudge_wrapper(button, on_support):
         "background": "white",
         "border_left": "1px solid rgba(15, 23, 42, 0.1)",
         "border_top": "1px solid rgba(15, 23, 42, 0.1)",
-        "transform": "rotate(45deg)",
-        "left": "calc(50% - 7px)",
+        "transform": "translateX(-50%) rotate(45deg)",
+        "left": "50%",
         "top": "-7px",
         "box_shadow": "0px -10px 24px rgba(15, 23, 42, 0.12)",
+        "@media (max-width: 640px)": {
+            "display": "none",
+        },
     }
+
+    heading = "!Your idea has NOT been published yet!"
+    related_body = (
+        "Your comment is related to a previous entry. You can choose to\n"
+        "A) Upvote your own submission to make it “sticky”, or\n"
+        "😎 😎 Lend your vote to the previous entry\n"
+        "Nothing is public until you make that choice"
+    )
+    first_topic_body = (
+        "Your comment is the first to touch on this topic. Thank you!\n"
+        "Your comment will not be public unless you choose to upvote it, "
+        "this is part of our decision format in cases where your topic has come up before"
+    )
 
     return rx.box(
         button,
         rx.box(
             rx.vstack(
                 rx.text(
-                    "Support your concept to share it publicly.",
+                    heading,
                     weight="medium",
+                    size="3",
                 ),
-                rx.text(
-                    "Concepts stay private until you support them yourself or someone else does.",
-                    size="2",
-                    style={"color": "#475569"},
+                rx.cond(
+                    has_match,
+                    rx.text(
+                        related_body,
+                        size="2",
+                        style={
+                            "color": "#475569",
+                            "whiteSpace": "pre-line",
+                        },
+                    ),
+                    rx.text(
+                        first_topic_body,
+                        size="2",
+                        style={
+                            "color": "#475569",
+                            "whiteSpace": "pre-line",
+                        },
+                    ),
                 ),
                 rx.hstack(
                     rx.button(
@@ -106,18 +151,28 @@ def support_nudge_wrapper(button, on_support):
                         color_scheme="gray",
                     ),
                     spacing="2",
+                    align_items="start",
+                    justify="start",
+                    style={
+                        "flexWrap": "wrap",
+                        "rowGap": "8px",
+                        "columnGap": "8px",
+                    },
                 ),
                 align="start",
                 spacing="3",
             ),
             rx.box(**arrow_style),
-            position="absolute",
-            top="calc(100% + 16px)",
-            left="50%",
             **tooltip_style,
         ),
         position="relative",
-        display="inline-flex",
+        display="flex",
+        justify_content="center",
+        style={
+            "width": "100%",
+            "maxWidth": "100%",
+            "minWidth": "0",
+        },
     )
 
 
@@ -605,6 +660,8 @@ class ComparePageState(ReckoningsPageState):
                     self.support_nudge_concept_id == concept.id
                 )
             primary_keys, results = find_similar_texts_with_join(concept.id, 0.75, 10)
+            similar_ids = [pk for pk in primary_keys if pk != concept.id]
+            self.nudge_has_matches = bool(similar_ids)
 
             # Construct the base query with the condition that applies in both cases
             query = select(Reckoning).where(Reckoning.id.in_(primary_keys))
@@ -823,7 +880,11 @@ def parent_reckoning(state):
     support_button = no_upvote_concept_button(on_click=support_action)
     support_button_with_nudge = rx.cond(
         should_show_nudge,
-        support_nudge_wrapper(support_button, support_action),
+        support_nudge_wrapper(
+            support_button,
+            support_action,
+            getattr(state, "nudge_has_matches", False),
+        ),
         support_button,
     )
 
@@ -1386,6 +1447,7 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
                         support_nudge_wrapper(
                             support_button,
                             support_action,
+                            getattr(state, "nudge_has_matches", False),
                         ),
                         support_button,
                     ),

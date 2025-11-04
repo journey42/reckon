@@ -59,13 +59,7 @@ class HomePageState(AppState):
         if plain_text:
             insert_text_with_embedding(plain_text, concept.id)
 
-        preview_message = (
-            plain_text
-            or "Your concept is saved as a draft until it receives support."
-        )
-        if len(preview_message) > 160:
-            preview_message = preview_message[:157] + "..."
-        yield AppState.set_support_nudge(concept.id, preview_message)
+        yield AppState.set_support_nudge(concept.id, has_matches=False)
         self.concept = ""
         self._db_updated = True
         yield rx.redirect(f"/compare/{concept.id}")

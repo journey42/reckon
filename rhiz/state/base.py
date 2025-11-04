@@ -250,7 +250,7 @@ class AppState(rx.State):
     suneditor_toolbar_enabled: bool = _is_toolbar_enabled()
     show_support_nudge: bool = False
     support_nudge_concept_id: Optional[int] = None
-    pending_support_message: Optional[str] = None
+    nudge_has_matches: bool = False
 
     def scroll_to_saved_position(self):
         return rx.call_script("scrollToSavedPosition();")
@@ -346,18 +346,18 @@ class AppState(rx.State):
         return self._db_updated
 
     @rx.event
-    def set_support_nudge(self, concept_id: int, message: str):
+    def set_support_nudge(self, concept_id: int, has_matches: bool = False):
         """Show the support guidance for a just-submitted concept."""
         self.show_support_nudge = True
         self.support_nudge_concept_id = concept_id
-        self.pending_support_message = message
+        self.nudge_has_matches = has_matches
 
     @rx.event
     def dismiss_support_nudge(self):
         """Hide the post-submission support guidance."""
         self.show_support_nudge = False
         self.support_nudge_concept_id = None
-        self.pending_support_message = None
+        self.nudge_has_matches = False
 
     # @rx.var
     # def total(self):
