@@ -52,41 +52,42 @@ jobs:
         uses: azure/cli@v1
         with:
           inlineScript: |
+            set -euo pipefail
             TAG=${GITHUB_SHA::7}
             DB_CONN="${{ secrets.DB_URL }}"
+
             az containerapp secret set \
               --name ${{ secrets.CONTAINERAPP_NAME }} \
               --resource-group ${{ secrets.RESOURCE_GROUP }} \
               --secrets db-url="$DB_CONN"
-            az containerapp update \
+
+            NEW_REVISION=$(az containerapp update \
               --name ${{ secrets.CONTAINERAPP_NAME }} \
               --resource-group ${{ secrets.RESOURCE_GROUP }} \
               --image ${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${TAG} \
               --set-env-vars API_URL=${{ secrets.PUBLIC_API_URL }} \
                              SUNEDITOR_TOOLBAR_ENABLED=0 \
-                             DB_URL=secretref:db-url
-            LATEST_REV=$(az containerapp revision list \
-              --name ${{ secrets.CONTAINERAPP_NAME }} \
-              --resource-group ${{ secrets.RESOURCE_GROUP }} \
-              --query "[?properties.latestRevision==\`true\`].name" -o tsv | head -n 1)
-            az containerapp revision list \
-              --name ${{ secrets.CONTAINERAPP_NAME }} \
-              --resource-group ${{ secrets.RESOURCE_GROUP }} \
-              --all --query "[].name" -o tsv | while read REV; do
-              if [ -n "$REV" ] && [ "$REV" != "$LATEST_REV" ]; then
-                if ! az containerapp revision show --name ${{ secrets.CONTAINERAPP_NAME }} \
-                     --resource-group ${{ secrets.RESOURCE_GROUP }} \
-                     --revision "$REV" --query properties.active -o tsv | grep -q '^false$'; then
-                  az containerapp revision deactivate \
-                    --name ${{ secrets.CONTAINERAPP_NAME }} \
-                    --resource-group ${{ secrets.RESOURCE_GROUP }} \
-                    --revision "$REV"
+                             DB_URL=secretref:db-url \
+              --query properties.latestRevisionName -o tsv)
+
+            echo "Deployed revision: ${NEW_REVISION:-<unknown>}"
+
+            if [ -n "${NEW_REVISION}" ]; then
+              echo "Waiting for revision ${NEW_REVISION} to become active..."
+              for i in $(seq 1 12); do
+                STATE=$(az containerapp revision show \
+                  --name ${{ secrets.CONTAINERAPP_NAME }} \
+                  --resource-group ${{ secrets.RESOURCE_GROUP }} \
+                  --revision "$NEW_REVISION" \
+                  --query properties.runningState -o tsv || true)
+                if [ "$STATE" = "Running" ]; then
+                  echo "Revision ${NEW_REVISION} is running."
+                  break
                 fi
-              fi
-            done
-            if [ -n "$LATEST_REV" ]; then
-              az containerapp revision activate \
+                sleep 10
+              done
+              az containerapp revision show \
                 --name ${{ secrets.CONTAINERAPP_NAME }} \
                 --resource-group ${{ secrets.RESOURCE_GROUP }} \
-                --revision "$LATEST_REV"
+                --revision "$NEW_REVISION"
             fi
