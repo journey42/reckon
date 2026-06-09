@@ -57,7 +57,7 @@ enable pg vector using the following instructions: https://learn.microsoft.com/e
 
 connect to the host vm and run the following commands:
 
-az ssh vm --resource-group reckon-rg --vm-name reckon --subscription ba96b303-2d6d-4450-82a1-50de5bb7b50e
+az ssh vm --resource-group reckon-rg --vm-name reckon --subscription <SUBSCRIPTION_ID>
 
 type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
 curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y
