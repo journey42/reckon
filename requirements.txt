@@ -6,3 +6,5 @@ reflex>=0.8.17
 typer==0.9.0
 fastembed
 bcrypt
+qrcode[pil]>=7.4
+pytest>=8.0
