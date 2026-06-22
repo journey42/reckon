@@ -3,7 +3,7 @@
 import reflex as rx
 from sqlmodel import select
 from datetime import datetime, timezone
-from rhiz.styles import read_only_text_style, dialog_button_style
+from rhiz.styles import dialog_button_style
 from rhiz.components.buttons import (
     support_comment_button,
     detract_from_comment_button,

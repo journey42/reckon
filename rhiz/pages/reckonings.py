@@ -1,10 +1,11 @@
 """The your reckonings page."""
 
 import reflex as rx
+from rhiz.components.safe_markdown import SafeMarkdown
 from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import select, delete, func
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, noload
 from sqlalchemy import and_ as _and, or_ as _or
 from rhiz.state.base import AppState, Reckoning, ReckoningTypes
 from rhiz.styles import (
@@ -28,7 +29,6 @@ from rhiz.components.buttons import (
     more_button,
     upvote_concept_button,
     downvote_concept_button,
-    feedback_button,
     view_comments_button,
     compare_concepts_button,
     delete_button,
@@ -51,7 +51,6 @@ from rhiz.components.concept_dialog import concept_dialog, ConceptDialogState
 from rhiz.components.comment_dialog import comment_dialog, CommentDialogState
 from rhiz.utils.db import find_similar_texts_with_join
 
-
 NUDGE_HEADING = "!Your idea has NOT been published yet!"
 NUDGE_RELATED_BODY = (
     "Your comment is related to a previous entry. You can choose to\n"
@@ -64,9 +63,7 @@ NUDGE_FIRST_TOPIC_BODY = (
     "Your comment will not be public unless you choose to upvote it, this is part of our "
     "decision format in cases where your topic has come up before"
 )
-NUDGE_COLLAPSED_SUMMARY = (
-    "Your idea stays private until you choose how to support it."
-)
+NUDGE_COLLAPSED_SUMMARY = "Your idea stays private until you choose how to support it."
 
 
 def support_nudge_banner(state):
@@ -180,6 +177,77 @@ class ReckoningsPageState(AppState):
     page_type: int = 0
     rerender: bool = False
 
+    # Infinite-scroll windowing. has_more defaults to False so pages that
+    # override get_reckonings (Compare, Concept, Comments) never show the
+    # sentinel; the flat-list pages flip it on via get_reckonings below.
+    page_size: int = 20
+    loaded_count: int = 0
+    has_more: bool = False
+    is_loading: bool = False
+
+    # NOTE: Reflex dispatches a PUBLIC event handler to the substate that
+    # *defines* it, so an inherited public `get_reckonings`/`load_more` would
+    # run with `self` bound to this base substate (wrong `_window_query`, wrong
+    # `reckonings` node). The shared logic therefore lives in PRIVATE helpers
+    # (private methods are plain calls that preserve `self`), and each flat-list
+    # subclass defines thin public `get_reckonings`/`load_more` wrappers so the
+    # handlers dispatch to the correct substate.
+
+    def _window_query(self, session):
+        """Return the SQLAlchemy select for this page (ordering + filters).
+
+        Flat-list subclasses override this. The base raises so misuse is loud.
+        """
+        raise NotImplementedError
+
+    def _load_window(self, append: bool = False):
+        """Load one page_size window at the current offset.
+
+        Tallies for the whole window are computed in a few batched queries via
+        ``Reckoning.assign_tallies_batch`` rather than per row. ``noload`` keeps
+        the self-referential ``child_reckonings`` relationship from eager-loading
+        each concept's entire comment/vote subtree (which it otherwise does,
+        one round-trip per row, against the remote DB).
+        """
+        with rx.session() as session:
+            query = (
+                self._window_query(session)
+                .options(noload(Reckoning.child_reckonings))
+                .offset(self.loaded_count)
+                .limit(self.page_size)
+            )
+            rows = session.exec(query).unique().all()
+            # Multi-entity selects (Trending) return Row tuples; take the model.
+            batch = [r if isinstance(r, Reckoning) else r[0] for r in rows]
+            Reckoning.assign_tallies_batch(
+                batch, self.user.id if self.user else None, session
+            )
+            self.reckonings = (self.reckonings + batch) if append else batch
+            self.loaded_count += len(batch)
+            self.has_more = len(batch) == self.page_size
+
+    def _load_first_window(self):
+        """(Re)load the first window. Used by on_load/search/delete/vote paths."""
+        self.loaded_count = 0
+        self.has_more = True
+        self._load_window(append=False)
+
+    def _append_next_window(self):
+        """Append the next window; triggered by the infinite-scroll sentinel."""
+        if self.is_loading or not self.has_more:
+            return
+        self.is_loading = True
+        try:
+            self._load_window(append=True)
+        finally:
+            self.is_loading = False
+
+    def load_more(self):
+        """Default handler so the shared view's `state.load_more` reference
+        resolves on pages without infinite scroll (no-op: has_more is False).
+        Flat-list subclasses override this to dispatch to their own substate."""
+        self._append_next_window()
+
     def new_comment(self, subject, type, pid):
         result = self.check_login()
         if result:
@@ -282,7 +350,6 @@ class ReckoningsPageState(AppState):
             current_path = self.router.url.path or "/"
             return rx.redirect(current_path)  # return rx.redirect(f"/comments/{cid}")
 
-
     def support_nudge_support(self):
         """Trigger an upvote via the nudge banner."""
         if self.support_nudge_concept_id is None:
@@ -320,31 +387,31 @@ class YourDraftsPageState(ReckoningsPageState):
         yield self.scroll_to_saved_position()
 
     def get_reckonings(self):
-        """Get reckonings of type concept for this user from the database."""
-        with rx.session() as session:
-            # Start with the base query, including the ordering and common conditions
-            query = (
-                select(Reckoning)
-                .order_by(Reckoning.created_at.desc())
-                .where(
-                    _and(
-                        Reckoning.type == ReckoningTypes.draft,
-                        Reckoning.user_id == self.user.id,
-                    )
+        self._load_first_window()
+
+    def load_more(self):
+        self._append_next_window()
+
+    def _window_query(self, session):
+        """Drafts owned by the current user, newest first."""
+        query = (
+            select(Reckoning)
+            .order_by(Reckoning.created_at.desc())
+            .where(
+                _and(
+                    Reckoning.type == ReckoningTypes.draft,
+                    Reckoning.user_id == self.user.id,
                 )
             )
+        )
 
-            # If self.search is provided, add an additional condition to the query
-            if self.search:
-                query = query.where(
-                    func.lower(Reckoning.content).contains(self.search.lower())
-                )
+        # If self.search is provided, add an additional condition to the query
+        if self.search:
+            query = query.where(
+                func.lower(Reckoning.content).contains(self.search.lower())
+            )
 
-            # Execute the query to get the results, ensuring uniqueness
-            self.reckonings = session.exec(query).unique().all()
-
-            for r in self.reckonings:
-                r.compute_tallies(self.user.id)
+        return query
 
 
 class NewConceptsPageState(ReckoningsPageState):
@@ -373,31 +440,31 @@ class NewConceptsPageState(ReckoningsPageState):
         yield self.scroll_to_saved_position()
 
     def get_reckonings(self):
-        """Get reckonings of type concept for this user from the database."""
-        with rx.session() as session:
-            # Start with the base query, applying ordering and a condition that filters by type
-            query = (
-                select(Reckoning)
-                .order_by(Reckoning.created_at.desc())
-                .where(
-                    _or(
-                        Reckoning.type == ReckoningTypes.concept,
-                        Reckoning.type == ReckoningTypes.draft,
-                    )
+        self._load_first_window()
+
+    def load_more(self):
+        self._append_next_window()
+
+    def _window_query(self, session):
+        """All concepts and drafts, newest first."""
+        query = (
+            select(Reckoning)
+            .order_by(Reckoning.created_at.desc())
+            .where(
+                _or(
+                    Reckoning.type == ReckoningTypes.concept,
+                    Reckoning.type == ReckoningTypes.draft,
                 )
             )
+        )
 
-            # If self.search is provided, add an additional condition to the query
-            if self.search:
-                query = query.where(
-                    func.lower(Reckoning.content).contains(self.search.lower())
-                )
+        # If self.search is provided, add an additional condition to the query
+        if self.search:
+            query = query.where(
+                func.lower(Reckoning.content).contains(self.search.lower())
+            )
 
-            # Execute the query to get the results
-            self.reckonings = session.exec(query).all()
-
-            for r in self.reckonings:
-                r.compute_tallies(self.user.id)
+        return query
 
 
 class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
@@ -426,53 +493,51 @@ class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
         yield self.scroll_to_saved_position()
 
     def get_reckonings(self):
-        """Get reckonings of type concept for this user from the database."""
-        with rx.session() as session:
-            # Create an alias for child reckonings to differentiate from parent reckonings in the self-join
-            ChildReckoning = aliased(Reckoning)
+        self._load_first_window()
 
-            # Subquery to count the number of "up_vote" type child reckonings for each parent
-            up_vote_count_subquery = (
-                select(
-                    ChildReckoning.parent_reckoning_id,
-                    func.count(ChildReckoning.id).label("up_vote_count"),
-                )
-                .where(ChildReckoning.type == ReckoningTypes.up_vote)
-                .group_by(ChildReckoning.parent_reckoning_id)
-                .subquery()
+    def load_more(self):
+        self._append_next_window()
+
+    def _window_query(self, session):
+        """Concepts ordered by upvote count (desc), then newest first."""
+        # Create an alias for child reckonings to differentiate from parent reckonings in the self-join
+        ChildReckoning = aliased(Reckoning)
+
+        # Subquery to count the number of "up_vote" type child reckonings for each parent
+        up_vote_count_subquery = (
+            select(
+                ChildReckoning.parent_reckoning_id,
+                func.count(ChildReckoning.id).label("up_vote_count"),
+            )
+            .where(ChildReckoning.type == ReckoningTypes.up_vote)
+            .group_by(ChildReckoning.parent_reckoning_id)
+            .subquery()
+        )
+
+        # Start building the base query for selecting reckonings and the count of their up_votes
+        # Adjust the where condition as needed to filter by specific reckoning types
+        query = (
+            select(Reckoning, up_vote_count_subquery.c.up_vote_count)
+            .outerjoin(
+                up_vote_count_subquery,
+                Reckoning.id == up_vote_count_subquery.c.parent_reckoning_id,
+            )
+            .where(Reckoning.type == ReckoningTypes.concept)
+        )
+
+        # Conditionally add the search filter if `self.search` is provided
+        if self.search:
+            query = query.where(
+                func.lower(Reckoning.content).contains(self.search.lower())
             )
 
-            # Start building the base query for selecting reckonings and the count of their up_votes
-            # Adjust the where condition as needed to filter by specific reckoning types
-            query = (
-                select(Reckoning, up_vote_count_subquery.c.up_vote_count)
-                .outerjoin(
-                    up_vote_count_subquery,
-                    Reckoning.id == up_vote_count_subquery.c.parent_reckoning_id,
-                )
-                .where(Reckoning.type == ReckoningTypes.concept)
-            )
+        # Apply ordering by up_vote count and then by created_at timestamp
+        query = query.order_by(
+            up_vote_count_subquery.c.up_vote_count.desc(),
+            Reckoning.created_at.desc(),
+        )
 
-            # Conditionally add the search filter if `self.search` is provided
-            if self.search:
-                query = query.where(
-                    func.lower(Reckoning.content).contains(self.search.lower())
-                )
-
-            # Apply ordering by up_vote count and then by created_at timestamp
-            query = query.order_by(
-                up_vote_count_subquery.c.up_vote_count.desc(),
-                Reckoning.created_at.desc(),
-            )
-
-            # Execute the query and fetch all results
-            results = session.exec(query).unique().all()
-
-            # Extract Reckoning objects from the results
-            self.reckonings = [result[0] for result in results]
-
-            for r in self.reckonings:
-                r.compute_tallies(self.user.id)
+        return query
 
 
 class TrendingConceptsBySupportPageState(ReckoningsPageState):
@@ -501,58 +566,56 @@ class TrendingConceptsBySupportPageState(ReckoningsPageState):
         yield self.scroll_to_saved_position()
 
     def get_reckonings(self):
-        """Get reckonings of type concept for this user from the database."""
-        with rx.session() as session:
-            # Create an alias for child reckonings to differentiate from parent reckonings in the self-join
-            ChildReckoning = aliased(Reckoning)
+        self._load_first_window()
 
-            # Subquery to count the number of supportive comments (supports) type child reckonings for each parent
-            supportive_comments_count_subquery = (
-                select(
-                    ChildReckoning.parent_reckoning_id,
-                    func.count(ChildReckoning.id).label("supportive_comments_count"),
-                )
-                .where(
-                    ChildReckoning.type == ReckoningTypes.support
-                )  # Adjust this condition as needed
-                .group_by(ChildReckoning.parent_reckoning_id)
-                .subquery()
+    def load_more(self):
+        self._append_next_window()
+
+    def _window_query(self, session):
+        """Concepts ordered by supportive-comment count, then created_at (asc)."""
+        # Create an alias for child reckonings to differentiate from parent reckonings in the self-join
+        ChildReckoning = aliased(Reckoning)
+
+        # Subquery to count the number of supportive comments (supports) type child reckonings for each parent
+        supportive_comments_count_subquery = (
+            select(
+                ChildReckoning.parent_reckoning_id,
+                func.count(ChildReckoning.id).label("supportive_comments_count"),
+            )
+            .where(
+                ChildReckoning.type == ReckoningTypes.support
+            )  # Adjust this condition as needed
+            .group_by(ChildReckoning.parent_reckoning_id)
+            .subquery()
+        )
+
+        # Start building the base query for selecting reckonings and the count of their supportive comments
+        query = (
+            select(
+                Reckoning,
+                supportive_comments_count_subquery.c.supportive_comments_count,
+            )
+            .outerjoin(
+                supportive_comments_count_subquery,
+                Reckoning.id
+                == supportive_comments_count_subquery.c.parent_reckoning_id,
+            )
+            .where(Reckoning.type == ReckoningTypes.concept)
+        )
+
+        # Conditionally add the search filter if `self.search` is provided
+        if self.search:
+            query = query.where(
+                func.lower(Reckoning.content).contains(self.search.lower())
             )
 
-            # Start building the base query for selecting reckonings and the count of their supportive comments
-            query = (
-                select(
-                    Reckoning,
-                    supportive_comments_count_subquery.c.supportive_comments_count,
-                )
-                .outerjoin(
-                    supportive_comments_count_subquery,
-                    Reckoning.id
-                    == supportive_comments_count_subquery.c.parent_reckoning_id,
-                )
-                .where(Reckoning.type == ReckoningTypes.concept)
-            )
+        # Apply ordering by supportive comments count and then by created_at timestamp
+        query = query.order_by(
+            supportive_comments_count_subquery.c.supportive_comments_count.asc(),
+            Reckoning.created_at.asc(),
+        )
 
-            # Conditionally add the search filter if `self.search` is provided
-            if self.search:
-                query = query.where(
-                    func.lower(Reckoning.content).contains(self.search.lower())
-                )
-
-            # Apply ordering by supportive comments count and then by created_at timestamp
-            query = query.order_by(
-                supportive_comments_count_subquery.c.supportive_comments_count.asc(),
-                Reckoning.created_at.asc(),
-            )
-
-            # Execute the query and fetch all results
-            results = session.exec(query).unique().all()
-
-            # Extract Reckoning objects from the results
-            self.reckonings = [result[0] for result in results]
-
-            for r in self.reckonings:
-                r.compute_tallies(self.user.id)
+        return query
 
 
 class YourConceptsPageState(ReckoningsPageState):
@@ -583,33 +646,31 @@ class YourConceptsPageState(ReckoningsPageState):
     """The state for the your reckonings page."""
 
     def get_reckonings(self):
-        """Get reckonings of type concept for this user from the database."""
-        with rx.session() as session:
-            # Start with the base query
-            query = select(Reckoning).order_by(Reckoning.created_at.desc())
+        self._load_first_window()
 
-            # Define common conditions
-            common_conditions = [
-                Reckoning.type != ReckoningTypes.concept,
-                Reckoning.user_id == self.user.id,
-                Reckoning.type != ReckoningTypes.draft,
-            ]
+    def load_more(self):
+        self._append_next_window()
 
-            # If self.search is provided, add the search condition
-            if self.search:
-                common_conditions.append(
-                    func.lower(Reckoning.content).contains(self.search.lower())
+    def _window_query(self, session):
+        """The current user's published concepts, newest first."""
+        query = (
+            select(Reckoning)
+            .order_by(Reckoning.created_at.desc())
+            .where(
+                _and(
+                    Reckoning.type == ReckoningTypes.concept,
+                    Reckoning.user_id == self.user.id,
                 )
+            )
+        )
 
-            # Apply conditions to the query
-            query = query.where(_and(*common_conditions))
+        # If self.search is provided, add the search condition
+        if self.search:
+            query = query.where(
+                func.lower(Reckoning.content).contains(self.search.lower())
+            )
 
-            # Execute the query
-            self.reckonings = session.exec(query).unique().all()
-
-            for r in self.reckonings:
-                r.cache_parent_details(self.user.id)
-                r.compute_tallies(self.user.id)
+        return query
 
 
 class ComparePageState(ReckoningsPageState):
@@ -665,9 +726,7 @@ class ComparePageState(ReckoningsPageState):
             if concept.user_id != self.user.id:
                 self.dismiss_support_nudge()
             else:
-                self.show_support_nudge = (
-                    self.support_nudge_concept_id == concept.id
-                )
+                self.show_support_nudge = self.support_nudge_concept_id == concept.id
             primary_keys, results = find_similar_texts_with_join(concept.id, 0.75, 10)
             similar_ids = [pk for pk in primary_keys if pk != concept.id]
             self.nudge_has_matches = bool(similar_ids)
@@ -701,7 +760,7 @@ class ComparePageState(ReckoningsPageState):
                 r.similarity = round(
                     ((results_dict[r.id] - 1) * -1), 2
                 )  # reverse scale from 0 - infinity to 1 - 0
-                r.compute_tallies(self.user.id)
+                r.compute_tallies(self.user.id, session=session)
 
 
 class ConceptPageState(ReckoningsPageState):
@@ -738,7 +797,7 @@ class ConceptPageState(ReckoningsPageState):
                 ).first()
             ]
             for r in self.reckonings:
-                r.compute_tallies(self.user.id)
+                r.compute_tallies(self.user.id, session=session)
 
     @rx.var
     def concept_id(self) -> str:
@@ -814,7 +873,9 @@ class CommentsPageState(ReckoningsPageState):
             child.depth = (
                 "4px" if depth == 0 else (str(depth * 20) + "px")
             )  # Set the depth for each child
-            child.compute_tallies(self.user.id if self.user else None)
+            child.compute_tallies(
+                self.user.id if self.user else None, session=session
+            )
             self.reckonings.append(child)
             if max_depth == -1 or depth < max_depth - 1:
                 self.fetch_children(session, child.id, depth + 1, max_depth)
@@ -827,7 +888,9 @@ class CommentsPageState(ReckoningsPageState):
                 select(Reckoning).where(Reckoning.id == self.reckoning_id)
             ).first()
             if self.parent is not None:
-                self.parent.compute_tallies(self.user.id if self.user else None)
+                self.parent.compute_tallies(
+                    self.user.id if self.user else None, session=session
+                )
 
                 # Recursively fetch children with conditions applied
                 max_depth = 3
@@ -939,11 +1002,9 @@ def parent_reckoning(state):
                     (state.parent.type == 0),
                     rx.fragment(
                         rx.cond(
-                            (
-                                state.parent.user_vote_history == ReckoningTypes.no_vote
-                            ),
+                            (state.parent.user_vote_history == ReckoningTypes.no_vote),
                             rx.fragment(
-                support_button,
+                                support_button,
                                 rx.text(state.parent.up_votes),
                                 no_downvote_concept_button(
                                     on_click=state.vote_on_concept(
@@ -955,9 +1016,7 @@ def parent_reckoning(state):
                             None,
                         ),
                         rx.cond(
-                            (
-                                state.parent.user_vote_history == ReckoningTypes.up_vote
-                            ),
+                            (state.parent.user_vote_history == ReckoningTypes.up_vote),
                             rx.fragment(
                                 upvote_concept_button(on_click=support_action),
                                 rx.text(state.parent.up_votes),
@@ -1078,8 +1137,8 @@ def render_comment(state, c: Reckoning):
                 rx.cond(
                     (c.parent_type == ReckoningTypes.concept),
                     rx.fragment(
-                        rx.markdown(
-                            c.parent_content,
+                        SafeMarkdown.create(
+                            content=c.parent_content,
                             class_name="prose",
                             max_width="100%",
                             **read_only_text_style,
@@ -1184,10 +1243,10 @@ def render_comment(state, c: Reckoning):
                                         ),
                                     ),
                                 ),
-                                **comment_badge_style,
+                                 **comment_badge_style,
                             ),
-                            rx.markdown(
-                                c.parent_content,
+                            SafeMarkdown.create(
+                                content=c.parent_content,
                                 class_name="prose",
                                 max_width="100%",
                                 **read_only_text_style,
@@ -1245,8 +1304,8 @@ def render_comment(state, c: Reckoning):
                         ),
                         **comment_badge_style,
                     ),
-                    rx.markdown(
-                        c.content,
+                    SafeMarkdown.create(
+                        content=c.content,
                         class_name="prose",
                         max_width="100%",
                         **read_only_text_style,
@@ -1379,8 +1438,8 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
 
     return rx.grid(
         rx.box(
-            rx.markdown(
-                content,
+            SafeMarkdown.create(
+                content=content,
                 class_name="prose",
                 max_width="100%",
                 **read_only_text_style,
@@ -1539,10 +1598,47 @@ def reckoning(state, r: Reckoning):
     )
 
 
-def page(state, *args, **kwargs):
+def page(state, *args, infinite_scroll=False, **kwargs):
+    # Infinite-scroll UI (sentinel + hidden trigger) is only emitted for the
+    # flat-list pages that implement windowing (_window_query). Pages like
+    # Compare/Concept/Comments define their own get_reckonings and must NOT get
+    # the sentinel/trigger, or the global observer could click the trigger and
+    # reach the base _window_query (NotImplementedError).
+    grid_children = [
+        rx.foreach(
+            state.reckonings,
+            lambda r: reckoning(state, r),
+        ),
+    ]
+    trailing = []
+    if infinite_scroll:
+        grid_children.append(
+            # Sentinel: last grid item, full width, so it sits below all cards.
+            # Removed once there are no more rows to load.
+            rx.cond(
+                state.has_more,
+                rx.box(
+                    id="infinite-scroll-sentinel",
+                    width="100%",
+                    height="1px",
+                    style={"gridColumn": "1 / -1"},
+                ),
+                rx.fragment(),
+            )
+        )
+        # Hidden button the infinite-scroll observer (assets/scrolling.js)
+        # "clicks" to request the next window.
+        trailing.append(
+            rx.button(
+                "Load more",
+                id="infinite-load-trigger",
+                on_click=state.load_more,
+                display="none",
+            )
+        )
+
     return container(
-        rx.html(
-            """
+        rx.html("""
             <style>
             @keyframes supportPulse {
               0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(1, 204, 93, 0.45); }
@@ -1553,18 +1649,15 @@ def page(state, *args, **kwargs):
               animation: supportPulse 1.2s ease-in-out infinite;
             }
             </style>
-            """
-        ),
+            """),
         *args,
         support_nudge_banner(state),
         rx.grid(
-            rx.foreach(
-                state.reckonings,
-                lambda r: reckoning(state, r),
-            ),
+            *grid_children,
             h="100vh",
             gap=4,
         ),
+        *trailing,
         comment_dialog(),
         concept_dialog(),
         feedback_dialog(options=reckoning_feedback_options),
@@ -1572,13 +1665,13 @@ def page(state, *args, **kwargs):
     )
 
 
-@rx.page(
-    route="/your_concepts", on_load=YourConceptsPageState.on_load, **page_params
-)
+@rx.page(route="/your_concepts", on_load=YourConceptsPageState.on_load, **page_params)
 def your_concepts():
     """The your reckonings page."""
     return page(
-        YourConceptsPageState, navbar(your_concepts_navbar(YourConceptsPageState))
+        YourConceptsPageState,
+        navbar(your_concepts_navbar(YourConceptsPageState)),
+        infinite_scroll=True,
     )
 
 
@@ -1592,6 +1685,7 @@ def trending_concepts_by_upvotes():
     return page(
         TrendingConceptsByUpvotesPageState,
         navbar(trending_concepts_navbar(TrendingConceptsByUpvotesPageState)),
+        infinite_scroll=True,
     )
 
 
@@ -1605,19 +1699,28 @@ def trending_concepts_by_support():
     return page(
         TrendingConceptsBySupportPageState,
         navbar(trending_concepts_navbar(TrendingConceptsBySupportPageState)),
+        infinite_scroll=True,
     )
 
 
 @rx.page(route="/new_concepts", on_load=NewConceptsPageState.on_load, **page_params)
 def new_concepts():
     """The new concepts page."""
-    return page(NewConceptsPageState, navbar(search_navbar(NewConceptsPageState)))
+    return page(
+        NewConceptsPageState,
+        navbar(search_navbar(NewConceptsPageState)),
+        infinite_scroll=True,
+    )
 
 
 @rx.page(route="/your_drafts", on_load=YourDraftsPageState.on_load, **page_params)
 def your_drafts():
     """The your drafts page."""
-    return page(YourDraftsPageState, navbar(search_navbar(YourConceptsPageState)))
+    return page(
+        YourDraftsPageState,
+        navbar(search_navbar(YourDraftsPageState)),
+        infinite_scroll=True,
+    )
 
 
 @rx.page(route="/compare/[rid]", on_load=ComparePageState.on_load, **page_params)

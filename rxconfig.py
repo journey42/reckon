@@ -5,12 +5,20 @@ config = rx.Config(
     app_name="rhiz",
     #db_url="sqlite:///reflex.db",
     db_url=os.environ.get('DB_URL', 'postgresql://postgres:password@localhost:5432/reckon'),
-    #db_url="postgresql://reckon:+bX2NBT~;oa?@reckon-db.postgres.database.azure.com:5432/reckon",
     api_url=os.environ.get('API_URL', 'http://localhost:8000'),
     show_built_with_reflex=False,
     env=rx.Env.DEV,
-    state_auto_setters=False,
-    disable_plugins=["reflex.plugins.sitemap.SitemapPlugin"],
+    plugins=[
+        rx.plugins.RadixThemesPlugin(
+            theme=rx.theme(
+                appearance="light",
+                has_background=True,
+                radius="full",
+                accent_color="gray",
+            ),
+        ),
+    ],
+    disable_plugins=[rx.plugins.SitemapPlugin],
     tailwind={
         "theme": {
             "extend": {},

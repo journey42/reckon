@@ -4,10 +4,10 @@ import os
 import reflex as rx
 from typing import Optional, List
 from sqlmodel import Field, Relationship, select
-from datetime import datetime, timezone
+from sqlalchemy import text
+from datetime import datetime
 import asyncio
 from dataclasses import dataclass
-from math import gcd
 from rhiz.utils.time import calculate_elapsed_time
 
 
@@ -77,17 +77,21 @@ class Reckoning(rx.Model, table=True):
     """A table of Reckonings."""
 
     content: str = Field()
-    type: int = Field()
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    type: int = Field(index=True)
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, nullable=False, index=True
+    )
     updated_at: datetime = Field(nullable=True)
 
     # textembedding: Optional[TextEmbedding] = Relationship(back_populates="reckoning")
 
-    user_id: int = Field(foreign_key="user.id", nullable=True)
+    user_id: int = Field(foreign_key="user.id", nullable=True, index=True)
 
     user: Optional["User"] = Relationship(back_populates="reckonings")
 
-    parent_reckoning_id: Optional[int] = Field(default=None, foreign_key="reckoning.id")
+    parent_reckoning_id: Optional[int] = Field(
+        default=None, foreign_key="reckoning.id", index=True
+    )
 
     # Define the relationship with remote_side
     parent_reckoning: Optional["Reckoning"] = Relationship(
@@ -125,29 +129,34 @@ class Reckoning(rx.Model, table=True):
     parent_total_comments: Optional[int] = 0
     parent_elapsed_time: Optional[str] = ""
 
-    def cache_parent_details(self, uid: int):
+    def cache_parent_details(self, uid: int, session=None):
         try:
-            with rx.session() as session:
-                # session.expire_on_commit = False
-                parent = session.exec(
-                    select(Reckoning).where(Reckoning.id == self.parent_reckoning_id)
-                ).first()
-                self.parent_content = parent.content
-                self.parent_id = parent.id
-                self.parent_type = parent.type
-                parent.compute_tallies(uid)
-                if parent.type == ReckoningTypes.concept:
-                    self.parent_down_votes = parent.down_votes
-                    self.parent_up_votes = parent.up_votes
-
-                    self.parent_user_vote_history = parent.user_vote_history
-                    self.parent_total_comments = parent.total_comments
-                self.parent_supports = parent.supports
-                self.parent_detracts = parent.detracts
-                self.parent_points_of_order = parent.points_of_order
-                self.parent_elapsed_time = calculate_elapsed_time(parent.created_at)
-        except:
+            if session is None:
+                with rx.session() as sess:
+                    self._cache_parent_details_with_session(uid, sess)
+            else:
+                self._cache_parent_details_with_session(uid, session)
+        except Exception:
             pass
+
+    def _cache_parent_details_with_session(self, uid: int, session):
+        parent = session.exec(
+            select(Reckoning).where(Reckoning.id == self.parent_reckoning_id)
+        ).first()
+        self.parent_content = parent.content
+        self.parent_id = parent.id
+        self.parent_type = parent.type
+        parent.compute_tallies(uid, session=session)
+        if parent.type == ReckoningTypes.concept:
+            self.parent_down_votes = parent.down_votes
+            self.parent_up_votes = parent.up_votes
+
+            self.parent_user_vote_history = parent.user_vote_history
+            self.parent_total_comments = parent.total_comments
+        self.parent_supports = parent.supports
+        self.parent_detracts = parent.detracts
+        self.parent_points_of_order = parent.points_of_order
+        self.parent_elapsed_time = calculate_elapsed_time(parent.created_at)
 
     def tally_child_comments(self, reckoning):
         """
@@ -158,6 +167,10 @@ class Reckoning(rx.Model, table=True):
 
         Returns:
         - int: Total number of children and sub-children reckonings
+
+        NOTE: This walks lazy-loaded relationships and issues one query per
+        node (N+1). It is kept only as a fallback when no session is available;
+        the hot path uses ``_count_descendant_comments`` instead.
         """
         # Base case: If there are no child reckonings, return 0
         if not reckoning.child_reckonings:
@@ -175,7 +188,41 @@ class Reckoning(rx.Model, table=True):
 
         return total_children
 
-    def compute_tallies(self, uid: int) -> int:
+    def _count_descendant_comments(self, session) -> int:
+        """Count all non-vote descendants of this reckoning in a single query.
+
+        Replaces the recursive ``tally_child_comments`` walk (which fired one
+        SELECT per node) with a single recursive CTE. Votes are leaf nodes, so
+        excluding them is equivalent to the old "don't count, don't recurse"
+        behaviour.
+        """
+        from sqlalchemy import text
+
+        result = session.execute(
+            text(
+                """
+                WITH RECURSIVE descendants AS (
+                    SELECT id, type
+                    FROM reckoning
+                    WHERE parent_reckoning_id = :root
+                    UNION ALL
+                    SELECT r.id, r.type
+                    FROM reckoning r
+                    JOIN descendants d ON r.parent_reckoning_id = d.id
+                )
+                SELECT count(*) FROM descendants
+                WHERE type NOT IN (:up_vote, :down_vote)
+                """
+            ),
+            {
+                "root": self.id,
+                "up_vote": ReckoningTypes.up_vote,
+                "down_vote": ReckoningTypes.down_vote,
+            },
+        ).first()
+        return result[0] if result else 0
+
+    def compute_tallies(self, uid: int, session=None) -> int:
         for child in self.child_reckonings:
             if child.type == ReckoningTypes.support:
                 self.supports += 1
@@ -192,7 +239,10 @@ class Reckoning(rx.Model, table=True):
             else:
                 self.points_of_order += 1
 
-        self.total_comments = self.tally_child_comments(self)
+        if session is not None:
+            self.total_comments = self._count_descendant_comments(session)
+        else:
+            self.total_comments = self.tally_child_comments(self)
         self.elapsed_time = calculate_elapsed_time(self.created_at)
         # # Calculate GCD for simplifying the ratio, avoid division by zero
         # if self.detracts != 0 and self.supports != 0:
@@ -206,6 +256,104 @@ class Reckoning(rx.Model, table=True):
         #     ratio = "N/A"  # If detracts are zero, we can't form a meaningful ratio
 
         # self.supports_detracts_ratio = f"{self.supports} {ratio} {self.detracts}"
+
+    @staticmethod
+    def assign_tallies_batch(reckonings, uid, session):
+        """Compute display tallies for a list of concepts in 3 batched queries.
+
+        Equivalent to calling ``compute_tallies`` on each reckoning, but instead
+        of per-row round-trips (loading each concept's children + a recursive
+        CTE each), it issues three set-based queries for the whole list. Against
+        a remote DB this turns ~2 round-trips per row into 3 total.
+        """
+        if not reckonings:
+            return
+        ids = [r.id for r in reckonings]
+        by_id = {r.id: r for r in reckonings}
+
+        for r in reckonings:
+            r.supports = r.detracts = r.up_votes = r.down_votes = 0
+            r.points_of_order = 0
+            r.total_comments = 0
+            r.user_vote_history = ReckoningTypes.no_vote
+            r.elapsed_time = calculate_elapsed_time(r.created_at)
+
+        # 1) Direct-child counts grouped by type.
+        for pid, ctype, n in session.execute(
+            text(
+                """
+                SELECT parent_reckoning_id, type, count(*)
+                FROM reckoning
+                WHERE parent_reckoning_id = ANY(:ids)
+                GROUP BY parent_reckoning_id, type
+                """
+            ),
+            {"ids": ids},
+        ):
+            r = by_id.get(pid)
+            if r is None:
+                continue
+            if ctype == ReckoningTypes.support:
+                r.supports = n
+            elif ctype == ReckoningTypes.detract:
+                r.detracts = n
+            elif ctype == ReckoningTypes.up_vote:
+                r.up_votes = n
+            elif ctype == ReckoningTypes.down_vote:
+                r.down_votes = n
+            else:
+                r.points_of_order += n
+
+        # 2) The current user's own vote on each concept (if logged in).
+        if uid is not None:
+            for pid, ctype in session.execute(
+                text(
+                    """
+                    SELECT parent_reckoning_id, type
+                    FROM reckoning
+                    WHERE parent_reckoning_id = ANY(:ids)
+                      AND user_id = :uid
+                      AND type IN (:up, :down)
+                    """
+                ),
+                {
+                    "ids": ids,
+                    "uid": uid,
+                    "up": ReckoningTypes.up_vote,
+                    "down": ReckoningTypes.down_vote,
+                },
+            ):
+                r = by_id.get(pid)
+                if r is not None:
+                    r.user_vote_history = ctype
+
+        # 3) Total non-vote descendants per concept via one recursive CTE.
+        for root, n in session.execute(
+            text(
+                """
+                WITH RECURSIVE d AS (
+                    SELECT r.id, r.type, r.parent_reckoning_id AS root
+                    FROM reckoning r
+                    WHERE r.parent_reckoning_id = ANY(:ids)
+                    UNION ALL
+                    SELECT x.id, x.type, dd.root
+                    FROM reckoning x
+                    JOIN d dd ON x.parent_reckoning_id = dd.id
+                )
+                SELECT root, count(*) FILTER (WHERE type NOT IN (:up, :down))
+                FROM d
+                GROUP BY root
+                """
+            ),
+            {
+                "ids": ids,
+                "up": ReckoningTypes.up_vote,
+                "down": ReckoningTypes.down_vote,
+            },
+        ):
+            r = by_id.get(root)
+            if r is not None:
+                r.total_comments = n
 
 
 class Feedback(rx.Model, table=True):
@@ -237,8 +385,8 @@ class Log(rx.Model, table=True):
 
 
 def _is_toolbar_enabled() -> bool:
-    """Return True if the SunEditor toolbar should be enabled."""
-    value = os.getenv("SUNEDITOR_TOOLBAR_ENABLED", "1")
+    """Return True if the editor toolbar should be enabled."""
+    value = os.getenv("TOOLBAR_ENABLED", "1")
     return value.strip().lower() not in {"0", "false", "off"}
 
 
@@ -247,7 +395,7 @@ class AppState(rx.State):
 
     user: Optional[User] = None
     is_running: bool = False
-    suneditor_toolbar_enabled: bool = _is_toolbar_enabled()
+    toolbar_enabled: bool = _is_toolbar_enabled()
     show_support_nudge: bool = False
     support_nudge_concept_id: Optional[int] = None
     nudge_has_matches: bool = False
@@ -392,10 +540,7 @@ class AppState(rx.State):
 
         await asyncio.sleep(collapse_delay)
         async with self:
-            if (
-                self.show_support_nudge
-                and self.support_nudge_concept_id == concept_id
-            ):
+            if self.show_support_nudge and self.support_nudge_concept_id == concept_id:
                 self.support_nudge_collapsed = True
 
         remaining = pulse_duration - collapse_delay

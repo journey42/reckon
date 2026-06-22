@@ -3,6 +3,7 @@
 from .container import container
 from .navbar import navbar
 from .editor import editor
+from .tiptap_editor import TiptapEditor
 from .feedback_dialog import (
     feedback_dialog,
     FeedbackDialogState,

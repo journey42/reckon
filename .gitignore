@@ -8,7 +8,9 @@ reflex.db
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
-.ruff_cache
-.mypy_cache
+.ruff_cache/
+.mypy_cache/
 .env
 AGENTS.md
+.playwright-mcp/
+alembic/

@@ -2,37 +2,7 @@
 
 import os
 import reflex as rx
-from .pages import (
-    home,
-    login,
-    logged_out,
-    about,
-    guidelines,
-    privacy,
-    terms,
-    signup,
-    register,
-    reset_password,
-    reset_password_via_email,
-    request_reset_password,
-    reset_password_via_email_request_result,
-    reset_password_successful,
-    reset_password_via_email_successful,
-    signup_successful,
-    profile,
-    profile_updated,
-    users,
-    log,
-    new_concepts,
-    trending_concepts_by_upvotes,
-    trending_concepts_by_support,
-    your_concepts,
-    comments,
-    concept,
-    your_drafts,
-    compare,
-)
-from rhiz.styles import rhiz_green
+import rhiz.pages
 from posthog import Posthog
 
 
@@ -48,7 +18,9 @@ def _init_posthog():
 posthog = _init_posthog()
 
 # posthog.capture('test-id', 'test-event')
-posthog_script = rx.script(src="/posthog.js") if os.getenv("POSTHOG_PROJECT_API_KEY") else None
+posthog_script = (
+    rx.script(src="/posthog.js") if os.getenv("POSTHOG_PROJECT_API_KEY") else None
+)
 
 head_scripts = [rx.script(src="/scrolling.js")]
 if posthog_script is not None:
@@ -56,7 +28,4 @@ if posthog_script is not None:
 
 app = rx.App(
     head_components=head_scripts,
-    theme=rx.theme(
-        appearance="light", has_background=True, radius="full", accent_color="gray"
-    ),
 )

@@ -1,11 +1,10 @@
 # Getting Started
 Local Setup
 
-Install Python dependencies (suneditor is installed without pulling its pinned reflex):
+Install Python dependencies:
 
 ```
 pip install -r requirements.txt
-pip install reflex-suneditor==0.0.11 --no-deps
 ```
 
 Initialize the database first:

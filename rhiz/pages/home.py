@@ -4,10 +4,9 @@ import reflex as rx
 from datetime import datetime, timezone
 from rhiz.state.base import AppState, Reckoning, ReckoningTypes
 from rhiz.styles import page_params, dialog_button_style
-from rhiz.components.buttons import submit_button
 from rhiz.components.container import container
 from rhiz.components.navbar import navbar
-from reflex_suneditor import Editor, EditorOptions
+from rhiz.components.tiptap_editor import TiptapEditor
 from rhiz.utils.db import insert_text_with_embedding
 from rhiz.utils.parsing import remove_html_tags
 
@@ -67,55 +66,14 @@ class HomePageState(AppState):
 
 def composer():
     """The composer for new concepts."""
-    # Configure the editor options with custom button list to match TipTap
-    custom_button_list = [
-        ["undo", "redo"],  # Undo/Redo
-        ["bold", "italic", "underline", "strike"],  # Text formatting
-        ["formatBlock", "fontSize"],  # For headings, paragraph and font size
-        ["list", "outdent", "indent"],  # Lists and indentation
-        ["blockquote", "horizontalRule"],  # Quotes and dividers
-        ["link", "image", "video"],  # Media insertion
-        ["removeFormat"],  # Clear formatting
-    ]
-
-    editor_options_with_toolbar = EditorOptions(
-        button_list=custom_button_list,
-        default_tag="p",
-        mode="classic",
-    )
-    editor_options_without_toolbar = EditorOptions(
-        default_tag="p",
-        mode="classic",
-        show_path_label=False,
-        char_counter=False,
-    )
-
     return rx.vstack(
         rx.box(
-            rx.cond(
-                HomePageState.suneditor_toolbar_enabled,
-                Editor.create(
-                    set_options=editor_options_with_toolbar,
-                    set_contents=HomePageState.concept,
-                    placeholder="What is your concept?",
-                    on_change=HomePageState.set_concept,
-                    height="320px",
-                    width="100%",
-                    set_all_plugins=True,
-                    hide_toolbar=False,
-                    disable_toolbar=False,
-                ),
-                Editor.create(
-                    set_options=editor_options_without_toolbar,
-                    set_contents=HomePageState.concept,
-                    placeholder="What is your concept?",
-                    on_change=HomePageState.set_concept,
-                    height="320px",
-                    width="100%",
-                    set_all_plugins=True,
-                    hide_toolbar=True,
-                    disable_toolbar=True,
-                ),
+            TiptapEditor.create(
+                value=HomePageState.concept,
+                placeholder="What is your concept?",
+                on_change=HomePageState.set_concept,
+                height="320px",
+                toolbar_enabled=False,
             ),
             class_name="editor-container",
             width="100%",

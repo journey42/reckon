@@ -4,7 +4,7 @@ import reflex as rx
 from datetime import datetime, timezone
 from typing import List, Optional
 from rhiz.styles import input_style, dialog_button_style
-from rhiz.state.base import AppState, Feedback, Reckoning
+from rhiz.state.base import AppState, Feedback
 from rhiz.components.buttons import submit_button, close_button
 
 general_feedback_options: List[str] = ["Technical Problem", "Rhetorical Issue", "Other"]

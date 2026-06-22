@@ -18,8 +18,6 @@ RUN python -m venv $VIRTUAL_ENV
 
 # Install app requirements and reflex inside virtualenv
 RUN pip install -r requirements.txt
-# Install suneditor plugin without pulling old reflex dependency
-RUN pip install reflex-suneditor==0.0.11 --no-deps
 
 # Deploy templates and prepare app
 RUN reflex init

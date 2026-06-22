@@ -23,13 +23,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install reflex-suneditor==0.0.11 --no-deps
-          python -m pip install reflex==0.8.17
 
       - name: Export frontend
         env:
           API_URL: https://rhiz-backend.politefield-c0f001d2.eastus.azurecontainerapps.io
-          SUNEDITOR_TOOLBAR_ENABLED: 0
+          TOOLBAR_ENABLED: 0
         run: reflex export --frontend-only --no-zip
 
       - name: Prepare static artifacts

@@ -9,7 +9,6 @@ from rhiz.styles import (
     form_box_style,
     link_style,
     page_params,
-    page_footer_style,
 )
 
 

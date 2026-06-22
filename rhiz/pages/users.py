@@ -197,7 +197,7 @@ class UserEditorState(AppState):
                         user.email = val["data"]
                     elif col == column_names.enabled:
                         user.enabled = val["data"]
-                        if user.enabled == True:
+                        if user.enabled:
                             yield WelcomeEmailConfirmationDialogState.set_username(
                                 user.username
                             )

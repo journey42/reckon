@@ -97,8 +97,7 @@ def guidelines():
     return info_page(guidelines_text)
 
 
-terms_text = _format_numbered_sections(
-    """
+terms_text = _format_numbered_sections("""
 **Terms and Conditions**
 
 Last updated: 2024-01-24
@@ -287,8 +286,7 @@ BY USING SERVICE OR OTHER SERVICES PROVIDED BY US, YOU ACKNOWLEDGE THAT YOU HAVE
 22. **Contact Us**
 
 Please send your feedback, comments, requests for technical support by email: **support@rhiz.ai**.
-"""
-)
+""")
 
 
 @rx.page(on_load=AppState.check_login(), **page_params)
@@ -297,8 +295,7 @@ def terms():
     return info_page(terms_text)
 
 
-privacy_text = _format_numbered_sections(
-    """
+privacy_text = _format_numbered_sections("""
 **Privacy Policy**
 
 Effective date: 2024-01-24
@@ -582,8 +579,7 @@ You are advised to review this Privacy Policy periodically for any changes. Chan
 
 If you have any questions about this Privacy Policy, please contact us by email: **support@rhiz.ai**.
 
-"""
-)
+""")
 
 
 @rx.page(on_load=AppState.check_login(), **page_params)

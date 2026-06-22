@@ -122,13 +122,8 @@ meta = [
     }
 ]
 
-page_params = dict(
-    title="Rhiz", description="Speak Together", image=favicon, meta=meta
-)
+page_params = dict(title="Rhiz", description="Speak Together", image=favicon, meta=meta)
 
-from reflex.components.datadisplay.dataeditor import (
-    DataEditorTheme,
-)
 
 rhiz_data_editor_theme = {
     "accent_color": rhiz_dark_green,

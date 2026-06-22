@@ -1,5 +1,5 @@
 import reflex as rx
-from rhiz.styles import image_button_style, dialog_button_style
+from rhiz.styles import image_button_style
 
 variant = "ghost"
 

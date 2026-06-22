@@ -5,19 +5,9 @@ from sqlalchemy import pool
 
 from alembic import context
 
-def include_object(object, name, type_, reflected, compare_to):
-    print(type_)
-    print(name)
-    if type_ == "table" and name in ["embeddings"]:
-        print("returning after embeddings")
-        return False
-    else:
-        return True
-
-
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
-config = context.config(include_object=include_object)
+config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -54,7 +44,6 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        include_object=include_object
     )
 
     with context.begin_transaction():
@@ -76,7 +65,7 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata, include_object=include_object
+            connection=connection, target_metadata=target_metadata
         )
 
         with context.begin_transaction():

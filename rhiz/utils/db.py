@@ -3,12 +3,15 @@ from fastembed import TextEmbedding
 from sqlalchemy.sql import text
 
 _embedding_model: TextEmbedding | None = None
+_schema_ensured: bool = False
 
 
 def _get_embedding_model() -> TextEmbedding:
     global _embedding_model
     if _embedding_model is None:
-        _embedding_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        _embedding_model = TextEmbedding(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
     return _embedding_model
 
 
@@ -41,26 +44,27 @@ def get_matching_count():
 
 
 def _ensure_embeddings_schema(session):
-    """Make sure the vector extension and embeddings table exist."""
+    """Make sure the vector extension and embeddings table exist.
+
+    The schema is idempotent, so we only need to run the DDL once per process.
+    Previously this ran three ``CREATE ... IF NOT EXISTS`` statements (which
+    take locks) on every embedding query, adding latency to each request.
+    """
+    global _schema_ensured
+    if _schema_ensured:
+        return
     session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-    session.execute(
-        text(
-            """
+    session.execute(text("""
             CREATE TABLE IF NOT EXISTS embeddings (
                 reckoning_id INTEGER PRIMARY KEY REFERENCES reckoning(id) ON DELETE CASCADE,
                 embedding vector(384)
             )
-            """
-        )
-    )
-    session.execute(
-        text(
-            """
+            """))
+    session.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_embeddings_embedding
             ON embeddings USING ivfflat (embedding vector_cosine_ops)
-            """
-        )
-    )
+            """))
+    _schema_ensured = True
 
 
 def _encode_text(text_to_embed: str) -> list[float]:
@@ -82,14 +86,12 @@ def insert_text_with_embedding(text_to_embed, reckoning_id):
     with rx.session() as session:
         _ensure_embeddings_schema(session)
         # Prepare the SQL query with UPSERT functionality
-        query = text(
-            """
+        query = text("""
         INSERT INTO embeddings (embedding, reckoning_id) 
         VALUES (:embedding, :reckoning_id)
         ON CONFLICT (reckoning_id) 
         DO UPDATE SET embedding = EXCLUDED.embedding
-        """
-        )
+        """)
         # Execute the query with parameters
         session.execute(
             query, {"embedding": embedding_list, "reckoning_id": reckoning_id}
@@ -102,8 +104,7 @@ def find_similar_texts_with_join(rid, threshold, limit):
     with rx.session() as session:
         _ensure_embeddings_schema(session)
         # Prepare the SQL query
-        query = text(
-            """
+        query = text("""
         WITH target_embedding AS (
             SELECT embedding 
             FROM embeddings 
@@ -147,8 +148,7 @@ def find_similar_texts_with_join(rid, threshold, limit):
             reckoning_id = :id DESC
         LIMIT 
             :limit;
-        """
-        )
+        """)
         # Execute the query with parameters
         result = session.execute(
             query, {"id": rid, "threshold": threshold, "limit": limit}
