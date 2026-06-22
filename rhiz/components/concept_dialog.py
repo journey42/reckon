@@ -9,7 +9,7 @@ from rhiz.state.base import AppState, Reckoning
 from rhiz.components.buttons import submit_button, close_button
 from rhiz.utils.db import insert_text_with_embedding
 from rhiz.utils.parsing import remove_html_tags
-from rhiz.components.editor import editor
+from rhiz.components.tiptap_editor import TiptapEditor
 
 
 class ConceptDialogState(AppState):
@@ -78,13 +78,12 @@ def concept_dialog(*args, **kwargs):
                         grid_template_columns="4fr 9fr 1fr",
                     ),
                 ),
-                editor(
-                    name="concept_content",
-                    default_value=ConceptDialogState.content,
+                TiptapEditor.create(
+                    value=ConceptDialogState.content,
                     placeholder="Concept",
                     height="40vh",
-                    width="100%",
-                    on_blur=ConceptDialogState.set_content,
+                    toolbar_enabled=True,
+                    on_change=ConceptDialogState.set_content,
                 ),
                 submit_button(
                     **dialog_button_style,

@@ -18,7 +18,7 @@ from rhiz.styles import (
     read_only_text_style,
     reckoning_grid_style,
 )
-from ..components import container, navbar, editor
+from ..components import container, navbar
 from rhiz.components.buttons import (
     sort_by_upvotes_button,
     sort_by_support_button,
@@ -972,11 +972,11 @@ def parent_reckoning(state):
                     rx.image(src="/poo_comment.svg", **comment_badge_style),
                 ),
             ),
-            editor(
-                key=state.parent.id,
-                default_value=state.parent.content,
-                hide_toolbar=True,
-                disable=True,
+            SafeMarkdown.create(
+                content=state.parent.content,
+                class_name="prose",
+                max_width="100%",
+                **read_only_text_style,
             ),
             rx.grid(
                 rx.cond(
