@@ -82,6 +82,7 @@ startup banner.
 | `DB_URL` | PostgreSQL connection string (defaults to the local Compose DB in `rxconfig.py`). |
 | `API_URL` | Public backend URL the frontend connects to. |
 | `PUBLIC_BASE_URL` | Public site origin used to build **debate share links / QR codes and the email-verification link** (e.g. `https://www.rhiz.ai`). Defaults to `http://localhost:3000` for dev — **must be set in production**. |
+| `RUN_MIGRATIONS_ON_START` | Backend container entrypoint runs `reflex db migrate` on start when `1` (default). Set to `0` in production — migrations are applied manually (see below). |
 | `TOOLBAR_ENABLED` | Toggles the editor toolbar. |
 | `POSTHOG_PROJECT_API_KEY` | Optional analytics; unset disables the client script. |
 
@@ -98,7 +99,11 @@ reflex db migrate
 > **Note:** the production database's alembic history is currently out of sync,
 > so schema changes are applied directly (idempotent `CREATE … IF NOT EXISTS` /
 > `ALTER TABLE … ADD COLUMN IF NOT EXISTS`) until the history is reconciled. The
-> migration files are still authored for the record.
+> migration files are still authored for the record. Because of this, the
+> production backend container runs with `RUN_MIGRATIONS_ON_START=0` so it does
+> **not** run `reflex db migrate` on start, and the `alembic/` dir + `alembic.ini`
+> are kept out of the backend image (`.dockerignore`) — shipping them makes
+> `reflex run`'s schema check import the local `alembic/` dir and crash.
 
 ## Deployment (Azure, via GitHub Actions)
 
@@ -110,11 +115,17 @@ deployed by GitHub Actions workflows.
   Runs automatically on push to `master` that touches app code
   (`Dockerfile`, `requirements.txt`, `rxconfig.py`, `rhiz/**`, `scripts/**`), or
   manually via *Run workflow*. It builds the Docker image, pushes it to ACR, and
-  updates the Container App, setting `API_URL`, `PUBLIC_BASE_URL`, and `DB_URL`.
+  updates the Container App, setting `API_URL`, `PUBLIC_BASE_URL`, `DB_URL`, and
+  `RUN_MIGRATIONS_ON_START=0`. The container runs the **backend only**
+  (`reflex run --env prod --backend-only` → granian on `:8000`); the deploy
+  fails loudly if the new revision does not reach a healthy `Running` state.
 - **Frontend → Azure Static Web Apps** — `.github/workflows/static-app.yml`
   (manual *Run workflow*). It runs `reflex export --frontend-only` against the
-  backend `API_URL` and publishes `swa-build/` (with
-  `deploy/staticwebapp.config.json` for SPA routing) to Static Web Apps.
+  backend `API_URL` and publishes `swa-build/` to Static Web Apps.
+  `deploy/staticwebapp.config.json` adds a `navigationFallback` to the Reflex
+  React-Router SPA shell (`/__spa-fallback.html`) so direct hits / refreshes /
+  **QR codes** on dynamic routes (`/debate/<slug>`, `/concept/<id>`, …) resolve
+  client-side instead of 404-ing.
 
 Typical release: push to `master` (backend deploys automatically), then run the
 **Deploy Static Web App** workflow to publish the frontend.
