@@ -9,7 +9,10 @@ from rhiz.utils.validations import (
     validate_email,
     validate_password,
 )
-from rhiz.utils.comms import send_password_reset_email
+import os
+from datetime import timedelta
+from rhiz.utils.comms import send_password_reset_email, send_verification_email
+from rhiz.utils.verification import generate_token, is_debate_origin, TOKEN_TTL_HOURS
 from rhiz.utils.security import hash_password, verify_password
 
 
@@ -67,27 +70,58 @@ class AuthState(AppState):
             if session.exec(select(User).where(User.email == self.email)).first():
                 return rx.window_alert("User with that email already exists.")
 
+            nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
+            debate_origin = is_debate_origin(nxt)
+
             hashed_password = hash_password(self.password)
-            self.user = User(
+            new_user = User(
                 email=self.email,
                 username=self.username,
                 password=hashed_password,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
             )
-            session.add(self.user)
-
-            log = Log(
-                user_id=self.user.id,
-                content="signed up",
-                type="user",
-                created_at=datetime.now(timezone.utc),
+            if debate_origin:
+                new_user.verification_token = generate_token()
+                new_user.verification_expires_at = datetime.now(
+                    timezone.utc
+                ) + timedelta(hours=TOKEN_TTL_HOURS)
+            session.add(new_user)
+            session.add(
+                Log(
+                    user_id=new_user.id,
+                    content="signed up",
+                    type="user",
+                    created_at=datetime.now(timezone.utc),
+                )
             )
-            session.add(log)
-
             session.commit()
 
-            return rx.redirect("/signup_successful")
+            if not debate_origin:
+                # Normal signup: unchanged (disabled, pending manual approval).
+                return rx.redirect("/signup_successful")
+
+            # Debate-origin signup: email a verification link that re-enables
+            # the account and returns the user to the debate after login.
+            base = os.environ.get(
+                "PUBLIC_BASE_URL", "http://localhost:3000"
+            ).rstrip("/")
+            verify_url = (
+                f"{base}/verify_email/{new_user.verification_token}?next={nxt}"
+            )
+            try:
+                send_verification_email(new_user, verify_url)
+            except Exception as e:
+                session.add(
+                    Log(
+                        user_id=new_user.id,
+                        content=f"verification email failed: {e}",
+                        type="system",
+                        created_at=datetime.now(timezone.utc),
+                    )
+                )
+                session.commit()
+            return rx.redirect("/verify_email_sent")
 
     def register(self):
         """Register a user."""
