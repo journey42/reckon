@@ -2,7 +2,7 @@
 
 from sqlmodel import select
 
-from rhiz.state.base import Debate, DebateStatus, Reckoning
+from rhiz.state.base import Debate, DebateStatus
 from rhiz.utils.slugs import slugify, unique_slug
 
 

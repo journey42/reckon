@@ -372,7 +372,9 @@ class Debate(rx.Model, table=True):
     title: str = Field()
     intro: str = Field(default="")
     status: str = Field(default=DebateStatus.open)
-    created_by: int = Field(foreign_key="user.id", nullable=True)
+    created_by: Optional[int] = Field(
+        default=None, foreign_key="user.id", nullable=True
+    )
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
 
