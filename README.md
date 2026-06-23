@@ -1,81 +1,151 @@
-# Getting Started
-Local Setup
+# Rhiz — Speak Together
+
+Rhiz is a structured-deliberation platform built with [Reflex](https://reflex.dev).
+People post **concepts**, respond with **supports**, **detracts**, and
+**points of order**, **up/down-vote** them, and discover related ideas through
+trending lists and similarity search. Concepts can also be **distributed as
+debates** — public, shareable pages (link + QR) that invite a wider audience
+into a focused discussion and bridge them into the broader debate on the site.
+
+## Features
+
+- **Concepts & deliberation** — submit a concept (draft → published), respond
+  with support / detract / point-of-order comments, and up/down-vote. Threaded
+  comments per concept.
+- **Discovery** — Trending (by upvotes and by support), and **Compare**, which
+  surfaces similar concepts using pgvector embedding similarity.
+- **Rich text** — concepts are authored in a TipTap editor and rendered
+  read-only via sanitized Markdown.
+- **Performance** — list pages use infinite scroll with server-side windowing,
+  and concept tallies are computed in batched set-based queries (important
+  because the app talks to a remote database).
+- **Debates (distribution layer)**
+  - Turn **any** concept into a debate from the concept's ⋯ menu (it keeps
+    behaving normally elsewhere).
+  - `/debate/<slug>` is **publicly readable** (concept + comments, no account);
+    commenting, comparing, or proposing an alternative requires an account.
+  - A "how this works" overlay onboards first-time visitors (auto-shown once).
+  - **Your Debates** (`/your_debates`) — a user's own debates, with share
+    link + QR and open/close/delete.
+  - **All Debates** (`/debates`) — admin-only moderation of every debate, incl.
+    delete on behalf of others.
+  - **Email-verification signup** — when someone signs up via a debate link,
+    their account is auto-enabled after they verify their email (normal signups
+    still require manual approval).
+- **Roles** — regular / moderator / admin. Who may create debates is controlled
+  by the `DEBATE_CREATE_MIN_ROLE` setting (default: admin).
+
+## Tech stack
+
+- **Reflex** (Python full-stack; React/Vite frontend, FastAPI/granian backend)
+- **PostgreSQL + pgvector** via **SQLModel**
+- **fastembed** (`sentence-transformers/all-MiniLM-L6-v2`) for concept embeddings
+- **Azure**: Static Web Apps (frontend) + Container Apps (backend) + Azure
+  Communication Services (transactional email)
+
+## Local setup
 
 Install Python dependencies:
 
-```
+```bash
 pip install -r requirements.txt
-```
-
-Initialize the database first:
-
-```
-reflex db init
-reflex db migrate
 ```
 
 ### Local Postgres with pgvector
 
-A Docker image for Postgres 16 with the `pgvector` extension is available at `docker/db/Dockerfile`. Start it together with the app using Compose:
+A Postgres 16 + `pgvector` image lives at `docker/db/Dockerfile`. Start it with
+Compose from the repo root:
 
-Run this from the repository root:
-
-```
+```bash
 docker compose up db
 ```
 
-The container exposes Postgres on `localhost:5432` with the `reckon` database and credentials `postgres` / `password`. The app service is already configured to use the connection string `postgresql://postgres:password@db:5432/reckon`. To connect from outside Compose, set the `DB_URL` environment variable accordingly (for example when running Reflex commands locally).
+It exposes Postgres on `localhost:5432` with database `reckon` and credentials
+`postgres` / `password`. Compose-internal services use
+`postgresql://postgres:password@db:5432/reckon`; to connect from outside
+Compose, set `DB_URL` accordingly.
 
-### Azure Deployment (Container Apps)
+### Run the app
 
-Use the automated script to deploy the Reflex app and Caddy proxy to Azure Container Apps while reusing the existing resource group and PostgreSQL flexible server.
+```bash
+set -a && source .env && set +a   # loads DB_URL, PUBLIC_BASE_URL, etc.
+reflex run
+```
 
-1. Log in to Azure (`az login`) and make sure the correct subscription is selected.
-2. Update the `.env` file in the repository root with the correct connection string (and any overrides). The committed template contains placeholders you can edit in place. To supply a different file, set `ENV_FILE=/path/to/file` before running the script.
-3. Set `POSTHOG_PROJECT_API_KEY` in your environment (or leave it unset to disable the client script).
-4. Run the deploy script from the repo root (the script will install the Azure Container Apps CLI extension automatically if needed):
-   ```bash
-   ./scripts/deploy_containerapp.sh
-   ```
-   The script reads `.env` by default (override with `ENV_FILE=/path/to/file`), builds and pushes fresh images, creates/updates the Container Apps environment, applies `deploy/containerapp.yaml`, and prints the command needed to run database migrations (`az containerapp exec ... reflex db migrate`).
+Frontend serves on `:3000` (or `:3001`), backend on `:8000` — confirm from the
+startup banner.
 
-Once traffic is verified, you can update DNS to point at the Container App's external endpoint. The script is idempotent, so re-running it will roll out a new revision with the latest images.
+## Environment variables
 
-### Legacy VM Setup (manual)
+| Variable | Purpose |
+|---|---|
+| `DB_URL` | PostgreSQL connection string (defaults to the local Compose DB in `rxconfig.py`). |
+| `API_URL` | Public backend URL the frontend connects to. |
+| `PUBLIC_BASE_URL` | Public site origin used to build **debate share links / QR codes and the email-verification link** (e.g. `https://www.rhiz.ai`). Defaults to `http://localhost:3000` for dev — **must be set in production**. |
+| `TOOLBAR_ENABLED` | Toggles the editor toolbar. |
+| `POSTHOG_PROJECT_API_KEY` | Optional analytics; unset disables the client script. |
 
-run the following script via the Azure CLI to create the resource group and supporting resources
+## Database & migrations
+
+Schema is defined by the SQLModel models in `rhiz/state/base.py`. Migrations live
+in `alembic/` (gitignored — they're force-added when needed) and are normally
+applied with:
+
+```bash
+reflex db migrate
+```
+
+> **Note:** the production database's alembic history is currently out of sync,
+> so schema changes are applied directly (idempotent `CREATE … IF NOT EXISTS` /
+> `ALTER TABLE … ADD COLUMN IF NOT EXISTS`) until the history is reconciled. The
+> migration files are still authored for the record.
+
+## Deployment (Azure, via GitHub Actions)
+
+Production runs as a **statically-exported Reflex frontend** on Azure Static Web
+Apps talking to a **containerized backend** on Azure Container Apps. Both are
+deployed by GitHub Actions workflows.
+
+- **Backend → Azure Container Apps** — `.github/workflows/deploy-backend.yml`.
+  Runs automatically on push to `master` that touches app code
+  (`Dockerfile`, `requirements.txt`, `rxconfig.py`, `rhiz/**`, `scripts/**`), or
+  manually via *Run workflow*. It builds the Docker image, pushes it to ACR, and
+  updates the Container App, setting `API_URL`, `PUBLIC_BASE_URL`, and `DB_URL`.
+- **Frontend → Azure Static Web Apps** — `.github/workflows/static-app.yml`
+  (manual *Run workflow*). It runs `reflex export --frontend-only` against the
+  backend `API_URL` and publishes `swa-build/` (with
+  `deploy/staticwebapp.config.json` for SPA routing) to Static Web Apps.
+
+Typical release: push to `master` (backend deploys automatically), then run the
+**Deploy Static Web App** workflow to publish the frontend.
+
+Required repository **secrets**:
+
+- Backend: `AZURE_CREDENTIALS`, `ACR_NAME`, `ACR_LOGIN_SERVER`, `PUBLIC_API_URL`,
+  `DB_URL`, `CONTAINERAPP_NAME`, `RESOURCE_GROUP`
+- Frontend: `AZURE_STATIC_WEB_APPS_API_TOKEN`
+
+## Legacy VM setup (manual, archival)
+
+Earlier deployments used a single Azure VM. Retained for reference:
+
+```bash
+# create resource group + supporting resources
 ./scripts/azure-create-vm.sh
-
-configure db with the following templates:
-./scripts/parameters.json
-./scripts/template.json
-
-create db reckon
-
-enable pg vector using the following instructions: https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/how-to-use-pgvector
-
-connect to the host vm and run the following commands:
+# db templates: ./scripts/parameters.json, ./scripts/template.json
+# create db `reckon`, enable pgvector:
+#   https://learn.microsoft.com/azure/postgresql/flexible-server/how-to-use-pgvector
 
 az ssh vm --resource-group reckon-rg --vm-name reckon --subscription <SUBSCRIPTION_ID>
 
+# on the VM:
 type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y
-
+# install gh (see https://cli.github.com), then:
 gh auth login
-
 gh repo clone journey42/reckon
-
-sudo apt install docker.io
-sudo apt install docker-compose
-
+sudo apt install docker.io docker-compose
 sudo DOMAIN=reckon-dev.eastus.cloudapp.azure.com docker-compose build
-
 cp ~/reckon/scripts/azure/reckon.service /etc/systemd/system/reckon.service
-
-sudo systemctl daemon-reload
-
-sudo systemctl enable reckon
-
-sudo systemctl start reckon
-
+sudo systemctl daemon-reload && sudo systemctl enable reckon && sudo systemctl start reckon
 sudo systemctl status reckon
+```
