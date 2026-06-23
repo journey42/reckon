@@ -40,4 +40,10 @@ COPY --chown=reflex --from=init /app /app
 USER reflex
 ENV PATH="/app/.venv/bin:$PATH" API_URL=$API_URL
 
-CMD ["sh", "-c", "if [ \"${RUN_MIGRATIONS_ON_START:-1}\" = \"1\" ]; then reflex db migrate; fi && reflex run --env prod"]
+# This container serves only the backend (granian on :8000) — the frontend is
+# deployed separately to Azure Static Web Apps and connects here via API_URL.
+# Running the full app (`reflex run --env prod`) also starts the prod frontend
+# server on :3000, which the ACA ingress (targetPort 8000) can't reach, so its
+# health probe fails and the container crash-loops. --backend-only binds granian
+# on :8000 where the ingress and the SWA frontend's websocket actually connect.
+CMD ["sh", "-c", "if [ \"${RUN_MIGRATIONS_ON_START:-1}\" = \"1\" ]; then reflex db migrate; fi && reflex run --env prod --backend-only --backend-host 0.0.0.0 --backend-port 8000"]
