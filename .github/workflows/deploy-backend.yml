@@ -66,6 +66,7 @@ jobs:
               --resource-group ${{ secrets.RESOURCE_GROUP }} \
               --image ${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${TAG} \
               --set-env-vars API_URL=${{ secrets.PUBLIC_API_URL }} \
+                             PUBLIC_BASE_URL=https://www.rhiz.ai \
                              SUNEDITOR_TOOLBAR_ENABLED=0 \
                              DB_URL=secretref:db-url \
               --query properties.latestRevisionName -o tsv)
