@@ -227,24 +227,12 @@ class AuthState(AppState):
         pass
 
     def _post_login_target(self) -> str:
-        """Where to send the user after login: ?next=/... only if it is a safe
-        same-origin relative path, else home. Rejects absolute and
-        protocol-relative URLs, backslash tricks ('\\' -> '/'), and
-        percent-encoded variants (browsers decode before navigating)."""
-        from urllib.parse import urlparse, unquote
+        """Where to send the user after login: ?next=/... if safe, else home."""
+        from rhiz.utils.urls import safe_next_path
 
-        nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
-        if nxt:
-            normalized = unquote(nxt).replace("\\", "/")
-            parsed = urlparse(normalized)
-            if (
-                not parsed.scheme
-                and not parsed.netloc
-                and normalized.startswith("/")
-                and not normalized.startswith("//")
-            ):
-                return nxt
-        return "/"
+        return safe_next_path(
+            self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
+        ) or "/"
 
     def login(self, form_data: dict):
         """Log in a user."""
