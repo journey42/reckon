@@ -34,3 +34,4 @@ from .reckonings import your_drafts
 from .feedback import feedback
 from . import debate  # noqa: F401
 from . import debates_admin  # noqa: F401
+from . import your_debates  # noqa: F401

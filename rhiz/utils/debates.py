@@ -44,3 +44,16 @@ def set_debate_status(session, debate_id: int, status: str) -> None:
     if debate is not None:
         debate.status = status
         session.commit()
+
+
+def delete_debate(session, debate_id: int, owner_id: int | None = None) -> None:
+    """Delete a debate. If owner_id is given, only delete it when that user
+    owns it (used by the per-user view); admins pass owner_id=None to delete
+    any debate. The referenced concept is left untouched."""
+    debate = session.exec(select(Debate).where(Debate.id == debate_id)).first()
+    if debate is None:
+        return
+    if owner_id is not None and debate.created_by != owner_id:
+        return
+    session.delete(debate)
+    session.commit()
