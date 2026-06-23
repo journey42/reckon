@@ -52,6 +52,11 @@ function scrollToSavedPosition() {
 // trigger button (#debate-howto-open) we click programmatically.
 window.rhizDebateOverlayInit = function (slug) {
   try {
+    if (!slug) {
+      var m = location.pathname.split("/debate/")[1] || "";
+      slug = m.split("/")[0];
+    }
+    if (!slug) return;
     var key = "rhiz_debate_seen_" + slug;
     if (!localStorage.getItem(key)) {
       localStorage.setItem(key, "1");

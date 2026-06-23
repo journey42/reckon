@@ -73,11 +73,24 @@ class DebatePageState(AppState):
                 )
         return out
 
-    def require_login_then(self, path: str):
-        """If logged in, go to `path`; otherwise to signup with a return URL."""
-        if self.logged_in:
-            return rx.redirect(path)
+    def _signup_redirect(self):
+        """Redirect anonymous users to signup with a return to this debate."""
         return rx.redirect(f"/signup?next=/debate/{self.debate_slug}")
+
+    def go_comment(self):
+        if not self.logged_in:
+            return self._signup_redirect()
+        return rx.redirect(f"/comments/{self.concept.id}")
+
+    def go_compare(self):
+        if not self.logged_in:
+            return self._signup_redirect()
+        return rx.redirect(f"/compare/{self.concept.id}")
+
+    def go_propose(self):
+        if not self.logged_in:
+            return self._signup_redirect()
+        return rx.redirect("/")
 
 
 from rhiz.components.safe_markdown import SafeMarkdown
@@ -135,16 +148,16 @@ def _gated_cta(state):
     return rx.hstack(
         rx.button(
             "Comment",
-            on_click=state.require_login_then(f"/comments/{state.concept.id}"),
+            on_click=state.go_comment,
         ),
         rx.button(
             "Compare concepts",
-            on_click=state.require_login_then(f"/compare/{state.concept.id}"),
+            on_click=state.go_compare,
             variant="soft",
         ),
         rx.button(
             "Propose an alternative",
-            on_click=state.require_login_then("/"),
+            on_click=state.go_propose,
             variant="soft",
         ),
         spacing="3",
@@ -199,14 +212,13 @@ def debate_page():
                 rx.divider(),
                 rx.heading("Responses", size="4"),
                 rx.foreach(DebatePageState.comments, _comment),
-                rx.script(
-                    f"window.rhizDebateOverlayInit && "
-                    f"window.rhizDebateOverlayInit('{DebatePageState.debate_slug}');"
-                ),
                 spacing="4",
                 align="stretch",
                 width="100%",
                 padding="24px",
+                on_mount=rx.call_script(
+                    "window.rhizDebateOverlayInit && window.rhizDebateOverlayInit();"
+                ),
             ),
         ),
     )
