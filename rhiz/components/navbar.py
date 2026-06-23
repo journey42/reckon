@@ -6,7 +6,9 @@ from rhiz.components.buttons import (
     trending_concepts_button,
     your_concepts_button,
     logo_button,
+    debates_button,
 )
+from rhiz.utils.permissions import DEBATE_CREATE_MIN_ROLE
 from rhiz.components.feedback_dialog import (
     feedback_dialog,
     FeedbackDialogState,
@@ -56,7 +58,7 @@ def user_menu() -> rx.Component:
             ),
             rx.cond(
                 AppState.user.role == UserTypes.admin,
-                rx.menu.item("Debates", on_click=rx.redirect("/debates")),
+                rx.menu.item("All Debates", on_click=rx.redirect("/debates")),
             ),
             rx.cond(
                 AppState.user.role == UserTypes.admin,
@@ -75,6 +77,11 @@ def app_logo() -> rx.Component:
             rx.spacer(width="5px"),  # Add spacer after logo
             trending_concepts_button(),
             your_concepts_button(),
+            rx.cond(
+                AppState.user.role >= DEBATE_CREATE_MIN_ROLE,
+                debates_button(),
+                rx.fragment(),
+            ),
             legend_button(on_click=LegendDialogState.visible),
             spacing="5",
             style={"gap": "24px"},  # Increased from 18px to 24px

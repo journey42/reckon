@@ -88,7 +88,24 @@ def your_drafts_button(*args, **kwargs):
 
 
 def legend_button(*args, **kwargs):
-    return create_button("/legend.svg", **kwargs)
+    return create_button("/legend.svg", content="The Legend", **kwargs)
+
+
+def debates_button(*args, **kwargs):
+    """Main-nav icon linking to the current user's debates ("Your Debates").
+
+    Uses a built-in Lucide icon (no SVG asset) with the main-menu styling and a
+    tooltip, mirroring the other main-nav buttons (which link + tooltip).
+    """
+    params = button_params["main_menu"].copy()
+    params.update(kwargs)
+    return rx.link(
+        rx.tooltip(
+            rx.button(rx.icon("megaphone", size=24), **params),
+            content="Your Debates",
+        ),
+        href="/your_debates",
+    )
 
 
 def submit_button(*args, **kwargs):
