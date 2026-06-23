@@ -1,6 +1,11 @@
 """Email-verification token helpers for debate-origin signups."""
 
 import secrets
+from datetime import datetime, timezone
+
+from sqlmodel import select
+
+from rhiz.state.base import User
 
 TOKEN_TTL_HOURS = 72
 
@@ -15,14 +20,7 @@ def is_debate_origin(nxt: str | None) -> bool:
     return bool(nxt) and nxt.startswith("/debate/")
 
 
-from datetime import datetime, timezone
-
-from sqlmodel import select
-
-from rhiz.state.base import User
-
-
-def verify_and_enable(session, token: str):
+def verify_and_enable(session, token: str) -> "User | None":
     """Enable the account owning a valid, unexpired token (single-use).
 
     Returns the User on success, or None if the token is empty, unknown, or
