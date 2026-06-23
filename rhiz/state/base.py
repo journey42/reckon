@@ -30,6 +30,10 @@ class User(rx.Model, table=True):
     role: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(nullable=True)
+    verification_token: Optional[str] = Field(default=None, nullable=True)
+    verification_expires_at: Optional[datetime] = Field(
+        default=None, nullable=True
+    )
 
     reckonings: List["Reckoning"] = Relationship(back_populates="user")
 
