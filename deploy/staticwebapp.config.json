@@ -1,4 +1,11 @@
 {
+  "navigationFallback": {
+    "rewrite": "/__spa-fallback.html",
+    "exclude": [
+      "/assets/*",
+      "*.{js,css,json,txt,map,svg,webp,png,jpg,jpeg,gif,ico,gz,woff,woff2,ttf,eot}"
+    ]
+  },
   "responseOverrides": {
     "404": {
       "rewrite": "/404.html"
