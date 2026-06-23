@@ -20,5 +20,10 @@ DEBATE_CREATE_MIN_ROLE = _min_role()
 
 
 def can_manage_debates(user) -> bool:
-    """True if the user exists and meets the minimum role threshold."""
-    return user is not None and getattr(user, "role", -1) >= DEBATE_CREATE_MIN_ROLE
+    """True if the user exists and either meets the minimum role threshold or
+    has been individually granted debate access (per-user flag set by an admin
+    on the Users page)."""
+    return user is not None and (
+        getattr(user, "role", -1) >= DEBATE_CREATE_MIN_ROLE
+        or getattr(user, "can_create_debates", False)
+    )

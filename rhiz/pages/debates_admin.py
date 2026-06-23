@@ -9,7 +9,7 @@ the "Create Debate" action in a concept's card menu, not here.
 import reflex as rx
 from sqlmodel import select
 
-from rhiz.state.base import AppState, Debate, DebateStatus, UserTypes
+from rhiz.state.base import AppState, Debate, DebateStatus, UserTypes, User
 from rhiz.utils.debates import set_debate_status, delete_debate
 from rhiz.utils.qr import qr_data_uri
 from rhiz.styles import page_params
@@ -36,10 +36,14 @@ class DebatesAdminState(AppState):
             return
         base = public_base_url()
         with rx.session() as session:
-            debates = session.exec(
-                select(Debate).order_by(Debate.created_at.desc())
+            # Single outer join so each debate's creator username comes back in
+            # one query (no per-row lookup against the remote DB).
+            rows = session.exec(
+                select(Debate, User.username)
+                .outerjoin(User, User.id == Debate.created_by)
+                .order_by(Debate.created_at.desc())
             ).all()
-            for d in debates:
+            for d, creator_username in rows:
                 url = f"{base}/debate/{d.slug}"
                 self.rows.append(
                     {
@@ -49,6 +53,7 @@ class DebatesAdminState(AppState):
                         "status": d.status,
                         "url": url,
                         "qr": qr_data_uri(url),
+                        "creator": creator_username or "Unknown",
                     }
                 )
 

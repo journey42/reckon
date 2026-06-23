@@ -88,6 +88,7 @@ class ColumnNames:
     role: int = 4
     created_at: int = 5
     updated_at: int = 6
+    can_create_debates: int = 7
 
 
 column_names = ColumnNames()
@@ -113,6 +114,7 @@ def get_users() -> List[List]:
                 user.role,
                 str(user.created_at.astimezone(ZoneInfo("America/Los_Angeles"))),
                 str(user.updated_at.astimezone(ZoneInfo("America/Los_Angeles"))),
+                user.can_create_debates,
             ]
             user_data_list.append(user_data)
     return user_data_list
@@ -148,6 +150,10 @@ class UserEditorState(AppState):
         {
             "title": "Updated At",
             "type": "str",
+        },
+        {
+            "title": "Can Create Debates",
+            "type": "bool",
         },
     ]
 
@@ -210,6 +216,8 @@ class UserEditorState(AppState):
                         if not is_valid:
                             return rx.window_alert(message)
                         user.role = val["data"]
+                    elif col == column_names.can_create_debates:
+                        user.can_create_debates = val["data"]
                     user.updated_at = datetime.now(timezone.utc)
                     session.add(user)
                     log = Log(

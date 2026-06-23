@@ -53,6 +53,8 @@ from rhiz.components.comment_dialog import comment_dialog, CommentDialogState
 from rhiz.components.debate_dialog import debate_dialog, DebateDialogState
 from rhiz.utils.db import find_similar_texts_with_join
 from rhiz.utils.permissions import can_manage_debates
+from rhiz.utils.debates import get_debate_for_concept
+from urllib.parse import quote
 
 NUDGE_HEADING = "!Your idea has NOT been published yet!"
 NUDGE_RELATED_BODY = (
@@ -256,8 +258,34 @@ class ReckoningsPageState(AppState):
         Flat-list subclasses override this to dispatch to their own substate."""
         self._append_next_window()
 
+    def _require_login_redirect(self):
+        """Gate write/nav actions on the public comments page.
+
+        Anonymous visitors are sent to signup with a return path; when the
+        concept they're on is a debate, that path is the /debate/<slug> link so
+        is_debate_origin() matches and the account auto-enables after email
+        verification. Logged-in-but-not-enabled users keep the old /login gate.
+        """
+        if not self.logged_in:
+            target = self.router.url.path or "/"
+            parts = [p for p in target.split("/") if p]
+            if len(parts) >= 2 and parts[0] == "comments":
+                try:
+                    cid = int(parts[1])
+                except ValueError:
+                    cid = None
+                if cid is not None:
+                    with rx.session() as session:
+                        debate = get_debate_for_concept(session, cid)
+                    if debate is not None:
+                        target = f"/debate/{debate.slug}"
+            return rx.redirect(f"/signup?next={quote(target, safe='/')}")
+        if not self.user.enabled:
+            return rx.redirect("/login")
+        return None
+
     def new_comment(self, subject, type, pid):
-        result = self.check_login()
+        result = self._require_login_redirect()
         if result:
             return result
         if type == ReckoningTypes.support:
@@ -275,7 +303,7 @@ class ReckoningsPageState(AppState):
         yield ConceptDialogState.visible()
 
     def provide_feedback_on_reckoning(self, rid):
-        result = self.check_login()
+        result = self._require_login_redirect()
         if result:
             return result
         yield FeedbackDialogState.set_reckoning(rid)
@@ -285,6 +313,9 @@ class ReckoningsPageState(AppState):
         pass
 
     def compare_concepts(self, cid):
+        result = self._require_login_redirect()
+        if result:
+            return result
         return rx.redirect(f"/compare/{cid}")
 
     def view_comments(self, cid):
@@ -294,7 +325,7 @@ class ReckoningsPageState(AppState):
         self.rerender = not (self.rerender)
 
     def vote_on_concept(self, cid, type):
-        result = self.check_login()
+        result = self._require_login_redirect()
         if result:
             return result
         with rx.session() as session:

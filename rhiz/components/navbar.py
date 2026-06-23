@@ -8,14 +8,66 @@ from rhiz.components.buttons import (
     logo_button,
     debates_button,
 )
-from rhiz.utils.permissions import DEBATE_CREATE_MIN_ROLE
 from rhiz.components.feedback_dialog import (
     feedback_dialog,
     FeedbackDialogState,
     general_feedback_options,
 )
 from rhiz.components.legend_dialog import legend_dialog, LegendDialogState
+from rhiz.components.how_it_works_dialog import (
+    how_it_works_dialog,
+    HowItWorksDialogState,
+)
 from rhiz.state.base import AppState, UserTypes
+
+
+def _authenticated_menu_items() -> rx.Component:
+    """Dropdown items for a logged-in user."""
+    return rx.fragment(
+        rx.menu.item(AppState.user.username, disabled=True),
+        rx.menu.separator(),
+        rx.menu.item("Profile", on_click=rx.redirect("/profile")),
+        rx.menu.item("Feedback", on_click=FeedbackDialogState.visible),
+        rx.menu.item("About", on_click=rx.redirect("/about")),
+        rx.menu.item("How To", on_click=rx.redirect("/how_to")),
+        rx.menu.item("Guidelines", on_click=rx.redirect("/guidelines")),
+        rx.menu.item("Terms", on_click=rx.redirect("/terms")),
+        rx.menu.item("Privacy", on_click=rx.redirect("/privacy")),
+        rx.cond(
+            AppState.user.role == UserTypes.admin,
+            rx.menu.separator(),
+        ),
+        rx.cond(
+            AppState.user.role == UserTypes.admin,
+            rx.menu.item("Log", on_click=rx.redirect("/log")),
+        ),
+        rx.cond(
+            AppState.user.role == UserTypes.admin,
+            rx.menu.item("Users", on_click=rx.redirect("/users")),
+        ),
+        rx.cond(
+            AppState.user.role == UserTypes.admin,
+            rx.menu.item("Feedback", on_click=rx.redirect("/feedback")),
+        ),
+        rx.cond(
+            AppState.user.role == UserTypes.admin,
+            rx.menu.item("New Concepts", on_click=rx.redirect("/new_concepts")),
+        ),
+        rx.cond(
+            AppState.user.role == UserTypes.admin,
+            rx.menu.item("All Debates", on_click=rx.redirect("/debates")),
+        ),
+        rx.cond(
+            AppState.user.role == UserTypes.admin,
+            rx.menu.separator(),
+        ),
+        rx.menu.item("Log out", on_click=rx.redirect("/logged_out")),
+    )
+
+
+def _logged_out_menu_items() -> rx.Component:
+    """Dropdown for an anonymous visitor: just the debate onboarding overlay."""
+    return rx.menu.item("How this Works", on_click=HowItWorksDialogState.visible)
 
 
 def user_menu() -> rx.Component:
@@ -25,46 +77,11 @@ def user_menu() -> rx.Component:
             rx.image(src="/menu.svg", width="36px", height="36px", alt="Open menu"),
         ),
         rx.menu.content(
-            rx.menu.item(AppState.user.username, disabled=True),
-            # rx.menu.item(AppState.user.email, disabled=True),
-            rx.menu.separator(),
-            # rx.menu.item("Drafts", on_click=rx.redirect("/your_drafts")),
-            rx.menu.item("Profile", on_click=rx.redirect("/profile")),
-            rx.menu.item("Feedback", on_click=FeedbackDialogState.visible),
-            rx.menu.item("About", on_click=rx.redirect("/about")),
-            rx.menu.item("How To", on_click=rx.redirect("/how_to")),
-            rx.menu.item("Guidelines", on_click=rx.redirect("/guidelines")),
-            rx.menu.item("Terms", on_click=rx.redirect("/terms")),
-            rx.menu.item("Privacy", on_click=rx.redirect("/privacy")),
             rx.cond(
-                AppState.user.role == UserTypes.admin,
-                rx.menu.separator(),
+                AppState.logged_in,
+                _authenticated_menu_items(),
+                _logged_out_menu_items(),
             ),
-            rx.cond(
-                AppState.user.role == UserTypes.admin,
-                rx.menu.item("Log", on_click=rx.redirect("/log")),
-            ),
-            rx.cond(
-                AppState.user.role == UserTypes.admin,
-                rx.menu.item("Users", on_click=rx.redirect("/users")),
-            ),
-            rx.cond(
-                AppState.user.role == UserTypes.admin,
-                rx.menu.item("Feedback", on_click=rx.redirect("/feedback")),
-            ),
-            rx.cond(
-                AppState.user.role == UserTypes.admin,
-                rx.menu.item("New Concepts", on_click=rx.redirect("/new_concepts")),
-            ),
-            rx.cond(
-                AppState.user.role == UserTypes.admin,
-                rx.menu.item("All Debates", on_click=rx.redirect("/debates")),
-            ),
-            rx.cond(
-                AppState.user.role == UserTypes.admin,
-                rx.menu.separator(),
-            ),
-            rx.menu.item("Log out", on_click=rx.redirect("/logged_out")),
         ),
     )
 
@@ -75,14 +92,23 @@ def app_logo() -> rx.Component:
         rx.hstack(
             logo_button(),
             rx.spacer(width="5px"),  # Add spacer after logo
-            trending_concepts_button(),
-            your_concepts_button(),
             rx.cond(
-                AppState.user.role >= DEBATE_CREATE_MIN_ROLE,
-                debates_button(),
+                AppState.logged_in,
+                rx.hstack(
+                    trending_concepts_button(),
+                    your_concepts_button(),
+                    rx.cond(
+                        AppState.user_can_manage_debates,
+                        debates_button(),
+                        rx.fragment(),
+                    ),
+                    legend_button(on_click=LegendDialogState.visible),
+                    spacing="5",
+                    style={"gap": "24px"},
+                    align="center",
+                ),
                 rx.fragment(),
             ),
-            legend_button(on_click=LegendDialogState.visible),
             spacing="5",
             style={"gap": "24px"},  # Increased from 18px to 24px
             align="center",
@@ -114,6 +140,22 @@ def navbar(*args, **kwargs) -> rx.Component:
         app_logo(),
         feedback_dialog(options=general_feedback_options),
         legend_dialog(),
+        how_it_works_dialog(),
+        # Hidden trigger the once-per-visit auto-open script clicks for anonymous
+        # visitors (kept out of the menu so it's present in the DOM when closed).
+        rx.cond(
+            AppState.logged_in,
+            rx.fragment(),
+            rx.button(
+                "How this works",
+                id="debate-howto-open",
+                display="none",
+                on_click=HowItWorksDialogState.visible,
+            ),
+        ),
         *args,
+        on_mount=rx.call_script(
+            "window.rhizDebateOverlayInit && window.rhizDebateOverlayInit();"
+        ),
         **navbar_styles,
     )

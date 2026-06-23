@@ -52,6 +52,7 @@ class YourDebatesState(AppState):
                         "status": d.status,
                         "url": url,
                         "qr": qr_data_uri(url),
+                        "creator": "",  # own page — creator line stays hidden
                     }
                 )
 

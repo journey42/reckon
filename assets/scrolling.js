@@ -53,7 +53,12 @@ function scrollToSavedPosition() {
 window.rhizDebateOverlayInit = function (slug) {
   try {
     if (!slug) {
-      var m = location.pathname.split("/debate/")[1] || "";
+      // Debates now live at /comments/<id> (reached via a /debate/<slug> link);
+      // key the once-per-visit marker off whichever path we're on.
+      var m =
+        location.pathname.split("/debate/")[1] ||
+        location.pathname.split("/comments/")[1] ||
+        "";
       slug = m.split("/")[0];
     }
     if (!slug) return;

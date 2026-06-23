@@ -28,6 +28,7 @@ class User(rx.Model, table=True):
     email: str = Field()
     enabled: bool = Field(default=False)
     role: int = Field(default=0)
+    can_create_debates: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(nullable=True)
     verification_token: Optional[str] = Field(default=None, nullable=True)
@@ -472,6 +473,17 @@ class AppState(rx.State):
     def logged_in(self) -> bool:
         """Check if a user is logged in."""
         return self.user is not None
+
+    @rx.var(auto_deps=False, deps=["user"])
+    def user_can_manage_debates(self) -> bool:
+        """True if the current user may create/manage debates (role or per-user flag).
+
+        Imported lazily + explicit deps because rhiz.utils.permissions imports
+        from this module (circular import otherwise breaks auto-dep detection).
+        """
+        from rhiz.utils.permissions import can_manage_debates
+
+        return can_manage_debates(self.user)
 
     @rx.event(background=True)
     async def check_if_user_enabled(self):

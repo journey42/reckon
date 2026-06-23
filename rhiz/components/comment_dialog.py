@@ -3,7 +3,7 @@
 import reflex as rx
 from sqlmodel import select
 from datetime import datetime, timezone
-from rhiz.styles import dialog_button_style
+from rhiz.styles import dialog_button_style, read_only_text_style
 from rhiz.components.buttons import (
     support_comment_button,
     detract_from_comment_button,
@@ -11,7 +11,8 @@ from rhiz.components.buttons import (
     close_button,
 )
 from rhiz.state.base import AppState, Reckoning, ReckoningTypes
-from rhiz.components.editor import editor
+from rhiz.components.tiptap_editor import TiptapEditor
+from rhiz.components.safe_markdown import SafeMarkdown
 
 
 class CommentDialogState(AppState):
@@ -111,21 +112,27 @@ def comment_dialog(*args, **kwargs):
             ),
             rx.form(
                 rx.vstack(
-                    editor(
-                        name="subject",
-                        default_value=CommentDialogState.subject,
-                        height="20vh",
+                    rx.box(
+                        SafeMarkdown.create(
+                            content=CommentDialogState.subject,
+                            class_name="prose",
+                            max_width="100%",
+                            **read_only_text_style,
+                        ),
                         width="100%",
-                        hide_toolbar=True,
-                        disable=True,
+                        max_height="20vh",
+                        overflow_y="auto",
+                        padding="12px",
+                        border="1px solid #e2e8f0",
+                        border_radius="8px",
+                        background="#f8fafc",
                     ),
-                    editor(
-                        name="comment_content",
-                        default_value=CommentDialogState.content,
+                    TiptapEditor.create(
+                        value=CommentDialogState.content,
                         placeholder="Comment",
                         height="25vh",
-                        width="100%",
-                        on_blur=CommentDialogState.set_content,
+                        toolbar_enabled=True,
+                        on_change=CommentDialogState.set_content,
                     ),
                     rx.match(
                         CommentDialogState.type,
