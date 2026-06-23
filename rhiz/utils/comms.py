@@ -89,3 +89,29 @@ def send_welcome_email(
     except Exception as e:
         session.rollback()  # Consider what to do in case of failure. For simplicity, this just rolls back the session.
         raise (e)
+
+
+def send_verification_email(user: User, verify_url: str) -> bool:
+    """Email an account-verification link. Returns True if ACS accepted it."""
+    email_client = EmailClient.from_connection_string(CONNECTION_STRING)
+    message = {
+        "content": {
+            "subject": "Verify your Rhiz account",
+            "plainText": (
+                "Welcome to Rhiz! Confirm your email to activate your account "
+                f"and join the debate:\n{verify_url}\n\n"
+                "If you didn't sign up, you can ignore this message."
+            ),
+            "html": (
+                "<p>Welcome to Rhiz! Confirm your email to activate your "
+                "account and join the debate:</p>"
+                f"<p><a href='{verify_url}'>Verify my account</a></p>"
+                "<p>If you didn't sign up, you can ignore this message.</p>"
+            ),
+        },
+        "recipients": {"to": [{"address": user.email}]},
+        "senderAddress": SUPPORT_EMAIL_ADDRESS,
+    }
+    poller = email_client.begin_send(message)
+    send_result = poller.result()
+    return send_result["status"] == "Succeeded"
