@@ -32,7 +32,13 @@ def debate_row(state_cls, r):
         rx.flex(
             rx.vstack(
                 rx.heading(r["title"], size="3"),
-                rx.link(r["url"], href=r["url"], size="1"),
+                rx.link(
+                    r["url"],
+                    href=r["url"],
+                    size="1",
+                    width="100%",
+                    style={"wordBreak": "break-all"},
+                ),
                 rx.text("Status: ", r["status"], size="1"),
                 rx.cond(
                     r["creator"] != "",

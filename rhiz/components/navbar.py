@@ -154,8 +154,12 @@ def navbar(*args, **kwargs) -> rx.Component:
             ),
         ),
         *args,
+        # Poll briefly for the external scrolling.js to define the init fn —
+        # without a redirect the navbar can mount before that asset loads.
         on_mount=rx.call_script(
-            "window.rhizDebateOverlayInit && window.rhizDebateOverlayInit();"
+            "(function(){var n=0;(function go(){"
+            "if(window.rhizDebateOverlayInit){window.rhizDebateOverlayInit();return;}"
+            "if(n++<20)setTimeout(go,100);})();})();"
         ),
         **navbar_styles,
     )

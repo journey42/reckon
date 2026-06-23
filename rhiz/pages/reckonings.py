@@ -847,6 +847,10 @@ class CommentsPageState(ReckoningsPageState):
     """The state for the comments page."""
 
     parent: Optional[Reckoning] = None
+    # When non-zero, reckoning_id resolves to this concept id instead of the
+    # route's "rid" param. Used by the debate page (/debate/<slug>), which
+    # reuses this state but loads by slug-resolved concept id rather than rid.
+    concept_id_override: int = 0
 
     def close_complete_modal(self):
         yield self.get_reckonings()
@@ -975,6 +979,8 @@ class CommentsPageState(ReckoningsPageState):
 
     @rx.var
     def reckoning_id(self) -> str:
+        if self.concept_id_override:
+            return str(self.concept_id_override)
         return self.get_path_param("rid", "no rid")
 
 
