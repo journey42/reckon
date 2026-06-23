@@ -226,6 +226,13 @@ class AuthState(AppState):
         """Password reset email sent."""
         pass
 
+    def _post_login_target(self) -> str:
+        """Where to send the user after login: ?next=/... if safe, else home."""
+        nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
+        if nxt and nxt.startswith("/") and not nxt.startswith("//"):
+            return nxt
+        return "/"
+
     def login(self, form_data: dict):
         """Log in a user."""
         with rx.session() as session:
@@ -261,6 +268,6 @@ class AuthState(AppState):
 
                 session.commit()
 
-                return rx.redirect("/")
+                return rx.redirect(self._post_login_target())
             else:
                 return rx.window_alert("Invalid username or password.")
