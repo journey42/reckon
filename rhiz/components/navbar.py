@@ -56,6 +56,10 @@ def user_menu() -> rx.Component:
             ),
             rx.cond(
                 AppState.user.role == UserTypes.admin,
+                rx.menu.item("Debates", on_click=rx.redirect("/debates")),
+            ),
+            rx.cond(
+                AppState.user.role == UserTypes.admin,
                 rx.menu.separator(),
             ),
             rx.menu.item("Log out", on_click=rx.redirect("/logged_out")),
