@@ -229,13 +229,13 @@ class AuthState(AppState):
     def _post_login_target(self) -> str:
         """Where to send the user after login: ?next=/... only if it is a safe
         same-origin relative path, else home. Rejects absolute and
-        protocol-relative URLs, and backslash tricks (browsers treat '\\' as
-        '/', so '/\\evil.com' must be rejected)."""
-        from urllib.parse import urlparse
+        protocol-relative URLs, backslash tricks ('\\' -> '/'), and
+        percent-encoded variants (browsers decode before navigating)."""
+        from urllib.parse import urlparse, unquote
 
         nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
         if nxt:
-            normalized = nxt.replace("\\", "/")
+            normalized = unquote(nxt).replace("\\", "/")
             parsed = urlparse(normalized)
             if (
                 not parsed.scheme
