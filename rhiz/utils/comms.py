@@ -1,5 +1,6 @@
 import reflex as rx
 from azure.communication.email import EmailClient
+from html import escape
 from datetime import datetime, timezone
 from rhiz.state.base import (
     User,
@@ -94,6 +95,7 @@ def send_welcome_email(
 def send_verification_email(user: User, verify_url: str) -> bool:
     """Email an account-verification link. Returns True if ACS accepted it."""
     email_client = EmailClient.from_connection_string(CONNECTION_STRING)
+    safe_url = escape(verify_url, quote=True)
     message = {
         "content": {
             "subject": "Verify your Rhiz account",
@@ -105,7 +107,7 @@ def send_verification_email(user: User, verify_url: str) -> bool:
             "html": (
                 "<p>Welcome to Rhiz! Confirm your email to activate your "
                 "account and join the debate:</p>"
-                f"<p><a href='{verify_url}'>Verify my account</a></p>"
+                f'<p><a href="{safe_url}">Verify my account</a></p>'
                 "<p>If you didn't sign up, you can ignore this message.</p>"
             ),
         },

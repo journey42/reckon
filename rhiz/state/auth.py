@@ -106,8 +106,11 @@ class AuthState(AppState):
             base = os.environ.get(
                 "PUBLIC_BASE_URL", "http://localhost:3000"
             ).rstrip("/")
+            from urllib.parse import quote
+
             verify_url = (
-                f"{base}/verify_email/{new_user.verification_token}?next={nxt}"
+                f"{base}/verify_email/{new_user.verification_token}"
+                f"?next={quote(nxt, safe='/')}"
             )
             try:
                 send_verification_email(new_user, verify_url)
