@@ -131,7 +131,7 @@ def comment_dialog(*args, **kwargs):
                         value=CommentDialogState.content,
                         placeholder="Comment",
                         height="25vh",
-                        toolbar_enabled=True,
+                        toolbar_enabled=False,
                         on_change=CommentDialogState.set_content,
                     ),
                     rx.match(
