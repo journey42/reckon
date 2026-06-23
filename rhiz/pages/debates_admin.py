@@ -1,5 +1,6 @@
 """Admin page: create and manage distributable debates."""
 
+import os
 import reflex as rx
 from sqlmodel import select
 
@@ -23,8 +24,10 @@ class DebatesAdminState(AppState):
         return can_manage_debates(self.user)
 
     def _base_url(self) -> str:
-        # Public site origin for share links; falls back to the request origin.
-        return (self.router.url.scheme or "http") + "://" + (self.router.url.host or "localhost:3000")  # type: ignore[attr-defined]
+        """Public origin for debate share links. Set PUBLIC_BASE_URL in
+        production (e.g. https://reckon.cc); defaults to the local dev
+        frontend. Trailing slash is stripped."""
+        return os.environ.get("PUBLIC_BASE_URL", "http://localhost:3000").rstrip("/")
 
     def on_load(self):
         result = self.check_login()
