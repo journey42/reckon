@@ -14,6 +14,7 @@ from datetime import timedelta
 from rhiz.utils.comms import send_password_reset_email, send_verification_email
 from rhiz.utils.verification import generate_token, is_debate_origin, TOKEN_TTL_HOURS
 from rhiz.utils.security import hash_password, verify_password
+from urllib.parse import quote
 
 
 class AuthState(AppState):
@@ -99,6 +100,7 @@ class AuthState(AppState):
 
             if not debate_origin:
                 # Normal signup: unchanged (disabled, pending manual approval).
+                self.user = new_user
                 return rx.redirect("/signup_successful")
 
             # Debate-origin signup: email a verification link that re-enables
@@ -106,8 +108,6 @@ class AuthState(AppState):
             base = os.environ.get(
                 "PUBLIC_BASE_URL", "http://localhost:3000"
             ).rstrip("/")
-            from urllib.parse import quote
-
             verify_url = (
                 f"{base}/verify_email/{new_user.verification_token}"
                 f"?next={quote(nxt, safe='/')}"
