@@ -78,3 +78,141 @@ class DebatePageState(AppState):
         if self.logged_in:
             return rx.redirect(path)
         return rx.redirect(f"/signup?next=/debate/{self.debate_slug}")
+
+
+from rhiz.components.safe_markdown import SafeMarkdown
+from rhiz.components import container
+from rhiz.styles import read_only_text_style, page_params
+
+
+def _howto_overlay():
+    """How-this-works modal: hidden trigger (#debate-howto-open) auto-clicked
+    once per slug by assets/scrolling.js; visible CTA reopens it."""
+    return rx.dialog.root(
+        rx.dialog.trigger(
+            rx.button(
+                "How this works",
+                id="debate-howto-open",
+                size="2",
+                variant="soft",
+            ),
+        ),
+        rx.dialog.content(
+            rx.dialog.title("How this works"),
+            rx.dialog.description(
+                "This page shows a concept open for debate. Anyone can read it "
+                "and the responses below. To add a comment, compare it with "
+                "similar ideas, or propose your own alternative, create a free "
+                "account — your contribution then joins the wider debate on the "
+                "site.",
+                size="2",
+            ),
+            rx.dialog.close(
+                rx.button("Got it", margin_top="12px"),
+            ),
+            max_width="480px",
+        ),
+    )
+
+
+def _comment(c: Reckoning):
+    return rx.box(
+        SafeMarkdown.create(
+            content=c.content,
+            class_name="prose",
+            max_width="100%",
+            **read_only_text_style,
+        ),
+        margin_left=c.depth,
+        padding_y="6px",
+        border_left="2px solid #eaecf0",
+        padding_left="10px",
+    )
+
+
+def _gated_cta(state):
+    """Login-gated action buttons (anonymous -> signup with return)."""
+    return rx.hstack(
+        rx.button(
+            "Comment",
+            on_click=state.require_login_then(f"/comments/{state.concept.id}"),
+        ),
+        rx.button(
+            "Compare concepts",
+            on_click=state.require_login_then(f"/compare/{state.concept.id}"),
+            variant="soft",
+        ),
+        rx.button(
+            "Propose an alternative",
+            on_click=state.require_login_then("/"),
+            variant="soft",
+        ),
+        spacing="3",
+        wrap="wrap",
+    )
+
+
+def debate_page():
+    return container(
+        rx.cond(
+            DebatePageState.not_found,
+            rx.center(
+                rx.vstack(
+                    rx.heading("Debate not found", size="6"),
+                    rx.text("This debate link is invalid or has been removed."),
+                    rx.link("Go to Rhiz", href="/"),
+                    spacing="3",
+                ),
+                min_height="60vh",
+            ),
+            rx.vstack(
+                rx.hstack(
+                    rx.heading(DebatePageState.debate_title, size="7"),
+                    rx.spacer(),
+                    _howto_overlay(),
+                    width="100%",
+                    align="center",
+                ),
+                rx.text(
+                    DebatePageState.debate_intro,
+                    size="3",
+                    style={"whiteSpace": "pre-line", "color": "#475569"},
+                ),
+                rx.divider(),
+                rx.box(
+                    SafeMarkdown.create(
+                        content=DebatePageState.concept.content,
+                        class_name="prose",
+                        max_width="100%",
+                        **read_only_text_style,
+                    ),
+                    width="100%",
+                ),
+                rx.cond(
+                    DebatePageState.is_open,
+                    _gated_cta(DebatePageState),
+                    rx.callout(
+                        "This debate is closed to new contributions.",
+                        size="1",
+                    ),
+                ),
+                rx.divider(),
+                rx.heading("Responses", size="4"),
+                rx.foreach(DebatePageState.comments, _comment),
+                rx.script(
+                    f"window.rhizDebateOverlayInit && "
+                    f"window.rhizDebateOverlayInit('{DebatePageState.debate_slug}');"
+                ),
+                spacing="4",
+                align="stretch",
+                width="100%",
+                padding="24px",
+            ),
+        ),
+    )
+
+
+@rx.page(route="/debate/[slug]", on_load=DebatePageState.on_load, **page_params)
+def debate():
+    """Public debate page."""
+    return debate_page()

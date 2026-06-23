@@ -46,3 +46,19 @@ function scrollToSavedPosition() {
   ensure();
   setInterval(ensure, 500);
 })();
+
+// Debate "how this works" overlay: auto-open once per slug (anonymous-safe),
+// reopen on demand. The Reflex dialog is controlled by a hidden checkbox-style
+// trigger button (#debate-howto-open) we click programmatically.
+window.rhizDebateOverlayInit = function (slug) {
+  try {
+    var key = "rhiz_debate_seen_" + slug;
+    if (!localStorage.getItem(key)) {
+      localStorage.setItem(key, "1");
+      var btn = document.getElementById("debate-howto-open");
+      if (btn) btn.click();
+    }
+  } catch (e) {
+    /* localStorage unavailable: skip auto-open */
+  }
+};

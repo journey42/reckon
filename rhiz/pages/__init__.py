@@ -32,3 +32,4 @@ from .reckonings import concept
 from .reckonings import compare
 from .reckonings import your_drafts
 from .feedback import feedback
+from rhiz.pages import debate  # noqa: F401
