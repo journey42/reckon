@@ -33,3 +33,4 @@ from .reckonings import compare
 from .reckonings import your_drafts
 from .feedback import feedback
 from rhiz.pages import debate  # noqa: F401
+from rhiz.pages import debates_admin  # noqa: F401
