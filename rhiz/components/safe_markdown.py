@@ -9,6 +9,7 @@ class SafeMarkdown(rx.NoSSRComponent):
         "react-markdown",
         "remark-gfm",
         "rehype-raw",
+        "rehype-sanitize",
         "rehype-unwrap-images",
         "remark-math",
         "rehype-katex",

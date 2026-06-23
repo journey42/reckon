@@ -43,6 +43,18 @@ const RhizTiptapEditor = ({ value, onChange, placeholder, height, toolbarEnabled
 
   if (!editor) return null
 
+  // Reject script-bearing URI schemes from the link/image/video prompts so
+  // attacker-supplied URLs can't carry javascript:/data: into stored content.
+  const safeUrl = (raw) => {
+    if (!raw) return null
+    const u = String(raw).trim()
+    if (/^\s*(javascript|data|vbscript|file):/i.test(u)) {
+      window.alert('That link type is not allowed.')
+      return null
+    }
+    return u
+  }
+
   const tb = (label, onClick, active, title) =>
     React.createElement('button', {
       type: 'button',
@@ -79,15 +91,15 @@ const RhizTiptapEditor = ({ value, onChange, placeholder, height, toolbarEnabled
           tb('\u2015', () => editor.chain().focus().setHorizontalRule().run(), false, 'Horizontal Rule'),
           sep(),
           tb('\u{1F517}', () => {
-            const url = window.prompt('Enter URL:')
+            const url = safeUrl(window.prompt('Enter URL:'))
             if (url) editor.chain().focus().setLink({ href: url }).run()
           }, editor.isActive('link'), 'Link'),
           tb('\u{1F5BC}', () => {
-            const url = window.prompt('Enter image URL:')
+            const url = safeUrl(window.prompt('Enter image URL:'))
             if (url) editor.chain().focus().setImage({ src: url }).run()
           }, false, 'Image'),
           tb('\u25B6', () => {
-            const url = window.prompt('Enter YouTube URL:')
+            const url = safeUrl(window.prompt('Enter YouTube URL:'))
             if (url) editor.chain().focus().setYoutubeVideo({ src: url }).run()
           }, false, 'Video'),
           sep(),
@@ -153,6 +165,13 @@ const RhizTiptapEditor = ({ value, onChange, placeholder, height, toolbarEnabled
         line-height: 1.7;
       }
       .rhiz-ed-wrap .ProseMirror p { margin: 0.3em 0; }
+      .rhiz-ed-wrap .ProseMirror p.is-editor-empty:first-child::before {
+        content: attr(data-placeholder);
+        color: #9ca3af;
+        float: left;
+        height: 0;
+        pointer-events: none;
+      }
       .rhiz-ed-wrap .ProseMirror h1 { font-size: 1.5em; font-weight: 700; margin: 0.5em 0; }
       .rhiz-ed-wrap .ProseMirror h2 { font-size: 1.25em; font-weight: 600; margin: 0.4em 0; }
       .rhiz-ed-wrap .ProseMirror h3 { font-size: 1.1em; font-weight: 600; margin: 0.3em 0; }
