@@ -1,9 +1,7 @@
 """Admin page: create and manage distributable debates."""
 
 import reflex as rx
-from typing import Optional
 from sqlmodel import select
-from pydantic import BaseModel
 
 from rhiz.state.base import AppState, Reckoning, Debate, DebateStatus
 from rhiz.utils.debates import create_debate, set_debate_status
@@ -13,17 +11,8 @@ from rhiz.styles import page_params
 from rhiz.components import container, navbar
 
 
-class DebateRow(BaseModel):
-    id: int
-    slug: str
-    title: str
-    status: str
-    url: str
-    qr: str
-
-
 class DebatesAdminState(AppState):
-    rows: list[DebateRow] = []
+    rows: list[dict] = []
     concept_id_input: str = ""
     title_input: str = ""
     intro_input: str = ""
@@ -53,10 +42,14 @@ class DebatesAdminState(AppState):
             for d in debates:
                 url = f"{base}/debate/{d.slug}"
                 self.rows.append(
-                    DebateRow(
-                        id=d.id, slug=d.slug, title=d.title, status=d.status,
-                        url=url, qr=qr_data_uri(url),
-                    )
+                    {
+                        "id": d.id,
+                        "slug": d.slug,
+                        "title": d.title,
+                        "status": d.status,
+                        "url": url,
+                        "qr": qr_data_uri(url),
+                    }
                 )
 
     def set_concept_id_input(self, v: str):
@@ -103,21 +96,21 @@ class DebatesAdminState(AppState):
         self._refresh()
 
 
-def _row(r: DebateRow):
+def _row(r: dict):
     return rx.card(
         rx.hstack(
             rx.vstack(
-                rx.heading(r.title, size="3"),
-                rx.link(r.url, href=r.url, size="1"),
-                rx.text("Status: " + r.status, size="1"),
+                rx.heading(r["title"], size="3"),
+                rx.link(r["url"], href=r["url"], size="1"),
+                rx.text("Status: ", r["status"], size="1"),
                 align="start",
                 spacing="1",
             ),
             rx.spacer(),
-            rx.image(src=r.qr, width="96px", height="96px"),
+            rx.image(src=r["qr"], width="96px", height="96px"),
             rx.button(
-                rx.cond(r.status == DebateStatus.open, "Close", "Reopen"),
-                on_click=lambda: DebatesAdminState.toggle_status(r.id, r.status),
+                rx.cond(r["status"] == DebateStatus.open, "Close", "Reopen"),
+                on_click=DebatesAdminState.toggle_status(r["id"], r["status"]),
                 variant="soft",
                 size="1",
             ),
