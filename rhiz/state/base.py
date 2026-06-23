@@ -356,6 +356,26 @@ class Reckoning(rx.Model, table=True):
                 r.total_comments = n
 
 
+@dataclass(frozen=True)
+class DebateStatus:
+    """Debate lifecycle states."""
+
+    open: str = "open"
+    closed: str = "closed"
+
+
+class Debate(rx.Model, table=True):
+    """A distributable debate page wrapping a single concept (1:1)."""
+
+    slug: str = Field(index=True, unique=True)
+    concept_id: int = Field(foreign_key="reckoning.id", index=True, unique=True)
+    title: str = Field()
+    intro: str = Field(default="")
+    status: str = Field(default=DebateStatus.open)
+    created_by: int = Field(foreign_key="user.id", nullable=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
 class Feedback(rx.Model, table=True):
     """A table of Feedback."""
 
