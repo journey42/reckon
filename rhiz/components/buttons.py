@@ -210,6 +210,20 @@ def more_button(*args, **kwargs):
     return create_button("/more.svg", button_type="small", **kwargs)
 
 
+def create_debate_button(*args, **kwargs):
+    """Icon button to open the create-debate dialog for a concept.
+
+    Uses a built-in Lucide icon (no SVG asset needed) and the same small-button
+    styling as the other popover actions.
+    """
+    params = button_params["small"].copy()
+    params.update(kwargs)
+    return rx.tooltip(
+        rx.button(rx.icon("megaphone", size=20), **params),
+        content="Create Debate",
+    )
+
+
 def sort_by_upvotes_button(*args, **kwargs):
     return create_button(
         "/sort_by_upvotes.svg",

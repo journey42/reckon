@@ -41,6 +41,7 @@ from rhiz.components.buttons import (
     edit_button,
     view_concept_button,
     view_parent_button,
+    create_debate_button,
 )
 from rhiz.components.feedback_dialog import (
     feedback_dialog,
@@ -49,7 +50,9 @@ from rhiz.components.feedback_dialog import (
 )
 from rhiz.components.concept_dialog import concept_dialog, ConceptDialogState
 from rhiz.components.comment_dialog import comment_dialog, CommentDialogState
+from rhiz.components.debate_dialog import debate_dialog, DebateDialogState
 from rhiz.utils.db import find_similar_texts_with_join
+from rhiz.utils.permissions import can_manage_debates
 
 NUDGE_HEADING = "!Your idea has NOT been published yet!"
 NUDGE_RELATED_BODY = (
@@ -184,6 +187,11 @@ class ReckoningsPageState(AppState):
     loaded_count: int = 0
     has_more: bool = False
     is_loading: bool = False
+
+    @rx.var
+    def user_can_manage_debates(self) -> bool:
+        """Whether the current user may create/distribute debates."""
+        return can_manage_debates(self.user)
 
     # NOTE: Reflex dispatches a PUBLIC event handler to the substate that
     # *defines* it, so an inherited public `get_reckonings`/`load_more` would
@@ -1483,6 +1491,15 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
                             ),
                             disabled_delete_button(**popover_button_style),
                         ),
+                        rx.cond(
+                            state.user_can_manage_debates
+                            & ((state.page_type == 1) | (state.page_type == 4)),
+                            create_debate_button(
+                                **popover_button_style,
+                                on_click=DebateDialogState.open_for(item_id),
+                            ),
+                            rx.fragment(),
+                        ),
                         direction="row",
                         spacing="3",
                         size="1",
@@ -1660,6 +1677,7 @@ def page(state, *args, infinite_scroll=False, **kwargs):
         *trailing,
         comment_dialog(),
         concept_dialog(),
+        debate_dialog(),
         feedback_dialog(options=reckoning_feedback_options),
         **kwargs,
     )
