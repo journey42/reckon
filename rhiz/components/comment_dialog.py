@@ -120,7 +120,7 @@ def comment_dialog(*args, **kwargs):
                             **read_only_text_style,
                         ),
                         width="100%",
-                        max_height="20vh",
+                        height="25vh",
                         overflow_y="auto",
                         padding="12px",
                         border="1px solid #e2e8f0",
