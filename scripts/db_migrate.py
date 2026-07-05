@@ -10,7 +10,7 @@ Usage:
 import os
 import sys
 
-# Ensure we can import from the project root
+# Ensure we can import from project modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from alembic.config import Config
@@ -23,18 +23,10 @@ def get_db_url() -> str:
     url = os.getenv("DB_URL")
     if url:
         return url
-    # Fallback: read from alembic.ini
     import configparser
     cfg = configparser.ConfigParser()
     cfg.read("alembic.ini")
     return cfg.get("alembic", "sqlalchemy.url")
-
-
-def get_current_head() -> str:
-    """Get the current Alembic head revision."""
-    from alembic.script import ScriptDirectory
-    scripts = ScriptDirectory.from_config(Config("alembic.ini"))
-    return scripts.get_current_head()
 
 
 def main():
@@ -50,45 +42,52 @@ def main():
     has_version_table = "alembic_version" in tables
 
     if not has_version_table:
-        # Determine which revision to stamp by looking at applied migrations.
-        # If the debate table exists, the old migrations were applied.
-        # Otherwise, stamp at the very start.
-
-        # We check for the oldest migration's tables to determine starting point
         has_debate_table = "debate" in tables
         has_user_table = "user" in tables
 
         if has_debate_table:
-            # The debate table migration (c3d4e5f6a7b8) was applied.
-            # The user-verification migration (d4e5f6a7b8c9) may also be applied.
+            # Determine how many old migrations were applied
             has_verification = False
             if has_user_table:
-                cols = [c["name"] for c in inspector.get_columns("user")]
+                cols = [c["name"].lower() for c in inspector.get_columns("user")]
                 has_verification = "verification_token" in cols
 
             stamp_revision = "d4e5f6a7b8c9" if has_verification else "c3d4e5f6a7b8"
-            print(f"[migrate] alembic_version table missing. Stamping at {stamp_revision}...", flush=True)
+            print(
+                f"[migrate] alembic_version missing. Stamping at {stamp_revision}...",
+                flush=True,
+            )
 
             with engine.connect() as conn:
-                conn.execute(text(f"CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL, PRIMARY KEY (version_num))"))
-                conn.execute(text(f"INSERT INTO alembic_version (version_num) VALUES ('{stamp_revision}')"))
+                conn.execute(
+                    text(
+                        "CREATE TABLE IF NOT EXISTS alembic_version "
+                        "(version_num VARCHAR(32) NOT NULL, PRIMARY KEY (version_num))"
+                    )
+                )
+                conn.execute(
+                    text(f"INSERT INTO alembic_version (version_num) VALUES ('{stamp_revision}')")
+                )
                 conn.commit()
             print(f"[migrate] Stamped at {stamp_revision}.", flush=True)
         else:
-            print(f"[migrate] No existing tables found. Running full migration from scratch...", flush=True)
+            print(
+                f"[migrate] No existing tables. Running full migration from scratch...",
+                flush=True,
+            )
     else:
-        # Read current revision
         with engine.connect() as conn:
             result = conn.execute(text("SELECT version_num FROM alembic_version"))
             row = result.fetchone()
             current = row[0] if row else None
-            print(f"[migrate] alembic_version table exists, current revision: {current}", flush=True)
+            print(f"[migrate] alembic_version exists, revision: {current}", flush=True)
 
     engine.dispose()
 
-    # Now run alembic upgrade head
+    # Run alembic upgrade head — override config URL with env var
     print(f"[migrate] Running: alembic upgrade head...", flush=True)
     alembic_cfg = Config("alembic.ini")
+    alembic_cfg.set_main_option("sqlalchemy.url", db_url)
     command.upgrade(alembic_cfg, "head")
     print(f"[migrate] Migration complete.", flush=True)
 
