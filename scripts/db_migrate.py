@@ -32,7 +32,7 @@ def get_db_url() -> str:
 def known_revisions():
     """Return the set of revision IDs that exist as migration files."""
     cfg = Config()
-    cfg.set_main_option("script_location", "alembic")
+    cfg.set_main_option("script_location", "migrations")
     scripts = ScriptDirectory.from_config(cfg)
     return {r.revision for r in scripts.walk_revisions("base", "heads")}
 
@@ -54,7 +54,7 @@ def main():
 
     # Build Alembic config with correct DB URL
     alembic_cfg = Config()
-    alembic_cfg.set_main_option("script_location", "alembic")
+    alembic_cfg.set_main_option("script_location", "migrations")
     alembic_cfg.set_main_option("sqlalchemy.url", db_url)
 
     has_version_table = "alembic_version" in tables

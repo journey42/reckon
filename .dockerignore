@@ -5,12 +5,7 @@ test-results
 .web
 __pycache__/*
 
-# Keep the alembic migrations dir and config out of the backend image.
-# Migrations are applied manually (direct SQL) because the alembic history is
-# out of sync, and the container runs with RUN_MIGRATIONS_ON_START=0. Shipping
-# the local `alembic/` dir makes Python resolve `import alembic` to it (a
-# namespace pkg with no `util`), and shipping `alembic.ini` makes Reflex's
-# startup `check_schema_up_to_date()` try to import alembic — both crash
-# `reflex run`. Excluding them makes that check early-return.
+# The migrations dir holds Alembic migration scripts needed on startup.
+# The container now runs with RUN_MIGRATIONS_ON_START=1.
 alembic
 alembic.ini
