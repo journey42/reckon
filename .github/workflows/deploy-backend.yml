@@ -68,7 +68,7 @@ jobs:
               --set-env-vars API_URL=${{ secrets.PUBLIC_API_URL }} \
                              PUBLIC_BASE_URL=https://www.rhiz.ai \
                              SUNEDITOR_TOOLBAR_ENABLED=0 \
-                             RUN_MIGRATIONS_ON_START=0 \
+                             RUN_MIGRATIONS_ON_START=1 \
                              DB_URL=secretref:db-url \
               --query properties.latestRevisionName -o tsv)
 

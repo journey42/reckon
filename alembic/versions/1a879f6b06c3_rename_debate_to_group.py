@@ -30,6 +30,11 @@ def upgrade() -> None:
         op.execute(
             "ALTER TABLE \"user\" RENAME COLUMN can_create_debates TO can_create_groups"
         )
+    else:
+        # Neither old nor new column exists — add it
+        conn.execute(
+            "ALTER TABLE \"user\" ADD COLUMN IF NOT EXISTS can_create_groups BOOLEAN DEFAULT FALSE"
+        )
 
 
 def downgrade() -> None:
