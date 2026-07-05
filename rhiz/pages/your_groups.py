@@ -16,6 +16,7 @@ from rhiz.utils.qr import qr_data_uri
 from rhiz.styles import page_params
 from rhiz.components import container, navbar
 from rhiz.pages.group_common import public_base_url, group_row
+from rhiz.components.group_dialog import group_dialog, GroupDialogState
 
 
 class YourGroupsState(AppState):
@@ -87,7 +88,17 @@ def your_groups_page():
         rx.cond(
             YourGroupsState.can_manage,
             rx.vstack(
-                rx.heading("Your Groups", size="6"),
+                rx.hstack(
+                    rx.heading("Your Groups", size="6"),
+                    rx.spacer(),
+                    rx.button(
+                        "Create Group",
+                        on_click=GroupDialogState.open,
+                        size="2",
+                    ),
+                    width="100%",
+                    align="center",
+                ),
                 rx.text(
                     "Groups you've created. Share the link or QR code, and "
                     "open/close or delete them here.",
@@ -106,6 +117,7 @@ def your_groups_page():
                     YourGroupsState.rows,
                     lambda r: group_row(YourGroupsState, r),
                 ),
+                group_dialog(),
                 spacing="4",
                 align="stretch",
                 width="100%",
