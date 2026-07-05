@@ -15,7 +15,6 @@ from sqlalchemy import create_engine, text, inspect
 
 from alembic.config import Config
 from alembic import command
-from alembic.script import ScriptDirectory
 
 
 def get_db_url() -> str:
@@ -31,10 +30,24 @@ def get_db_url() -> str:
 
 def known_revisions():
     """Return the set of revision IDs that exist as migration files."""
-    cfg = Config()
-    cfg.set_main_option("script_location", "migrations")
-    scripts = ScriptDirectory.from_config(cfg)
-    return {r.revision for r in scripts.walk_revisions("base", "heads")}
+    import re
+    revisions = set()
+    versions_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "migrations", "versions")
+    if not os.path.isdir(versions_dir):
+        return revisions
+    for fn in os.listdir(versions_dir):
+        if not fn.endswith(".py"):
+            continue
+        fp = os.path.join(versions_dir, fn)
+        try:
+            with open(fp) as f:
+                content = f.read()
+        except Exception:
+            continue
+        m = re.search(r'^revision:\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+        if m:
+            revisions.add(m.group(1))
+    return revisions
 
 
 def stamp_at(alembic_cfg: Config, revision: str):
