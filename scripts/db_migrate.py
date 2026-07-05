@@ -8,13 +8,12 @@ Usage:
 """
 
 import os
+import subprocess
 import sys
 
 # Ensure we can import from project modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from alembic.config import Config
-from alembic import command
 from sqlalchemy import create_engine, text, inspect
 
 
@@ -46,7 +45,6 @@ def main():
         has_user_table = "user" in tables
 
         if has_debate_table:
-            # Determine how many old migrations were applied
             has_verification = False
             if has_user_table:
                 cols = [c["name"].lower() for c in inspector.get_columns("user")]
@@ -66,7 +64,9 @@ def main():
                     )
                 )
                 conn.execute(
-                    text(f"INSERT INTO alembic_version (version_num) VALUES ('{stamp_revision}')")
+                    text(
+                        f"INSERT INTO alembic_version (version_num) VALUES ('{stamp_revision}')"
+                    )
                 )
                 conn.commit()
             print(f"[migrate] Stamped at {stamp_revision}.", flush=True)
@@ -84,11 +84,25 @@ def main():
 
     engine.dispose()
 
-    # Run alembic upgrade head — override config URL with env var
+    # Run alembic upgrade head via CLI (pass DB_URL so env.py can use it)
     print(f"[migrate] Running: alembic upgrade head...", flush=True)
-    alembic_cfg = Config("alembic.ini")
-    alembic_cfg.set_main_option("sqlalchemy.url", db_url)
-    command.upgrade(alembic_cfg, "head")
+    env = os.environ.copy()
+    env["DB_URL"] = db_url
+    result = subprocess.run(
+        ["alembic", "upgrade", "head"],
+        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if result.stdout:
+        print(result.stdout, flush=True)
+    if result.stderr:
+        print(result.stderr, flush=True, file=sys.stderr)
+    if result.returncode != 0:
+        print(f"[migrate] ERROR: alembic upgrade head failed (exit {result.returncode})", flush=True)
+        sys.exit(result.returncode)
+
     print(f"[migrate] Migration complete.", flush=True)
 
 
