@@ -46,4 +46,4 @@ ENV PATH="/app/.venv/bin:$PATH" API_URL=$API_URL
 # server on :3000, which the ACA ingress (targetPort 8000) can't reach, so its
 # health probe fails and the container crash-loops. --backend-only binds granian
 # on :8000 where the ingress and the SWA frontend's websocket actually connect.
-CMD ["sh", "-c", "if [ \"${RUN_MIGRATIONS_ON_START:-1}\" = \"1\" ]; then reflex db migrate; fi && reflex run --env prod --backend-only --backend-host 0.0.0.0 --backend-port 8000"]
+CMD ["sh", "-c", "if [ \"${RUN_MIGRATIONS_ON_START:-1}\" = \"1\" ]; then python scripts/db_migrate.py; fi && reflex run --env prod --backend-only --backend-host 0.0.0.0 --backend-port 8000"]
