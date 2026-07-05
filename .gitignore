@@ -14,3 +14,5 @@ reflex.db
 AGENTS.md
 .playwright-mcp/
 alembic/
+ornith_harness/
+docs/superpowers/

@@ -1,15 +1,15 @@
-"""Slug helpers for debate pages."""
+"""Slug helpers for group pages."""
 
 import re
 from typing import Callable
 
 
 def slugify(text: str) -> str:
-    """Lowercase, alphanumerics joined by single hyphens; fallback 'debate'."""
+    """Lowercase, alphanumerics joined by single hyphens; fallback 'group'."""
     text = (text or "").lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
     text = text.strip("-")
-    return text or "debate"
+    return text or "group"
 
 
 def unique_slug(base: str, exists: Callable[[str], bool]) -> str:

@@ -6,7 +6,7 @@ from rhiz.components.buttons import (
     trending_concepts_button,
     your_concepts_button,
     logo_button,
-    debates_button,
+    groups_button,
 )
 from rhiz.components.feedback_dialog import (
     feedback_dialog,
@@ -28,9 +28,7 @@ def _authenticated_menu_items() -> rx.Component:
         rx.menu.separator(),
         rx.menu.item("Profile", on_click=rx.redirect("/profile")),
         rx.menu.item("Feedback", on_click=FeedbackDialogState.visible),
-        rx.menu.item("About", on_click=rx.redirect("/about")),
         rx.menu.item("How To", on_click=rx.redirect("/how_to")),
-        rx.menu.item("Guidelines", on_click=rx.redirect("/guidelines")),
         rx.menu.item("Terms", on_click=rx.redirect("/terms")),
         rx.menu.item("Privacy", on_click=rx.redirect("/privacy")),
         rx.cond(
@@ -55,7 +53,7 @@ def _authenticated_menu_items() -> rx.Component:
         ),
         rx.cond(
             AppState.user.role == UserTypes.admin,
-            rx.menu.item("All Debates", on_click=rx.redirect("/debates")),
+            rx.menu.item("All Groups", on_click=rx.redirect("/groups")),
         ),
         rx.cond(
             AppState.user.role == UserTypes.admin,
@@ -66,7 +64,7 @@ def _authenticated_menu_items() -> rx.Component:
 
 
 def _logged_out_menu_items() -> rx.Component:
-    """Dropdown for an anonymous visitor: just the debate onboarding overlay."""
+    """Dropdown for an anonymous visitor: just the group onboarding overlay."""
     return rx.menu.item("How this Works", on_click=HowItWorksDialogState.visible)
 
 
@@ -98,8 +96,8 @@ def app_logo() -> rx.Component:
                     trending_concepts_button(),
                     your_concepts_button(),
                     rx.cond(
-                        AppState.user_can_manage_debates,
-                        debates_button(),
+                        AppState.user_can_manage_groups,
+                        groups_button(),
                         rx.fragment(),
                     ),
                     legend_button(on_click=LegendDialogState.visible),
@@ -148,7 +146,7 @@ def navbar(*args, **kwargs) -> rx.Component:
             rx.fragment(),
             rx.button(
                 "How this works",
-                id="debate-howto-open",
+                id="group-howto-open",
                 display="none",
                 on_click=HowItWorksDialogState.visible,
             ),
@@ -158,7 +156,7 @@ def navbar(*args, **kwargs) -> rx.Component:
         # without a redirect the navbar can mount before that asset loads.
         on_mount=rx.call_script(
             "(function(){var n=0;(function go(){"
-            "if(window.rhizDebateOverlayInit){window.rhizDebateOverlayInit();return;}"
+            "if(window.rhizGroupOverlayInit){window.rhizGroupOverlayInit();return;}"
             "if(n++<20)setTimeout(go,100);})();})();"
         ),
         **navbar_styles,

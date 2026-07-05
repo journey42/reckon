@@ -49,7 +49,6 @@ Rhiz was founded with the goal of encouraging both independent thought and broad
 """
 
 
-@rx.page(on_load=AppState.check_login(), **page_params)
 def about():
     """The about page."""
     return info_page(about_text)
@@ -91,7 +90,6 @@ The trouble with brigading is not that it’s mean, or that it targets individua
 """
 
 
-@rx.page(on_load=AppState.check_login(), **page_params)
 def guidelines():
     """The guidlines page."""
     return info_page(guidelines_text)

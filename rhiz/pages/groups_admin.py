@@ -1,23 +1,23 @@
-"""Admin page: moderate ALL debates system-wide (/debates).
+"""Admin page: moderate ALL groups system-wide (/groups).
 
-Admin-only. Lists every debate (across all users) with its share link + QR,
+Admin-only. Lists every group (across all users) with its share link + QR,
 and lets an admin open/close or delete any of them — e.g. on behalf of other
-users once debate creation is extended beyond admins. Debates are created from
-the "Create Debate" action in a concept's card menu, not here.
+users once group creation is extended beyond admins. Groups are created from
+the Your Groups page, not here.
 """
 
 import reflex as rx
 from sqlmodel import select
 
-from rhiz.state.base import AppState, Debate, DebateStatus, UserTypes, User
-from rhiz.utils.debates import set_debate_status, delete_debate
+from rhiz.state.base import AppState, Group, GroupStatus, UserTypes, User
+from rhiz.utils.groups import set_group_status, delete_group
 from rhiz.utils.qr import qr_data_uri
 from rhiz.styles import page_params
 from rhiz.components import container, navbar
-from rhiz.pages.debate_common import public_base_url, debate_row
+from rhiz.pages.group_common import public_base_url, group_row
 
 
-class DebatesAdminState(AppState):
+class GroupsAdminState(AppState):
     rows: list[dict] = []
 
     @rx.var
@@ -36,67 +36,67 @@ class DebatesAdminState(AppState):
             return
         base = public_base_url()
         with rx.session() as session:
-            # Single outer join so each debate's creator username comes back in
+            # Single outer join so each group's creator username comes back in
             # one query (no per-row lookup against the remote DB).
             rows = session.exec(
-                select(Debate, User.username)
-                .outerjoin(User, User.id == Debate.created_by)
-                .order_by(Debate.created_at.desc())
+                select(Group, User.username)
+                .outerjoin(User, User.id == Group.created_by)
+                .order_by(Group.created_at.desc())
             ).all()
-            for d, creator_username in rows:
-                url = f"{base}/debate/{d.slug}"
+            for g, creator_username in rows:
+                url = f"{base}/group/{g.slug}"
                 self.rows.append(
                     {
-                        "id": d.id,
-                        "slug": d.slug,
-                        "title": d.title,
-                        "status": d.status,
+                        "id": g.id,
+                        "slug": g.slug,
+                        "name": g.name,
+                        "status": g.status,
                         "url": url,
                         "qr": qr_data_uri(url),
                         "creator": creator_username or "Unknown",
                     }
                 )
 
-    def toggle_status(self, debate_id: int, current: str):
+    def toggle_status(self, group_id: int, current: str):
         if not (self.user and self.user.role == UserTypes.admin):
             return
         new_status = (
-            DebateStatus.closed
-            if current == DebateStatus.open
-            else DebateStatus.open
+            GroupStatus.closed
+            if current == GroupStatus.open
+            else GroupStatus.open
         )
         with rx.session() as session:
-            set_debate_status(session, debate_id, new_status)
+            set_group_status(session, group_id, new_status)
         self._refresh()
 
-    def delete_debate(self, debate_id: int):
+    def delete_group(self, group_id: int):
         if not (self.user and self.user.role == UserTypes.admin):
             return
         with rx.session() as session:
-            delete_debate(session, debate_id)  # admin: delete any debate
+            delete_group(session, group_id)  # admin: delete any group
         self._refresh()
 
 
-def debates_admin_page():
+def groups_admin_page():
     return container(
         navbar(),
         rx.cond(
-            DebatesAdminState.is_admin,
+            GroupsAdminState.is_admin,
             rx.vstack(
-                rx.heading("All Debates", size="6"),
+                rx.heading("All Groups", size="6"),
                 rx.text(
-                    "Every debate on the site. Open/close or delete any of them "
+                    "Every group on the site. Open/close or delete any of them "
                     "— including on behalf of other users.",
                     size="2",
                 ),
                 rx.cond(
-                    DebatesAdminState.rows.length() == 0,
-                    rx.callout("No debates have been created yet.", size="1"),
+                    GroupsAdminState.rows.length() == 0,
+                    rx.callout("No groups have been created yet.", size="1"),
                     rx.fragment(),
                 ),
                 rx.foreach(
-                    DebatesAdminState.rows,
-                    lambda r: debate_row(DebatesAdminState, r),
+                    GroupsAdminState.rows,
+                    lambda r: group_row(GroupsAdminState, r),
                 ),
                 spacing="4",
                 align="stretch",
@@ -111,7 +111,7 @@ def debates_admin_page():
     )
 
 
-@rx.page(route="/debates", on_load=DebatesAdminState.on_load, **page_params)
-def debates_admin():
-    """Admin-only: moderate all debates."""
-    return debates_admin_page()
+@rx.page(route="/groups", on_load=GroupsAdminState.on_load, **page_params)
+def groups_admin():
+    """Admin-only: moderate all groups."""
+    return groups_admin_page()

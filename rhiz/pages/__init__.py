@@ -3,8 +3,6 @@
 from .home import home
 from .login import login
 from .logged_out import logged_out
-from .info import about
-from .info import guidelines
 from .info import privacy
 from .info import terms
 from .info import how_to
@@ -32,8 +30,8 @@ from .reckonings import concept
 from .reckonings import compare
 from .reckonings import your_drafts
 from .feedback import feedback
-from . import debate  # noqa: F401
-from . import debates_admin  # noqa: F401
-from . import your_debates  # noqa: F401
-from . import verify_email_sent  # noqa: F401
-from . import verify_email  # noqa: F401
+from rhiz.pages.group import group  # noqa: F401
+from rhiz.pages.groups_admin import groups_admin  # noqa: F401
+from rhiz.pages.your_groups import your_groups  # noqa: F401
+from rhiz.pages.verify_email_sent import verify_email_sent  # noqa: F401
+from rhiz.pages.verify_email import verify_email  # noqa: F401

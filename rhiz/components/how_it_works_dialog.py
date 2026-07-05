@@ -1,9 +1,9 @@
-"""'How this works' debate-onboarding overlay.
+"""'How this works' group-onboarding overlay.
 
-Greets first-time visitors on a debate (the comments view at /debate/<slug>)
-with the debate's title + intro, plus a short explainer. Auto-opens once per
-concept via assets/scrolling.js and can be re-summoned from the logged-out
-navbar dropdown. Controlled by `show`, mirroring LegendDialogState.
+Greets first-time visitors on a group page (the comments view at /group/<slug>)
+with the group's name + founding question, plus a short explainer. Auto-opens
+once per visit via assets/scrolling.js and can be re-summoned from the
+logged-out navbar dropdown. Controlled by `show`, mirroring LegendDialogState.
 """
 
 import reflex as rx
@@ -14,18 +14,18 @@ class HowItWorksDialogState(AppState):
     """'How this works' overlay state."""
 
     show: bool = False
-    debate_title: str = ""
-    debate_intro: str = ""
+    group_name: str = ""
+    founding_question: str = ""
 
     def visible(self):
         """Toggle the overlay."""
         self.show = not self.show
 
     @rx.event
-    def set_debate_info(self, title: str, intro: str):
-        """Populate the greeting with the current debate's title + intro."""
-        self.debate_title = title or ""
-        self.debate_intro = intro or ""
+    def set_group_info(self, name: str, founding_question: str):
+        """Populate the greeting with the current group's name + founding question."""
+        self.group_name = name or ""
+        self.founding_question = founding_question or ""
 
 
 def how_it_works_dialog(*args, **kwargs):
@@ -33,27 +33,34 @@ def how_it_works_dialog(*args, **kwargs):
         rx.dialog.content(
             rx.dialog.title(
                 rx.cond(
-                    HowItWorksDialogState.debate_title != "",
-                    HowItWorksDialogState.debate_title,
+                    HowItWorksDialogState.founding_question != "",
+                    f"How this works: {HowItWorksDialogState.group_name}",
                     "How this works",
                 ),
             ),
-            rx.cond(
-                HowItWorksDialogState.debate_intro != "",
-                rx.text(
-                    HowItWorksDialogState.debate_intro,
-                    size="2",
-                    style={"whiteSpace": "pre-line", "color": "#475569"},
-                    margin_bottom="10px",
+            rx.text(
+                (
+                    "This is a pilot to allow groups to find consensus. To "
+                    "participate just answer the founding question your group "
+                    "has posed in your own words or upvote existing answers. "
+                    "If you get lost you can always return to your groups home "
+                    "page (link or QR code).\n\n"
+                    "The ideas you submit will be ranked by semantic similarity "
+                    "with other submissions in your group. When you submit an "
+                    "idea any related ideas that have been submitted to the "
+                    "group will display below, starting with your idea at the "
+                    "top.\n\n"
+                    "If someone has entered something similar you can either "
+                    "choose to stick with your language and confirm your "
+                    "submission or switch your support to the other statement. "
+                    "This allows emergent consensus to coalesce. The pipeline "
+                    "that compares idea submissions does not apply to the "
+                    "comments section. The comments are plain text and you "
+                    "submit them along with a green, yellow or red button "
+                    "conveying agreement, a neutral note, or disagreement."
                 ),
-                rx.fragment(),
-            ),
-            rx.dialog.description(
-                "Anyone can read this concept and the responses below. To add a "
-                "comment, compare it with similar ideas, or propose your own "
-                "alternative, create a free account — your contribution then joins "
-                "the wider debate on the site.",
                 size="2",
+                style={"whiteSpace": "pre-line", "color": "#475569"},
             ),
             rx.dialog.close(
                 rx.button(

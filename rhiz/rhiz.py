@@ -15,7 +15,7 @@ def _init_posthog():
     return Posthog(project_api_key=api_key, host=host)
 
 
-posthog = _init_posthog()
+posthog = _init_posthog() if os.getenv("POSTHOG_SECRET_KEY") else None
 
 # posthog.capture('test-id', 'test-event')
 posthog_script = (

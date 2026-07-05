@@ -1,7 +1,7 @@
 """Email-verification landing page (/verify_email/[token]).
 
 Consumes the token, enables the account, and redirects to login (carrying the
-debate `next` so the user lands back on the debate after logging in). Public —
+group `next` so the user lands back on the group after logging in). Public —
 no login required.
 """
 
@@ -40,7 +40,7 @@ def verify_email_page():
                     rx.heading("Link invalid or expired", size="6"),
                     rx.text(
                         "This verification link is no longer valid. Try signing "
-                        "up again from the debate page.",
+                        "up again from the group page.",
                         size="3",
                     ),
                     rx.link("Go to login", href="/login"),

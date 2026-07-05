@@ -91,8 +91,8 @@ def legend_button(*args, **kwargs):
     return create_button("/legend.svg", content="The Legend", **kwargs)
 
 
-def debates_button(*args, **kwargs):
-    """Main-nav icon linking to the current user's debates ("Your Debates").
+def groups_button(*args, **kwargs):
+    """Main-nav icon linking to the current user's groups ("Your Groups").
 
     Uses a built-in Lucide icon (no SVG asset) with the main-menu styling and a
     tooltip, mirroring the other main-nav buttons (which link + tooltip).
@@ -101,10 +101,10 @@ def debates_button(*args, **kwargs):
     params.update(kwargs)
     return rx.link(
         rx.tooltip(
-            rx.button(rx.icon("megaphone", size=24), **params),
-            content="Your Debates",
+            rx.button(rx.icon("users", size=24), **params),
+            content="Your Groups",
         ),
-        href="/your_debates",
+        href="/your_groups",
     )
 
 
@@ -227,18 +227,7 @@ def more_button(*args, **kwargs):
     return create_button("/more.svg", button_type="small", **kwargs)
 
 
-def create_debate_button(*args, **kwargs):
-    """Icon button to open the create-debate dialog for a concept.
 
-    Uses a built-in Lucide icon (no SVG asset needed) and the same small-button
-    styling as the other popover actions.
-    """
-    params = button_params["small"].copy()
-    params.update(kwargs)
-    return rx.tooltip(
-        rx.button(rx.icon("megaphone", size=20), **params),
-        content="Create Debate",
-    )
 
 
 def sort_by_upvotes_button(*args, **kwargs):

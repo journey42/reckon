@@ -41,7 +41,6 @@ from rhiz.components.buttons import (
     edit_button,
     view_concept_button,
     view_parent_button,
-    create_debate_button,
 )
 from rhiz.components.feedback_dialog import (
     feedback_dialog,
@@ -50,10 +49,10 @@ from rhiz.components.feedback_dialog import (
 )
 from rhiz.components.concept_dialog import concept_dialog, ConceptDialogState
 from rhiz.components.comment_dialog import comment_dialog, CommentDialogState
-from rhiz.components.debate_dialog import debate_dialog, DebateDialogState
+from rhiz.components.group_dialog import group_dialog, GroupDialogState
 from rhiz.utils.db import find_similar_texts_with_join
-from rhiz.utils.permissions import can_manage_debates
-from rhiz.utils.debates import get_debate_for_concept
+from rhiz.utils.permissions import can_manage_groups
+from rhiz.utils.groups import get_group_for_concept
 from urllib.parse import quote
 
 NUDGE_HEADING = "!Your idea has NOT been published yet!"
@@ -191,9 +190,9 @@ class ReckoningsPageState(AppState):
     is_loading: bool = False
 
     @rx.var
-    def user_can_manage_debates(self) -> bool:
-        """Whether the current user may create/distribute debates."""
-        return can_manage_debates(self.user)
+    def user_can_manage_groups(self) -> bool:
+        """Whether the current user may create groups."""
+        return can_manage_groups(self.user)
 
     # NOTE: Reflex dispatches a PUBLIC event handler to the substate that
     # *defines* it, so an inherited public `get_reckonings`/`load_more` would
@@ -262,7 +261,7 @@ class ReckoningsPageState(AppState):
         """Gate write/nav actions on the public comments page.
 
         Anonymous visitors are sent to signup with a return path; when the
-        concept they're on is a debate, that path is the /debate/<slug> link so
+        concept they're on is a group, that path is the /group/<slug> link so
         is_debate_origin() matches and the account auto-enables after email
         verification. Logged-in-but-not-enabled users keep the old /login gate.
         """
@@ -276,9 +275,9 @@ class ReckoningsPageState(AppState):
                     cid = None
                 if cid is not None:
                     with rx.session() as session:
-                        debate = get_debate_for_concept(session, cid)
-                    if debate is not None:
-                        target = f"/debate/{debate.slug}"
+                        group = get_group_for_concept(session, cid)
+                    if group is not None:
+                        target = f"/group/{group.slug}"
             return rx.redirect(f"/signup?next={quote(target, safe='/')}")
         if not self.user.enabled:
             return rx.redirect("/login")
@@ -384,6 +383,18 @@ class ReckoningsPageState(AppState):
 
             if type == ReckoningTypes.up_vote:
                 self.dismiss_support_nudge()
+
+            # Capture PostHog event for vote cast.
+            try:
+                from rhiz.rhiz import posthog
+                if posthog and self.user:
+                    posthog.capture("vote_cast", distinct_id=f"user-{self.user.id}", properties={
+                        "event_type": "vote",
+                        "vote_type": "upvote" if type == ReckoningTypes.up_vote else "downvote",
+                        "target_reckoning_id": cid,
+                    })
+            except Exception:
+                pass  # PostHog failures should not block voting.
 
             yield self.save_scroll_position()
             current_path = self.router.url.path or "/"
@@ -848,7 +859,7 @@ class CommentsPageState(ReckoningsPageState):
 
     parent: Optional[Reckoning] = None
     # When non-zero, reckoning_id resolves to this concept id instead of the
-    # route's "rid" param. Used by the debate page (/debate/<slug>), which
+    # route's "rid" param. Used by the group page (/group/<slug>), which
     # reuses this state but loads by slug-resolved concept id rather than rid.
     concept_id_override: int = 0
 
@@ -1528,15 +1539,7 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
                             ),
                             disabled_delete_button(**popover_button_style),
                         ),
-                        rx.cond(
-                            state.user_can_manage_debates
-                            & ((state.page_type == 1) | (state.page_type == 4)),
-                            create_debate_button(
-                                **popover_button_style,
-                                on_click=DebateDialogState.open_for(item_id),
-                            ),
-                            rx.fragment(),
-                        ),
+                        rx.fragment(),
                         direction="row",
                         spacing="3",
                         size="1",
@@ -1714,7 +1717,7 @@ def page(state, *args, infinite_scroll=False, **kwargs):
         *trailing,
         comment_dialog(),
         concept_dialog(),
-        debate_dialog(),
+        group_dialog(),
         feedback_dialog(options=reckoning_feedback_options),
         **kwargs,
     )

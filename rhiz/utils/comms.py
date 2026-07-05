@@ -101,12 +101,12 @@ def send_verification_email(user: User, verify_url: str) -> bool:
             "subject": "Verify your Rhiz account",
             "plainText": (
                 "Welcome to Rhiz! Confirm your email to activate your account "
-                f"and join the debate:\n{verify_url}\n\n"
+                f"and join the group:\n{verify_url}\n\n"
                 "If you didn't sign up, you can ignore this message."
             ),
             "html": (
                 "<p>Welcome to Rhiz! Confirm your email to activate your "
-                "account and join the debate:</p>"
+                "account and join the group:</p>"
                 f'<p><a href="{safe_url}">Verify my account</a></p>'
                 "<p>If you didn't sign up, you can ignore this message.</p>"
             ),

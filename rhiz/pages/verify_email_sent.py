@@ -1,4 +1,4 @@
-"""Confirmation shown after a debate-origin signup sends a verification email."""
+"""Confirmation shown after a group-origin signup sends a verification email."""
 
 import reflex as rx
 from rhiz.components.container import container
@@ -13,7 +13,7 @@ def verify_email_sent():
                 rx.heading("Check your email", size="6"),
                 rx.text(
                     "We've sent you a link to verify your email and activate "
-                    "your account. Open it, then log in to join the debate.",
+                    "your account. Open it, then log in to join the group.",
                     size="3",
                 ),
                 rx.link("Back to login", href="/login"),

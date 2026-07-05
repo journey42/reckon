@@ -28,7 +28,7 @@ class User(rx.Model, table=True):
     email: str = Field()
     enabled: bool = Field(default=False)
     role: int = Field(default=0)
-    can_create_debates: bool = Field(default=False)
+    can_create_groups: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(nullable=True)
     verification_token: Optional[str] = Field(default=None, nullable=True)
@@ -362,21 +362,21 @@ class Reckoning(rx.Model, table=True):
 
 
 @dataclass(frozen=True)
-class DebateStatus:
-    """Debate lifecycle states."""
+class GroupStatus:
+    """Group lifecycle states."""
 
     open: str = "open"
     closed: str = "closed"
 
 
-class Debate(rx.Model, table=True):
-    """A distributable debate page wrapping a single concept (1:1)."""
+class Group(rx.Model, table=True):
+    """A distributable group page wrapping a single concept (1:1)."""
 
     slug: str = Field(index=True, unique=True)
     concept_id: int = Field(foreign_key="reckoning.id", index=True, unique=True)
-    title: str = Field()
-    intro: str = Field(default="")
-    status: str = Field(default=DebateStatus.open)
+    name: str = Field()
+    founding_question: str = Field(default="")
+    status: str = Field(default=GroupStatus.open)
     created_by: Optional[int] = Field(
         default=None, foreign_key="user.id", nullable=True
     )
@@ -475,15 +475,15 @@ class AppState(rx.State):
         return self.user is not None
 
     @rx.var(auto_deps=False, deps=["user"])
-    def user_can_manage_debates(self) -> bool:
-        """True if the current user may create/manage debates (role or per-user flag).
+    def user_can_manage_groups(self) -> bool:
+        """True if the current user may create/manage groups (role or per-user flag).
 
         Imported lazily + explicit deps because rhiz.utils.permissions imports
         from this module (circular import otherwise breaks auto-dep detection).
         """
-        from rhiz.utils.permissions import can_manage_debates
+        from rhiz.utils.permissions import can_manage_groups
 
-        return can_manage_debates(self.user)
+        return can_manage_groups(self.user)
 
     @rx.event(background=True)
     async def check_if_user_enabled(self):

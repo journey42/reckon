@@ -1,4 +1,4 @@
-"""Email-verification token helpers for debate-origin signups."""
+"""Email-verification token helpers for group-origin signups."""
 
 import secrets
 from datetime import datetime, timezone
@@ -15,9 +15,9 @@ def generate_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def is_debate_origin(nxt: str | None) -> bool:
-    """True if a signup's `next` points at a debate page."""
-    return bool(nxt) and nxt.startswith("/debate/")
+def is_group_origin(nxt: str | None) -> bool:
+    """True if a signup's `next` points at a group page."""
+    return bool(nxt) and nxt.startswith("/group/")
 
 
 def verify_and_enable(session, token: str) -> "User | None":

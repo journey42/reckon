@@ -1,27 +1,27 @@
-"""Shared building blocks for the debate management pages.
+"""Shared building blocks for the group management pages.
 
-Both the admin all-debates view (/debates) and the per-user view
-(/your_debates) render the same kind of row (share link + QR, open/close,
+Both the admin all-groups view (/groups) and the per-user view
+(/your_groups) render the same kind of row (share link + QR, open/close,
 delete) and compute the same public share URL. The only differences are which
-debates each lists and who may see the page, so those live in the page modules
+groups each lists and who may see the page, so those live in the page modules
 while the common rendering lives here.
 """
 
 import os
 import reflex as rx
 
-from rhiz.state.base import DebateStatus
+from rhiz.state.base import GroupStatus
 
 
 def public_base_url() -> str:
-    """Public origin for debate share links. Set PUBLIC_BASE_URL in production
+    """Public origin for group share links. Set PUBLIC_BASE_URL in production
     (e.g. https://www.rhiz.ai); defaults to the local dev frontend. Trailing
     slash is stripped."""
     return os.environ.get("PUBLIC_BASE_URL", "http://localhost:3000").rstrip("/")
 
 
-def debate_row(state_cls, r):
-    """A single debate card. `state_cls` is the page's State class so the
+def group_row(state_cls, r):
+    """A single group card. `state_cls` is the page's State class so the
     open/close and delete actions dispatch to that page's handlers.
 
     Uses a responsive flex: a row on desktop, but stacked into a column on
@@ -31,7 +31,7 @@ def debate_row(state_cls, r):
     return rx.card(
         rx.flex(
             rx.vstack(
-                rx.heading(r["title"], size="3"),
+                rx.heading(r["name"], size="3"),
                 rx.link(
                     r["url"],
                     href=r["url"],
@@ -55,7 +55,7 @@ def debate_row(state_cls, r):
             ),
             rx.vstack(
                 rx.button(
-                    rx.cond(r["status"] == DebateStatus.open, "Close", "Reopen"),
+                    rx.cond(r["status"] == GroupStatus.open, "Close", "Reopen"),
                     on_click=state_cls.toggle_status(r["id"], r["status"]),
                     variant="soft",
                     size="1",
@@ -63,7 +63,7 @@ def debate_row(state_cls, r):
                 ),
                 rx.button(
                     "Delete",
-                    on_click=state_cls.delete_debate(r["id"]),
+                    on_click=state_cls.delete_group(r["id"]),
                     color_scheme="red",
                     variant="soft",
                     size="1",

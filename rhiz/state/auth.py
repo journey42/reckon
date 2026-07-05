@@ -12,7 +12,7 @@ from rhiz.utils.validations import (
 import os
 from datetime import timedelta
 from rhiz.utils.comms import send_password_reset_email, send_verification_email
-from rhiz.utils.verification import generate_token, is_debate_origin, TOKEN_TTL_HOURS
+from rhiz.utils.verification import generate_token, is_group_origin, TOKEN_TTL_HOURS
 from rhiz.utils.security import hash_password, verify_password
 from urllib.parse import quote
 
@@ -72,7 +72,7 @@ class AuthState(AppState):
                 return rx.window_alert("User with that email already exists.")
 
             nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
-            debate_origin = is_debate_origin(nxt)
+            group_origin = is_group_origin(nxt)
 
             hashed_password = hash_password(self.password)
             new_user = User(
@@ -82,7 +82,7 @@ class AuthState(AppState):
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
             )
-            if debate_origin:
+            if group_origin:
                 new_user.verification_token = generate_token()
                 new_user.verification_expires_at = datetime.now(
                     timezone.utc
@@ -98,13 +98,23 @@ class AuthState(AppState):
             )
             session.commit()
 
-            if not debate_origin:
+            # Capture PostHog event for signup.
+            try:
+                from rhiz.rhiz import posthog
+                if posthog:
+                    posthog.capture("signup", distinct_id=f"user-{new_user.id}", properties={
+                        "event_type": "group_origin" if group_origin else "normal_signup",
+                    })
+            except Exception:
+                pass  # PostHog failures should not block signup.
+
+            if not group_origin:
                 # Normal signup: unchanged (disabled, pending manual approval).
                 self.user = new_user
                 return rx.redirect("/signup_successful")
 
-            # Debate-origin signup: email a verification link that re-enables
-            # the account and returns the user to the debate after login.
+            # Group-origin signup: email a verification link that re-enables
+            # the account and returns the user to the group after login.
             base = os.environ.get(
                 "PUBLIC_BASE_URL", "http://localhost:3000"
             ).rstrip("/")
