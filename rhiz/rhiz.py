@@ -2,7 +2,6 @@
 
 import os
 import reflex as rx
-import rhiz.pages
 from posthog import Posthog
 
 
@@ -29,3 +28,5 @@ if posthog_script is not None:
 app = rx.App(
     head_components=head_scripts,
 )
+
+import rhiz.pages  # noqa: F401,E402 — registers @rx.page decorated routes

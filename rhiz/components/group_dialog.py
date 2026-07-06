@@ -87,9 +87,7 @@ def group_dialog(*args, **kwargs):
                 ),
                 rx.cond(
                     GroupDialogState.error != "",
-                    rx.callout(
-                        GroupDialogState.error, color_scheme="red", size="1"
-                    ),
+                    rx.callout(GroupDialogState.error, color_scheme="red", size="1"),
                     rx.fragment(),
                 ),
                 rx.hstack(

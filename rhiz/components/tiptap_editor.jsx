@@ -8,6 +8,11 @@ import Image from '@tiptap/extension-image'
 import Youtube from '@tiptap/extension-youtube'
 
 const RhizTiptapEditor = ({ value, onChange, placeholder, height, toolbarEnabled, style }) => {
+  // Track whether the latest content change originated from the editor itself
+  // (user typing).  When it did, the useEffect below must NOT write `value`
+  // back into the editor — that would reset the cursor and corrupt input.
+  const internalChange = React.useRef(false)
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -25,6 +30,7 @@ const RhizTiptapEditor = ({ value, onChange, placeholder, height, toolbarEnabled
     ],
     content: value || '',
     onUpdate: ({ editor }) => {
+      internalChange.current = true
       onChange(editor.getHTML())
     },
     editorProps: {
@@ -36,9 +42,16 @@ const RhizTiptapEditor = ({ value, onChange, placeholder, height, toolbarEnabled
   }, [])
 
   React.useEffect(() => {
-    if (editor && value !== undefined && value !== editor.getHTML()) {
-      editor.commands.setContent(value || '', false)
+    // Only sync value → editor when the change came from OUTSIDE the editor
+    // (e.g. state reset, loading a different concept).  When the change was
+    // caused by the user typing (internalChange), skip the sync to avoid the
+    // feedback loop that corrupts input.
+    if (editor && value !== undefined && !internalChange.current) {
+      if (value !== editor.getHTML()) {
+        editor.commands.setContent(value || '', false)
+      }
     }
+    internalChange.current = false
   }, [value, editor])
 
   if (!editor) return null

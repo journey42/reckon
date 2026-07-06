@@ -49,11 +49,29 @@ from rhiz.components.feedback_dialog import (
 )
 from rhiz.components.concept_dialog import concept_dialog, ConceptDialogState
 from rhiz.components.comment_dialog import comment_dialog, CommentDialogState
-from rhiz.components.group_dialog import group_dialog, GroupDialogState
+from rhiz.components.group_dialog import group_dialog
 from rhiz.utils.db import find_similar_texts_with_join
 from rhiz.utils.permissions import can_manage_groups
 from rhiz.utils.groups import get_group_for_concept
 from urllib.parse import quote
+
+
+def _exclude_private_groups():
+    """SQLAlchemy filter: only site-wide or public-group reckonings.
+
+    Site-wide concepts have group_id IS NULL. Public-group concepts have
+    group_id pointing at a Group with is_public=True. Private group concepts
+    are excluded from all site-wide feeds.
+    """
+    from rhiz.state.base import Group
+
+    return _or(
+        Reckoning.group_id.is_(None),
+        Reckoning.group_id.in_(
+            select(Group.id).where(Group.is_public == True)  # noqa: E712
+        ),
+    )
+
 
 NUDGE_HEADING = "!Your idea has NOT been published yet!"
 NUDGE_RELATED_BODY = (
@@ -362,7 +380,7 @@ class ReckoningsPageState(AppState):
                         )
                     ).first()  # Assuming the count result is the first element
 
-                    if other_votes_count == 0:
+                    if other_votes_count == 0 and concept.group_id is None:
                         concept.type = ReckoningTypes.draft
                 else:
                     vote.type = type
@@ -387,12 +405,21 @@ class ReckoningsPageState(AppState):
             # Capture PostHog event for vote cast.
             try:
                 from rhiz.rhiz import posthog
+
                 if posthog and self.user:
-                    posthog.capture("vote_cast", distinct_id=f"user-{self.user.id}", properties={
-                        "event_type": "vote",
-                        "vote_type": "upvote" if type == ReckoningTypes.up_vote else "downvote",
-                        "target_reckoning_id": cid,
-                    })
+                    posthog.capture(
+                        "vote_cast",
+                        distinct_id=f"user-{self.user.id}",
+                        properties={
+                            "event_type": "vote",
+                            "vote_type": (
+                                "upvote"
+                                if type == ReckoningTypes.up_vote
+                                else "downvote"
+                            ),
+                            "target_reckoning_id": cid,
+                        },
+                    )
             except Exception:
                 pass  # PostHog failures should not block voting.
 
@@ -451,6 +478,7 @@ class YourDraftsPageState(ReckoningsPageState):
                 _and(
                     Reckoning.type == ReckoningTypes.draft,
                     Reckoning.user_id == self.user.id,
+                    _exclude_private_groups(),
                 )
             )
         )
@@ -501,9 +529,12 @@ class NewConceptsPageState(ReckoningsPageState):
             select(Reckoning)
             .order_by(Reckoning.created_at.desc())
             .where(
-                _or(
-                    Reckoning.type == ReckoningTypes.concept,
-                    Reckoning.type == ReckoningTypes.draft,
+                _and(
+                    _or(
+                        Reckoning.type == ReckoningTypes.concept,
+                        Reckoning.type == ReckoningTypes.draft,
+                    ),
+                    _exclude_private_groups(),
                 )
             )
         )
@@ -572,7 +603,12 @@ class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
                 up_vote_count_subquery,
                 Reckoning.id == up_vote_count_subquery.c.parent_reckoning_id,
             )
-            .where(Reckoning.type == ReckoningTypes.concept)
+            .where(
+                _and(
+                    Reckoning.type == ReckoningTypes.concept,
+                    _exclude_private_groups(),
+                )
+            )
         )
 
         # Conditionally add the search filter if `self.search` is provided
@@ -650,7 +686,12 @@ class TrendingConceptsBySupportPageState(ReckoningsPageState):
                 Reckoning.id
                 == supportive_comments_count_subquery.c.parent_reckoning_id,
             )
-            .where(Reckoning.type == ReckoningTypes.concept)
+            .where(
+                _and(
+                    Reckoning.type == ReckoningTypes.concept,
+                    _exclude_private_groups(),
+                )
+            )
         )
 
         # Conditionally add the search filter if `self.search` is provided
@@ -710,6 +751,7 @@ class YourConceptsPageState(ReckoningsPageState):
                 _and(
                     Reckoning.type == ReckoningTypes.concept,
                     Reckoning.user_id == self.user.id,
+                    _exclude_private_groups(),
                 )
             )
         )
@@ -782,7 +824,12 @@ class ComparePageState(ReckoningsPageState):
             self.nudge_has_matches = bool(similar_ids)
 
             # Construct the base query with the condition that applies in both cases
-            query = select(Reckoning).where(Reckoning.id.in_(primary_keys))
+            query = select(Reckoning).where(
+                _and(
+                    Reckoning.id.in_(primary_keys),
+                    _exclude_private_groups(),
+                )
+            )
 
             # Conditionally add the search filter if `self.search` is provided
             if self.search:
@@ -927,9 +974,7 @@ class CommentsPageState(ReckoningsPageState):
             child.depth = (
                 "4px" if depth == 0 else (str(depth * 20) + "px")
             )  # Set the depth for each child
-            child.compute_tallies(
-                self.user.id if self.user else None, session=session
-            )
+            child.compute_tallies(self.user.id if self.user else None, session=session)
             self.reckonings.append(child)
             if max_depth == -1 or depth < max_depth - 1:
                 self.fetch_children(session, child.id, depth + 1, max_depth)
@@ -1299,7 +1344,7 @@ def render_comment(state, c: Reckoning):
                                         ),
                                     ),
                                 ),
-                                 **comment_badge_style,
+                                **comment_badge_style,
                             ),
                             SafeMarkdown.create(
                                 content=c.parent_content,

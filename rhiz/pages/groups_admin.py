@@ -10,7 +10,7 @@ import reflex as rx
 from sqlmodel import select
 
 from rhiz.state.base import AppState, Group, GroupStatus, UserTypes, User
-from rhiz.utils.groups import set_group_status, delete_group
+from rhiz.utils.groups import set_group_status, set_group_public, delete_group
 from rhiz.utils.qr import qr_data_uri
 from rhiz.styles import page_params
 from rhiz.components import container, navbar
@@ -51,6 +51,7 @@ class GroupsAdminState(AppState):
                         "slug": g.slug,
                         "name": g.name,
                         "status": g.status,
+                        "is_public": g.is_public,
                         "url": url,
                         "qr": qr_data_uri(url),
                         "creator": creator_username or "Unknown",
@@ -61,9 +62,7 @@ class GroupsAdminState(AppState):
         if not (self.user and self.user.role == UserTypes.admin):
             return
         new_status = (
-            GroupStatus.closed
-            if current == GroupStatus.open
-            else GroupStatus.open
+            GroupStatus.closed if current == GroupStatus.open else GroupStatus.open
         )
         with rx.session() as session:
             set_group_status(session, group_id, new_status)
@@ -74,6 +73,15 @@ class GroupsAdminState(AppState):
             return
         with rx.session() as session:
             delete_group(session, group_id)  # admin: delete any group
+        self._refresh()
+
+    def toggle_public(self, group_id: int):
+        if not (self.user and self.user.role == UserTypes.admin):
+            return
+        with rx.session() as session:
+            group = session.exec(select(Group).where(Group.id == group_id)).first()
+            if group is not None:
+                set_group_public(session, group_id, not group.is_public)
         self._refresh()
 
 

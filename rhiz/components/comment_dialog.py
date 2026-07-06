@@ -62,15 +62,10 @@ class CommentDialogState(AppState):
 
     @rx.event
     def submit(self):
-        """Submit feedback."""
+        """Submit comment and reload the current page so it appears."""
+        if self.content == "":
+            return
         with rx.session() as session:
-            if self.content == "":
-                return
-            # comment_content = "This reckoning did not include a comment. Feel free to add one."
-
-            # if self.content != "":
-            #     comment_content = self.content
-
             if self.is_editing:
                 comment = session.exec(
                     select(Reckoning).where(Reckoning.id == self.cid)
@@ -78,7 +73,7 @@ class CommentDialogState(AppState):
                 comment.content = self.content
                 comment.updated_at = datetime.now(timezone.utc)
                 session.commit()
-                self.show = not (self.show)
+                self.show = False
             else:
                 comment = Reckoning(
                     content=self.content,
@@ -90,8 +85,10 @@ class CommentDialogState(AppState):
                 )
                 session.add(comment)
                 session.commit()
-                self.show = not (self.show)
-                # yield rx.redirect(f"/comments/{comment.id}")
+                self.show = False
+        # Reload the current page so the new comment appears.
+        self.save_scroll_position()
+        return rx.redirect(self.router.url.path or "/")
 
 
 def comment_dialog(*args, **kwargs):
@@ -144,7 +141,7 @@ def comment_dialog(*args, **kwargs):
                             support_comment_button(
                                 **dialog_button_style,
                                 align_self="flex-end",
-                                on_click=CommentDialogState.submit
+                                on_click=CommentDialogState.submit,
                             ),
                         ),
                         (
@@ -152,7 +149,7 @@ def comment_dialog(*args, **kwargs):
                             poo_comment_button(
                                 **dialog_button_style,
                                 align_self="flex-end",
-                                on_click=CommentDialogState.submit
+                                on_click=CommentDialogState.submit,
                             ),
                         ),
                         (
@@ -160,7 +157,7 @@ def comment_dialog(*args, **kwargs):
                             detract_from_comment_button(
                                 **dialog_button_style,
                                 align_self="flex-end",
-                                on_click=CommentDialogState.submit
+                                on_click=CommentDialogState.submit,
                             ),
                         ),
                     ),
@@ -175,5 +172,5 @@ def comment_dialog(*args, **kwargs):
         open=CommentDialogState.show,
         size="4",
         *args,
-        **kwargs
+        **kwargs,
     )

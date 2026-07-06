@@ -3,12 +3,28 @@
 import os
 import reflex as rx
 from typing import Optional, List
-from sqlmodel import Field, Relationship, select
+from sqlmodel import Field, Relationship, select, SQLModel
 from sqlalchemy import text
 from datetime import datetime
 import asyncio
 from dataclasses import dataclass
 from rhiz.utils.time import calculate_elapsed_time
+
+
+class Model(SQLModel):
+    """Replacement for rx.Model — provides id primary key + config.
+
+    rx.Model is deprecated in Reflex 0.9.2+ and will be removed in 1.0.
+    This subclass replicates the same functionality without the deprecation
+    warning.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "use_enum_values": True,
+        "extra": "allow",
+    }
 
 
 @dataclass(frozen=True)
@@ -20,7 +36,7 @@ class UserTypes:
     admin: int = 2
 
 
-class User(rx.Model, table=True):
+class User(Model, table=True):
     """A table of Users."""
 
     username: str = Field()
@@ -32,9 +48,7 @@ class User(rx.Model, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(nullable=True)
     verification_token: Optional[str] = Field(default=None, nullable=True)
-    verification_expires_at: Optional[datetime] = Field(
-        default=None, nullable=True
-    )
+    verification_expires_at: Optional[datetime] = Field(default=None, nullable=True)
 
     reckonings: List["Reckoning"] = Relationship(back_populates="user")
 
@@ -78,7 +92,7 @@ class ReckoningTypes:
     no_vote: int = 7
 
 
-class Reckoning(rx.Model, table=True):
+class Reckoning(Model, table=True):
     """A table of Reckonings."""
 
     content: str = Field()
@@ -87,6 +101,12 @@ class Reckoning(rx.Model, table=True):
         default_factory=datetime.utcnow, nullable=False, index=True
     )
     updated_at: datetime = Field(nullable=True)
+
+    # When non-null, this reckoning belongs to a group and is only visible
+    # on that group's page (unless the group is made public).
+    group_id: Optional[int] = Field(
+        default=None, foreign_key="group.id", nullable=True, index=True
+    )
 
     # textembedding: Optional[TextEmbedding] = Relationship(back_populates="reckoning")
 
@@ -113,26 +133,26 @@ class Reckoning(rx.Model, table=True):
 
     # Cache variables, not stored in the database
     supports_detracts_ratio: Optional[str] = None
-    up_votes: Optional[int] = 0
-    down_votes: Optional[int] = 0
-    supports: Optional[int] = 0
-    detracts: Optional[int] = 0
-    points_of_order: Optional[int] = 0
-    total_comments: Optional[int] = 0
-    elapsed_time: Optional[str] = ""
-    user_vote_history: Optional[int] = ReckoningTypes.no_vote
-    similarity: Optional[float] = 0.0
-    parent_content: Optional[str] = ""
-    parent_type: Optional[int] = 0
-    parent_id: Optional[int] = 0
-    parent_user_vote_history: Optional[int] = ReckoningTypes.no_vote
-    parent_up_votes: Optional[int] = 0
-    parent_down_votes: Optional[int] = 0
-    parent_supports: Optional[int] = 0
-    parent_detracts: Optional[int] = 0
-    parent_points_of_order: Optional[int] = 0
-    parent_total_comments: Optional[int] = 0
-    parent_elapsed_time: Optional[str] = ""
+    up_votes: int = 0
+    down_votes: int = 0
+    supports: int = 0
+    detracts: int = 0
+    points_of_order: int = 0
+    total_comments: int = 0
+    elapsed_time: str = ""
+    user_vote_history: int = ReckoningTypes.no_vote
+    similarity: float = 0.0
+    parent_content: str = ""
+    parent_type: int = 0
+    parent_id: int = 0
+    parent_user_vote_history: int = ReckoningTypes.no_vote
+    parent_up_votes: int = 0
+    parent_down_votes: int = 0
+    parent_supports: int = 0
+    parent_detracts: int = 0
+    parent_points_of_order: int = 0
+    parent_total_comments: int = 0
+    parent_elapsed_time: str = ""
 
     def cache_parent_details(self, uid: int, session=None):
         try:
@@ -204,8 +224,7 @@ class Reckoning(rx.Model, table=True):
         from sqlalchemy import text
 
         result = session.execute(
-            text(
-                """
+            text("""
                 WITH RECURSIVE descendants AS (
                     SELECT id, type
                     FROM reckoning
@@ -217,8 +236,7 @@ class Reckoning(rx.Model, table=True):
                 )
                 SELECT count(*) FROM descendants
                 WHERE type NOT IN (:up_vote, :down_vote)
-                """
-            ),
+                """),
             {
                 "root": self.id,
                 "up_vote": ReckoningTypes.up_vote,
@@ -285,14 +303,12 @@ class Reckoning(rx.Model, table=True):
 
         # 1) Direct-child counts grouped by type.
         for pid, ctype, n in session.execute(
-            text(
-                """
+            text("""
                 SELECT parent_reckoning_id, type, count(*)
                 FROM reckoning
                 WHERE parent_reckoning_id = ANY(:ids)
                 GROUP BY parent_reckoning_id, type
-                """
-            ),
+                """),
             {"ids": ids},
         ):
             r = by_id.get(pid)
@@ -312,15 +328,13 @@ class Reckoning(rx.Model, table=True):
         # 2) The current user's own vote on each concept (if logged in).
         if uid is not None:
             for pid, ctype in session.execute(
-                text(
-                    """
+                text("""
                     SELECT parent_reckoning_id, type
                     FROM reckoning
                     WHERE parent_reckoning_id = ANY(:ids)
                       AND user_id = :uid
                       AND type IN (:up, :down)
-                    """
-                ),
+                    """),
                 {
                     "ids": ids,
                     "uid": uid,
@@ -334,8 +348,7 @@ class Reckoning(rx.Model, table=True):
 
         # 3) Total non-vote descendants per concept via one recursive CTE.
         for root, n in session.execute(
-            text(
-                """
+            text("""
                 WITH RECURSIVE d AS (
                     SELECT r.id, r.type, r.parent_reckoning_id AS root
                     FROM reckoning r
@@ -348,8 +361,7 @@ class Reckoning(rx.Model, table=True):
                 SELECT root, count(*) FILTER (WHERE type NOT IN (:up, :down))
                 FROM d
                 GROUP BY root
-                """
-            ),
+                """),
             {
                 "ids": ids,
                 "up": ReckoningTypes.up_vote,
@@ -369,21 +381,22 @@ class GroupStatus:
     closed: str = "closed"
 
 
-class Group(rx.Model, table=True):
-    """A distributable group page wrapping a single concept (1:1)."""
+class Group(Model, table=True):
+    """A distributable group page with its own concept feed."""
 
     slug: str = Field(index=True, unique=True)
     concept_id: int = Field(foreign_key="reckoning.id", index=True, unique=True)
     name: str = Field()
     founding_question: str = Field(default="")
     status: str = Field(default=GroupStatus.open)
+    is_public: bool = Field(default=False)
     created_by: Optional[int] = Field(
         default=None, foreign_key="user.id", nullable=True
     )
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
 
-class Feedback(rx.Model, table=True):
+class Feedback(Model, table=True):
     """A table of Feedback."""
 
     content: str = Field()
@@ -399,7 +412,7 @@ class Feedback(rx.Model, table=True):
     user: Optional["User"] = Relationship(back_populates="feedback")
 
 
-class Log(rx.Model, table=True):
+class Log(Model, table=True):
     """A table of Logs."""
 
     content: str = Field()

@@ -20,7 +20,6 @@ from rhiz.state.base import Reckoning, ReckoningTypes
 from rhiz.utils.db import insert_text_with_embedding
 from rhiz.utils.parsing import remove_html_tags
 
-
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -156,7 +155,9 @@ def main():
     total = regenerate_embeddings(batch_size=args.batch_size, dry_run=args.dry_run)
     suffix = " (dry-run)" if args.dry_run else ""
     backup_note = f" Backup table: {backup_table}." if backup_table else ""
-    print(f"Completed embedding regeneration for {total} concepts{suffix}.{backup_note}")
+    print(
+        f"Completed embedding regeneration for {total} concepts{suffix}.{backup_note}"
+    )
 
 
 if __name__ == "__main__":

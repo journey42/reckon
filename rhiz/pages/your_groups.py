@@ -10,13 +10,14 @@ import reflex as rx
 from sqlmodel import select
 
 from rhiz.state.base import AppState, Group, GroupStatus
-from rhiz.utils.groups import set_group_status, delete_group
+from rhiz.utils.groups import set_group_status, set_group_public, delete_group
 from rhiz.utils.permissions import can_manage_groups
 from rhiz.utils.qr import qr_data_uri
 from rhiz.styles import page_params
 from rhiz.components import container, navbar
 from rhiz.pages.group_common import public_base_url, group_row
 from rhiz.components.group_dialog import group_dialog, GroupDialogState
+from rhiz.components.buttons import create_group_button
 
 
 class YourGroupsState(AppState):
@@ -51,6 +52,7 @@ class YourGroupsState(AppState):
                         "slug": g.slug,
                         "name": g.name,
                         "status": g.status,
+                        "is_public": g.is_public,
                         "url": url,
                         "qr": qr_data_uri(url),
                         "creator": "",  # own page — creator line stays hidden
@@ -61,15 +63,11 @@ class YourGroupsState(AppState):
         if not can_manage_groups(self.user):
             return
         new_status = (
-            GroupStatus.closed
-            if current == GroupStatus.open
-            else GroupStatus.open
+            GroupStatus.closed if current == GroupStatus.open else GroupStatus.open
         )
         with rx.session() as session:
             # owner_id guard: only act on the user's own group
-            group = session.exec(
-                select(Group).where(Group.id == group_id)
-            ).first()
+            group = session.exec(select(Group).where(Group.id == group_id)).first()
             if group is not None and group.created_by == self.user.id:
                 set_group_status(session, group_id, new_status)
         self._refresh()
@@ -79,6 +77,15 @@ class YourGroupsState(AppState):
             return
         with rx.session() as session:
             delete_group(session, group_id, owner_id=self.user.id)
+        self._refresh()
+
+    def toggle_public(self, group_id: int):
+        if not can_manage_groups(self.user):
+            return
+        with rx.session() as session:
+            group = session.exec(select(Group).where(Group.id == group_id)).first()
+            if group is not None and group.created_by == self.user.id:
+                set_group_public(session, group_id, not group.is_public)
         self._refresh()
 
 
@@ -91,10 +98,8 @@ def your_groups_page():
                 rx.hstack(
                     rx.heading("Your Groups", size="6"),
                     rx.spacer(),
-                    rx.button(
-                        "Create Group",
+                    create_group_button(
                         on_click=GroupDialogState.open,
-                        size="2",
                     ),
                     width="100%",
                     align="center",
@@ -108,7 +113,7 @@ def your_groups_page():
                     YourGroupsState.rows.length() == 0,
                     rx.callout(
                         "You haven't created any groups yet. Click \"Create "
-                        "Group\" to get started.",
+                        'Group" to get started.',
                         size="1",
                     ),
                     rx.fragment(),

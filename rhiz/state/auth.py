@@ -101,10 +101,17 @@ class AuthState(AppState):
             # Capture PostHog event for signup.
             try:
                 from rhiz.rhiz import posthog
+
                 if posthog:
-                    posthog.capture("signup", distinct_id=f"user-{new_user.id}", properties={
-                        "event_type": "group_origin" if group_origin else "normal_signup",
-                    })
+                    posthog.capture(
+                        "signup",
+                        distinct_id=f"user-{new_user.id}",
+                        properties={
+                            "event_type": (
+                                "group_origin" if group_origin else "normal_signup"
+                            ),
+                        },
+                    )
             except Exception:
                 pass  # PostHog failures should not block signup.
 
@@ -115,9 +122,9 @@ class AuthState(AppState):
 
             # Group-origin signup: email a verification link that re-enables
             # the account and returns the user to the group after login.
-            base = os.environ.get(
-                "PUBLIC_BASE_URL", "http://localhost:3000"
-            ).rstrip("/")
+            base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:3000").rstrip(
+                "/"
+            )
             verify_url = (
                 f"{base}/verify_email/{new_user.verification_token}"
                 f"?next={quote(nxt, safe='/')}"
@@ -277,9 +284,12 @@ class AuthState(AppState):
         """Where to send the user after login: ?next=/... if safe, else home."""
         from rhiz.utils.urls import safe_next_path
 
-        return safe_next_path(
-            self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
-        ) or "/"
+        return (
+            safe_next_path(
+                self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
+            )
+            or "/"
+        )
 
     def login(self, form_data: dict):
         """Log in a user."""

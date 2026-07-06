@@ -28,9 +28,7 @@ def verify_and_enable(session, token: str) -> "User | None":
     """
     if not token:
         return None
-    user = session.exec(
-        select(User).where(User.verification_token == token)
-    ).first()
+    user = session.exec(select(User).where(User.verification_token == token)).first()
     if user is None:
         return None
     expires = user.verification_expires_at

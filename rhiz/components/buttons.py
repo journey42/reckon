@@ -108,6 +108,16 @@ def groups_button(*args, **kwargs):
     )
 
 
+def create_group_button(*args, **kwargs):
+    """Icon button to open the Create Group dialog."""
+    params = button_params["small"].copy()
+    params.update(kwargs)
+    return rx.tooltip(
+        rx.button(rx.icon("plus", size=24), **params),
+        content="Create Group",
+    )
+
+
 def submit_button(*args, **kwargs):
     return create_button("/submit.svg", button_type="small", **kwargs)
 
@@ -225,9 +235,6 @@ def disabled_feedback_button(*args, **kwargs):
 
 def more_button(*args, **kwargs):
     return create_button("/more.svg", button_type="small", **kwargs)
-
-
-
 
 
 def sort_by_upvotes_button(*args, **kwargs):

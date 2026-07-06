@@ -2,7 +2,7 @@ psycopg2
 posthog
 beautifulsoup4
 azure-communication-email
-reflex==0.9.5.post2
+reflex==0.9.6.post1
 sqlmodel>=0.0.38
 alembic>=1.13
 typer==0.9.0
