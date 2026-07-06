@@ -13,6 +13,7 @@ feeds unless the group creator makes it public.
 
 import reflex as rx
 from sqlmodel import select, delete
+from sqlalchemy import func
 from sqlalchemy.orm import noload
 
 from rhiz.styles import page_params, read_only_text_style
@@ -113,8 +114,18 @@ class GroupPageState(ReckoningsPageState):
         yield self._load_group_concepts()
 
     def delete_reckoning(self, rid):
-        """Delete a reckoning."""
+        """Delete a reckoning. Prevents deletion if it has comments or votes."""
         with rx.session() as session:
+            child_count = session.exec(
+                select(func.count(Reckoning.id)).where(
+                    Reckoning.parent_reckoning_id == rid
+                )
+            ).first()
+            if child_count and child_count > 0:
+                return rx.window_alert(
+                    "This concept has comments or votes and cannot be deleted. "
+                    "Remove all comments and votes first."
+                )
             session.exec(delete(Reckoning).where(Reckoning.id == rid))
             session.commit()
         self._load_group_concepts()
