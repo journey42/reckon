@@ -100,11 +100,12 @@ def insert_text_with_embedding(text_to_embed, reckoning_id):
         session.commit()
 
 
-def find_similar_texts_with_join(rid, threshold, limit):
+def find_similar_texts_with_join(rid, threshold, limit, group_id=None):
     with rx.session() as session:
         _ensure_embeddings_schema(session)
         # Prepare the SQL query
-        query = text("""
+        group_filter = "AND r.group_id = :group_id" if group_id is not None else "AND r.group_id IS NULL"
+        query = text(f"""
         WITH target_embedding AS (
             SELECT embedding 
             FROM embeddings 
@@ -125,6 +126,7 @@ def find_similar_texts_with_join(rid, threshold, limit):
                 target_embedding te
             WHERE 
                 r.type = 0
+                {group_filter}
                 AND e.embedding <=> te.embedding < :threshold
         ), include_original AS (
             SELECT 
@@ -150,9 +152,10 @@ def find_similar_texts_with_join(rid, threshold, limit):
             :limit;
         """)
         # Execute the query with parameters
-        result = session.execute(
-            query, {"id": rid, "threshold": threshold, "limit": limit}
-        )
+        params = {"id": rid, "threshold": threshold, "limit": limit}
+        if group_id is not None:
+            params["group_id"] = group_id
+        result = session.execute(query, params)
         results = result.fetchall()
         # Process results
         keys = [id for id, similarity in results]

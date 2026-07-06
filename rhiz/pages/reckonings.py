@@ -879,17 +879,24 @@ class ComparePageState(ReckoningsPageState):
                 self.dismiss_support_nudge()
             else:
                 self.show_support_nudge = self.support_nudge_concept_id == concept.id
-            primary_keys, results = find_similar_texts_with_join(concept.id, 0.75, 10)
+            # Scope similarity search to the same group (or site-wide if not in a group)
+            primary_keys, results = find_similar_texts_with_join(
+                concept.id, 0.75, 10, group_id=concept.group_id
+            )
             similar_ids = [pk for pk in primary_keys if pk != concept.id]
             self.nudge_has_matches = bool(similar_ids)
 
-            # Construct the base query with the condition that applies in both cases
-            query = select(Reckoning).where(
-                _and(
-                    Reckoning.id.in_(primary_keys),
-                    _exclude_private_groups(),
+            # Construct the base query — when comparing a group concept,
+            # don't apply _exclude_private_groups() since we're already scoped
+            if concept.group_id is not None:
+                query = select(Reckoning).where(Reckoning.id.in_(primary_keys))
+            else:
+                query = select(Reckoning).where(
+                    _and(
+                        Reckoning.id.in_(primary_keys),
+                        _exclude_private_groups(),
+                    )
                 )
-            )
 
             # Conditionally add the search filter if `self.search` is provided
             if self.search:
