@@ -487,7 +487,12 @@ class YourDraftsPageState(ReckoningsPageState):
         self._append_next_window()
 
     def _window_query(self, session):
-        """Drafts owned by the current user, newest first."""
+        """Drafts owned by the current user, newest first.
+
+        Drafts include group-scoped drafts (converted when a user supports
+        someone else's concept at the decision fork) — these should be
+        visible to the user who wrote them regardless of group scope.
+        """
         query = (
             select(Reckoning)
             .order_by(Reckoning.created_at.desc())
@@ -495,7 +500,6 @@ class YourDraftsPageState(ReckoningsPageState):
                 _and(
                     Reckoning.type == ReckoningTypes.draft,
                     Reckoning.user_id == self.user.id,
-                    _exclude_private_groups(),
                 )
             )
         )
