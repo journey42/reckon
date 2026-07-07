@@ -170,10 +170,16 @@ class GroupPageState(ReckoningsPageState):
 
     @rx.event
     def nudge_support_concept(self, concept_id: int):
-        """Upvote a specific concept from the decision fork."""
+        """Upvote a concept from the decision fork.
+
+        If the user supports someone else's concept (not their own new
+        submission), their own concept is converted to a draft so it
+        disappears from the group feed — same as the main site behavior.
+        """
         self.dismiss_support_nudge()
         with rx.session() as session:
             session.expire_on_commit = False
+            # Upvote the chosen concept
             existing_vote = session.exec(
                 select(Reckoning).where(
                     Reckoning.parent_reckoning_id == concept_id,
@@ -192,9 +198,28 @@ class GroupPageState(ReckoningsPageState):
                     parent_reckoning_id=concept_id,
                     type=ReckoningTypes.up_vote,
                     user_id=self.user.id,
+                    group_id=self.group_id_val,
                 )
                 session.add(vote)
                 session.commit()
+
+            # If supporting someone else's concept, convert own new concept to draft
+            if concept_id != self.nudge_new_concept_id and self.nudge_new_concept_id:
+                own_concept = session.exec(
+                    select(Reckoning).where(Reckoning.id == self.nudge_new_concept_id)
+                ).first()
+                if own_concept is not None:
+                    # Check no other users have voted/commented on it
+                    other_children = session.exec(
+                        select(func.count(Reckoning.id)).where(
+                            Reckoning.parent_reckoning_id == own_concept.id,
+                            Reckoning.user_id != self.user.id,
+                        )
+                    ).first()
+                    if not other_children:
+                        own_concept.type = ReckoningTypes.draft
+                        session.add(own_concept)
+                        session.commit()
         self._load_group_concepts()
 
     def delete_reckoning(self, rid):
