@@ -55,6 +55,7 @@ class GroupsAdminState(AppState):
                         "url": url,
                         "qr": qr_data_uri(url),
                         "creator": creator_username or "Unknown",
+                        "is_owner": True,
                     }
                 )
 

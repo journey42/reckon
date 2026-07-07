@@ -13,6 +13,7 @@ import os
 from datetime import timedelta
 from rhiz.utils.comms import send_password_reset_email, send_verification_email
 from rhiz.utils.verification import generate_token, is_group_origin, TOKEN_TTL_HOURS
+from rhiz.utils.urls import safe_next_path
 from rhiz.utils.security import hash_password, verify_password
 from urllib.parse import quote
 
@@ -73,6 +74,18 @@ class AuthState(AppState):
 
             nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
             group_origin = is_group_origin(nxt)
+            from rhiz.state.base import get_setting
+
+            auto_signup = get_setting("auto_signup_enabled", "false").strip().lower() in {
+                "1", "true", "on", "yes",
+            }
+
+            # Extract group slug for affinity tracking
+            signup_group_slug = ""
+            if group_origin and nxt:
+                parts = nxt.strip("/").split("/")
+                if len(parts) >= 2 and parts[0] == "group":
+                    signup_group_slug = parts[1]
 
             hashed_password = hash_password(self.password)
             new_user = User(
@@ -82,11 +95,16 @@ class AuthState(AppState):
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
             )
+            if signup_group_slug:
+                new_user.signup_group_slug = signup_group_slug
             if group_origin:
                 new_user.verification_token = generate_token()
                 new_user.verification_expires_at = datetime.now(
                     timezone.utc
                 ) + timedelta(hours=TOKEN_TTL_HOURS)
+            if auto_signup and not group_origin:
+                # Auto-enable normal signups (no manual approval needed)
+                new_user.enabled = True
             session.add(new_user)
             session.add(
                 Log(
@@ -116,7 +134,13 @@ class AuthState(AppState):
                 pass  # PostHog failures should not block signup.
 
             if not group_origin:
-                # Normal signup: unchanged (disabled, pending manual approval).
+                # Normal signup
+                if auto_signup:
+                    # Auto-enabled: log them in and send to home (or group)
+                    self.user = new_user
+                    target = safe_next_path(nxt) or "/"
+                    return rx.redirect(target)
+                # Manual approval: show pending page
                 self.user = new_user
                 return rx.redirect("/signup_successful")
 
@@ -282,14 +306,15 @@ class AuthState(AppState):
 
     def _post_login_target(self) -> str:
         """Where to send the user after login: ?next=/... if safe, else home."""
-        from rhiz.utils.urls import safe_next_path
-
-        return (
-            safe_next_path(
-                self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
-            )
-            or "/"
+        nxt = safe_next_path(
+            self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
         )
+        if nxt:
+            return nxt
+        # Fall back to the group they signed up from, if any
+        if self.user and getattr(self.user, "signup_group_slug", None):
+            return f"/group/{self.user.signup_group_slug}"
+        return "/"
 
     def login(self, form_data: dict):
         """Log in a user."""

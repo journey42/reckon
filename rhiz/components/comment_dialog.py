@@ -75,6 +75,11 @@ class CommentDialogState(AppState):
                 session.commit()
                 self.show = False
             else:
+                # Look up parent concept's group_id to propagate group scope
+                parent = session.exec(
+                    select(Reckoning).where(Reckoning.id == self.pid)
+                ).first()
+                parent_group_id = getattr(parent, "group_id", None) if parent else None
                 comment = Reckoning(
                     content=self.content,
                     parent_reckoning_id=self.pid,
@@ -82,6 +87,7 @@ class CommentDialogState(AppState):
                     created_at=datetime.now(timezone.utc),
                     updated_at=datetime.now(timezone.utc),
                     user_id=self.user.id,
+                    group_id=parent_group_id,
                 )
                 session.add(comment)
                 session.commit()

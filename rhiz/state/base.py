@@ -45,6 +45,7 @@ class User(Model, table=True):
     enabled: bool = Field(default=False)
     role: int = Field(default=0)
     can_create_groups: bool = Field(default=False)
+    signup_group_slug: Optional[str] = Field(default=None, nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(nullable=True)
     verification_token: Optional[str] = Field(default=None, nullable=True)
@@ -422,6 +423,32 @@ class Log(Model, table=True):
     user_id: int = Field(foreign_key="user.id", nullable=True)
 
     user: Optional["User"] = Relationship(back_populates="logs")
+
+
+class AppSetting(Model, table=True):
+    """Simple key-value store for app-wide settings."""
+
+    key: str = Field(primary_key=True)
+    value: str = Field(default="")
+
+
+def get_setting(key: str, default: str = "") -> str:
+    """Read a setting from the database."""
+    with rx.session() as session:
+        row = session.exec(select(AppSetting).where(AppSetting.key == key)).first()
+        return row.value if row else default
+
+
+def set_setting(key: str, value: str) -> None:
+    """Write a setting to the database."""
+    with rx.session() as session:
+        row = session.exec(select(AppSetting).where(AppSetting.key == key)).first()
+        if row:
+            row.value = value
+        else:
+            row = AppSetting(key=key, value=value)
+        session.add(row)
+        session.commit()
 
 
 def _is_toolbar_enabled() -> bool:

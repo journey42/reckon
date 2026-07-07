@@ -52,28 +52,35 @@ def group_row(state_cls, r):
             ),
             rx.image(src=r["qr"], width="96px", height="96px", flex_shrink="0"),
             rx.vstack(
-                rx.button(
-                    rx.cond(r["status"] == GroupStatus.open, "Close", "Reopen"),
-                    on_click=state_cls.toggle_status(r["id"], r["status"]),
-                    variant="soft",
-                    size="1",
-                    width=rx.breakpoints(initial="100%", sm="auto"),
-                ),
-                rx.button(
-                    rx.cond(r["is_public"], "Make Private", "Make Public"),
-                    on_click=state_cls.toggle_public(r["id"]),
-                    variant="soft",
-                    color_scheme=rx.cond(r["is_public"], "green", "gray"),
-                    size="1",
-                    width=rx.breakpoints(initial="100%", sm="auto"),
-                ),
-                rx.button(
-                    "Delete",
-                    on_click=state_cls.delete_group(r["id"]),
-                    color_scheme="red",
-                    variant="soft",
-                    size="1",
-                    width=rx.breakpoints(initial="100%", sm="auto"),
+                # Owner-only controls (hidden for non-creators)
+                rx.cond(
+                    r["is_owner"],
+                    rx.fragment(
+                        rx.button(
+                            rx.cond(r["status"] == GroupStatus.open, "Close", "Reopen"),
+                            on_click=state_cls.toggle_status(r["id"], r["status"]),
+                            variant="soft",
+                            size="1",
+                            width=rx.breakpoints(initial="100%", sm="auto"),
+                        ),
+                        rx.button(
+                            rx.cond(r["is_public"], "Ungraduate", "Graduate"),
+                            on_click=state_cls.toggle_public(r["id"]),
+                            variant="soft",
+                            color_scheme=rx.cond(r["is_public"], "green", "gray"),
+                            size="1",
+                            width=rx.breakpoints(initial="100%", sm="auto"),
+                        ),
+                        rx.button(
+                            "Delete",
+                            on_click=state_cls.delete_group(r["id"]),
+                            color_scheme="red",
+                            variant="soft",
+                            size="1",
+                            width=rx.breakpoints(initial="100%", sm="auto"),
+                        ),
+                    ),
+                    rx.fragment(),
                 ),
                 spacing="2",
                 width=rx.breakpoints(initial="100%", sm="auto"),

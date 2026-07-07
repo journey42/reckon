@@ -41,6 +41,7 @@ from rhiz.components.buttons import (
     edit_button,
     view_concept_button,
     view_parent_button,
+    graduate_button,
 )
 from rhiz.components.feedback_dialog import (
     feedback_dialog,
@@ -329,6 +330,11 @@ class ReckoningsPageState(AppState):
     def close_modal(self):
         pass
 
+    @rx.event
+    def graduate_concept(self, rid: int):
+        """Graduate a concept to the main site. No-op on non-group pages."""
+        pass
+
     def compare_concepts(self, cid):
         result = self._require_login_redirect()
         if result:
@@ -395,6 +401,7 @@ class ReckoningsPageState(AppState):
                     created_at=datetime.now(timezone.utc),
                     updated_at=datetime.now(timezone.utc),
                     user_id=self.user.id,
+                    group_id=concept.group_id,
                 )
                 session.add(comment)
                 session.commit()
@@ -1670,6 +1677,15 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
                                 on_click=state.delete_reckoning(item_id),
                             ),
                             disabled_delete_button(**popover_button_style),
+                        ),
+                        # Graduate button (group pages only, owner only)
+                        rx.cond(
+                            (state.page_type == 7)
+                            & (getattr(state, "is_group_owner", False)),
+                            graduate_button(
+                                on_click=state.graduate_concept(item_id),
+                            ),
+                            rx.fragment(),
                         ),
                         rx.fragment(),
                         direction="row",

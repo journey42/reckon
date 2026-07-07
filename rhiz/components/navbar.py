@@ -96,7 +96,7 @@ def app_logo() -> rx.Component:
                     trending_concepts_button(),
                     your_concepts_button(),
                     rx.cond(
-                        AppState.user_can_manage_groups,
+                        AppState.logged_in,
                         groups_button(),
                         rx.fragment(),
                     ),

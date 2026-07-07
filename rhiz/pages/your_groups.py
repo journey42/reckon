@@ -35,29 +35,85 @@ class YourGroupsState(AppState):
 
     def _refresh(self):
         self.rows = []
-        if not can_manage_groups(self.user):
-            return
         base = public_base_url()
+        seen_ids = set()
         with rx.session() as session:
-            groups = session.exec(
-                select(Group)
-                .where(Group.created_by == self.user.id)
-                .order_by(Group.created_at.desc())
-            ).all()
-            for g in groups:
-                url = f"{base}/group/{g.slug}"
-                self.rows.append(
-                    {
-                        "id": g.id,
-                        "slug": g.slug,
-                        "name": g.name,
-                        "status": g.status,
-                        "is_public": g.is_public,
-                        "url": url,
-                        "qr": qr_data_uri(url),
-                        "creator": "",  # own page — creator line stays hidden
-                    }
+            # Groups the user created (only if they can create groups)
+            if can_manage_groups(self.user):
+                created = session.exec(
+                    select(Group)
+                    .where(Group.created_by == self.user.id)
+                    .order_by(Group.created_at.desc())
+                ).all()
+                for g in created:
+                    seen_ids.add(g.id)
+                    url = f"{base}/group/{g.slug}"
+                    self.rows.append(
+                        {
+                            "id": g.id,
+                            "slug": g.slug,
+                            "name": g.name,
+                            "status": g.status,
+                            "is_public": g.is_public,
+                            "url": url,
+                            "qr": qr_data_uri(url),
+                            "creator": "",
+                            "is_owner": True,
+                        }
+                    )
+
+            # Groups the user has participated in (via reckonings with group_id)
+            from rhiz.state.base import Reckoning
+            from sqlalchemy import distinct
+            participated_ids = session.exec(
+                select(distinct(Reckoning.group_id))
+                .where(
+                    Reckoning.user_id == self.user.id,
+                    Reckoning.group_id.isnot(None),
                 )
+            ).all()
+            for gid in participated_ids:
+                if gid in seen_ids:
+                    continue
+                g = session.exec(select(Group).where(Group.id == gid)).first()
+                if g:
+                    seen_ids.add(g.id)
+                    url = f"{base}/group/{g.slug}"
+                    self.rows.append(
+                        {
+                            "id": g.id,
+                            "slug": g.slug,
+                            "name": g.name,
+                            "status": g.status,
+                            "is_public": g.is_public,
+                            "url": url,
+                            "qr": qr_data_uri(url),
+                            "creator": "",
+                            "is_owner": g.created_by == self.user.id,
+                        }
+                    )
+
+            # Group the user signed up from (if not already shown above)
+            signup_slug = getattr(self.user, "signup_group_slug", None)
+            if signup_slug:
+                affinity = session.exec(
+                    select(Group).where(Group.slug == signup_slug)
+                ).first()
+                if affinity and affinity.id not in seen_ids:
+                    url = f"{base}/group/{affinity.slug}"
+                    self.rows.append(
+                        {
+                            "id": affinity.id,
+                            "slug": affinity.slug,
+                            "name": affinity.name,
+                            "status": affinity.status,
+                            "is_public": affinity.is_public,
+                            "url": url,
+                            "qr": qr_data_uri(url),
+                            "creator": "",
+                            "is_owner": affinity.created_by == self.user.id,
+                        }
+                    )
 
     def toggle_status(self, group_id: int, current: str):
         if not can_manage_groups(self.user):
@@ -92,46 +148,42 @@ class YourGroupsState(AppState):
 def your_groups_page():
     return container(
         navbar(),
-        rx.cond(
-            YourGroupsState.can_manage,
-            rx.vstack(
-                rx.hstack(
-                    rx.heading("Your Groups", size="6"),
-                    rx.spacer(),
+        rx.vstack(
+            rx.hstack(
+                rx.heading("Your Groups", size="6"),
+                rx.spacer(),
+                rx.cond(
+                    YourGroupsState.can_manage,
                     create_group_button(
                         on_click=GroupDialogState.open,
                     ),
-                    width="100%",
-                    align="center",
-                ),
-                rx.text(
-                    "Groups you've created. Share the link or QR code, and "
-                    "open/close or delete them here.",
-                    size="2",
-                ),
-                rx.cond(
-                    YourGroupsState.rows.length() == 0,
-                    rx.callout(
-                        "You haven't created any groups yet. Click \"Create "
-                        'Group" to get started.',
-                        size="1",
-                    ),
                     rx.fragment(),
                 ),
-                rx.foreach(
-                    YourGroupsState.rows,
-                    lambda r: group_row(YourGroupsState, r),
-                ),
-                group_dialog(),
-                spacing="4",
-                align="stretch",
                 width="100%",
-                padding="24px",
+                align="center",
             ),
-            rx.center(
-                rx.text("You do not have access to groups."),
-                min_height="50vh",
+            rx.text(
+                "Groups you've created or joined. Share the link or QR code, "
+                "and open/close or delete them here.",
+                size="2",
             ),
+            rx.cond(
+                YourGroupsState.rows.length() == 0,
+                rx.callout(
+                    "You haven't joined any groups yet.",
+                    size="1",
+                ),
+                rx.fragment(),
+            ),
+            rx.foreach(
+                YourGroupsState.rows,
+                lambda r: group_row(YourGroupsState, r),
+            ),
+            group_dialog(),
+            spacing="4",
+            align="stretch",
+            width="100%",
+            padding="24px",
         ),
     )
 

@@ -101,7 +101,42 @@ def main():
         else:
             print("[migrate] is_public column already exists on group.", flush=True)
 
-        # 5. Ensure alembic_version table exists for future Alembic-based migrations
+        # 4b. Add signup_group_slug column to user table
+        user_cols = [c["name"].lower() for c in inspector.get_columns("user")]
+        if "signup_group_slug" not in user_cols:
+            print("[migrate] Adding signup_group_slug column to user...", flush=True)
+            conn.execute(
+                text('ALTER TABLE "user" ADD COLUMN signup_group_slug VARCHAR')
+            )
+        else:
+            print("[migrate] signup_group_slug column already exists on user.", flush=True)
+
+        # 5. Create appsetting table for runtime-configurable settings
+        if "appsetting" not in tables:
+            print("[migrate] Creating appsetting table...", flush=True)
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS appsetting "
+                    "(id SERIAL NOT NULL, key VARCHAR NOT NULL, value VARCHAR DEFAULT '', "
+                    "PRIMARY KEY (id), UNIQUE (key))"
+                )
+            )
+        else:
+            # Ensure id column exists (table may have been created without it)
+            cols = [c["name"].lower() for c in inspector.get_columns("appsetting")]
+            if "id" not in cols:
+                print("[migrate] Adding id column to appsetting...", flush=True)
+                conn.execute(text("ALTER TABLE appsetting ADD COLUMN id SERIAL NOT NULL"))
+                conn.execute(text("ALTER TABLE appsetting ADD CONSTRAINT appsetting_pkey PRIMARY KEY (id)"))
+            else:
+                print("[migrate] appsetting table already exists.", flush=True)
+        # Seed default setting
+        exists = conn.execute(text("SELECT 1 FROM appsetting WHERE key = 'auto_signup_enabled'")).fetchone()
+        if not exists:
+            conn.execute(text("INSERT INTO appsetting (key, value) VALUES ('auto_signup_enabled', 'false')"))
+            print("[migrate] Seeded auto_signup_enabled=false", flush=True)
+
+        # 6. Ensure alembic_version table exists for future Alembic-based migrations
         conn.execute(
             text(
                 "CREATE TABLE IF NOT EXISTS alembic_version "

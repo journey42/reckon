@@ -113,7 +113,7 @@ def get_users() -> List[List]:
                 user.enabled,
                 user.role,
                 str(user.created_at.astimezone(ZoneInfo("America/Los_Angeles"))),
-                str(user.updated_at.astimezone(ZoneInfo("America/Los_Angeles"))),
+                str(user.updated_at.astimezone(ZoneInfo("America/Los_Angeles"))) if user.updated_at else "N/A",
                 user.can_create_groups,
             ]
             user_data_list.append(user_data)
@@ -124,6 +124,7 @@ class UserEditorState(AppState):
     """The user editor state."""
 
     users: List[List]
+    auto_signup_enabled: bool = False
 
     cols: list[Any] = [
         {
@@ -163,9 +164,20 @@ class UserEditorState(AppState):
         if result:
             return result
         self.users = get_users()
+        from rhiz.state.base import get_setting
+        self.auto_signup_enabled = get_setting("auto_signup_enabled", "false").strip().lower() in {
+            "1", "true", "on", "yes",
+        }
 
     def refresh(self):
         self.users = get_users()
+
+    @rx.event
+    def toggle_auto_signup(self):
+        """Toggle open signups on/off."""
+        from rhiz.state.base import set_setting
+        self.auto_signup_enabled = not self.auto_signup_enabled
+        set_setting("auto_signup_enabled", "true" if self.auto_signup_enabled else "false")
 
     def on_column_resize(self, col, width):
         """Resize a column in the logs editor."""
@@ -271,6 +283,25 @@ def users():
     """The users page."""
     return profile_layout(
         rx.vstack(
+            rx.hstack(
+                rx.text("Open Signups", size="3", weight="medium"),
+                rx.switch(
+                    checked=UserEditorState.auto_signup_enabled,
+                    on_click=UserEditorState.toggle_auto_signup,
+                ),
+                rx.text(
+                    rx.cond(
+                        UserEditorState.auto_signup_enabled,
+                        "(new accounts auto-enabled)",
+                        "(new accounts need manual approval)",
+                    ),
+                    size="2",
+                    color="gray",
+                ),
+                align="center",
+                spacing="3",
+                margin_bottom="12px",
+            ),
             rx.data_editor(
                 columns=UserEditorState.cols,
                 data=UserEditorState.users,

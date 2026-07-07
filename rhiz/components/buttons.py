@@ -118,6 +118,34 @@ def create_group_button(*args, **kwargs):
     )
 
 
+def graduate_button(*args, **kwargs):
+    """Icon button to graduate a concept to the main site.
+
+    Grey circle background with a white graduation cap icon.
+    """
+    params = button_params["small"].copy()
+    params.update(kwargs)
+    params["variant"] = "solid"
+    params["color_scheme"] = "gray"
+    params["style"] = {
+        **image_button_style,
+        "width": "28px",
+        "height": "28px",
+        "min_width": "28px",
+        "min_height": "28px",
+        "border_radius": "50%",
+        "padding": "0",
+    }
+    params["_hover"] = {}
+    return rx.tooltip(
+        rx.button(
+            rx.icon("graduation-cap", size=18, color="white"),
+            **params,
+        ),
+        content="Graduate to Site",
+    )
+
+
 def submit_button(*args, **kwargs):
     return create_button("/submit.svg", button_type="small", **kwargs)
 
