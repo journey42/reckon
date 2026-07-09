@@ -89,19 +89,51 @@ def set_group_public(session, group_id: int, is_public: bool) -> None:
 
 
 def delete_group(session, group_id: int, owner_id: int | None = None) -> None:
-    """Delete a group and all its concepts/comments.
+    """Delete a group and all its concepts, comments, and votes.
 
-    If owner_id is given, only delete when that user owns it. Admins pass
-    owner_id=None to delete any group.
+    Handles the circular FK: group.concept_id → reckoning.id (NOT NULL) AND
+    reckoning.group_id → group.id (nullable).  We null out group_id on all
+    affected reckonings first, then delete the group, then delete the
+    reckonings.
     """
     group = session.exec(select(Group).where(Group.id == group_id)).first()
     if group is None:
         return
     if owner_id is not None and group.created_by != owner_id:
         return
-    # Delete all group-scoped reckonings (concepts + their comment trees)
-    from sqlalchemy import delete as sa_delete
+    from sqlalchemy import text
 
-    session.exec(sa_delete(Reckoning).where(Reckoning.group_id == group_id))
+    concept_id = group.concept_id
+
+    # Step 1: Null out reckoning.group_id for all group-scoped reckonings
+    # so the group row can be deleted (breaks reckoning→group FK).
+    session.execute(
+        text("UPDATE reckoning SET group_id = NULL WHERE group_id = :gid"),
+        {"gid": group_id},
+    )
+    session.commit()
+
+    # Step 2: Delete the group row (concept_id FK still references the
+    # founding concept, but group→reckoning direction is fine).
     session.delete(group)
     session.commit()
+
+    # Step 3: Now delete all the reckonings — the founding concept and
+    # all its descendants (comments, votes, sub-concepts).
+    session.execute(
+        text(
+            """
+            WITH RECURSIVE descendants AS (
+                SELECT :concept_id AS id
+                UNION ALL
+                SELECT r.id FROM reckoning r
+                JOIN descendants d ON r.parent_reckoning_id = d.id
+            )
+            DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+            """
+        ),
+        {"concept_id": concept_id},
+    )
+    session.commit()
+
+    session.expire_all()

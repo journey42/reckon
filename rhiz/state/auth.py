@@ -144,7 +144,19 @@ class AuthState(AppState):
                 self.user = new_user
                 return rx.redirect("/signup_successful")
 
-            # Group-origin signup: email a verification link that re-enables
+            # Group-origin signup
+            if auto_signup:
+                # Auto-signup is on: skip email verification, enable and
+                # redirect straight to the group page.
+                new_user.enabled = True
+                new_user.verification_token = None
+                new_user.verification_expires_at = None
+                session.add(new_user)
+                session.commit()
+                self.user = new_user
+                return rx.redirect(safe_next_path(nxt) or "/")
+
+            # Auto-signup is off: email a verification link that re-enables
             # the account and returns the user to the group after login.
             base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:3000").rstrip(
                 "/"

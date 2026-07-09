@@ -42,12 +42,11 @@ const RhizTiptapEditor = ({ value, onChange, placeholder, height, toolbarEnabled
   }, [])
 
   React.useEffect(() => {
-    // Only sync value → editor when the change came from OUTSIDE the editor
-    // (e.g. state reset, loading a different concept).  When the change was
-    // caused by the user typing (internalChange), skip the sync to avoid the
-    // feedback loop that corrupts input.
+    // Only sync value → editor when the change came from OUTSIDE the editor.
+    // Skip sync entirely when the editor has focus (user is actively typing)
+    // to eliminate any possibility of the feedback loop that corrupts input.
     if (editor && value !== undefined && !internalChange.current) {
-      if (value !== editor.getHTML()) {
+      if (!editor.isFocused && value !== editor.getHTML()) {
         editor.commands.setContent(value || '', false)
       }
     }
