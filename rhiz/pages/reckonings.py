@@ -1843,7 +1843,8 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
                             disabled_edit_button(**popover_button_style),
                         ),
                         rx.cond(
-                            (state.page_type == 1),
+                            (state.page_type == 1)
+                            | (state.user.role >= 2),
                             delete_button(
                                 **popover_button_style,
                                 on_click=state.delete_reckoning(item_id),
