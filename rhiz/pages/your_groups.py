@@ -89,7 +89,7 @@ class YourGroupsState(AppState):
                             "url": url,
                             "qr": qr_data_uri(url),
                             "creator": "",
-                            "is_owner": g.created_by == self.user.id,
+                            "is_owner": g.created_by == self.user.id or (self.user and self.user.role >= 2),
                         }
                     )
 
@@ -111,7 +111,7 @@ class YourGroupsState(AppState):
                             "url": url,
                             "qr": qr_data_uri(url),
                             "creator": "",
-                            "is_owner": affinity.created_by == self.user.id,
+                            "is_owner": affinity.created_by == self.user.id or (self.user and self.user.role >= 2),
                         }
                     )
 

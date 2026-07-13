@@ -74,7 +74,7 @@ class GroupPageState(ReckoningsPageState):
             self.founding_question = group.founding_question
             self.founding_concept_id = group.concept_id
             self.is_group_public = group.is_public
-            self.is_group_owner = group.created_by == self.user.id if self.user else False
+            self.is_group_owner = (group.created_by == self.user.id or (self.user and self.user.role >= 2)) if self.user else False
 
         self._load_group_concepts()
         yield HowItWorksDialogState.set_group_info(
