@@ -223,19 +223,23 @@ class GroupPageState(ReckoningsPageState):
         self._load_group_concepts()
 
     def delete_reckoning(self, rid):
-        """Delete a reckoning. Prevents deletion if it has comments or votes."""
+        """Delete a reckoning and all its children (comments, votes)."""
         with rx.session() as session:
-            child_count = session.exec(
-                select(func.count(Reckoning.id)).where(
-                    Reckoning.parent_reckoning_id == rid
-                )
-            ).first()
-            if child_count and child_count > 0:
-                return rx.window_alert(
-                    "This concept has comments or votes and cannot be deleted. "
-                    "Remove all comments and votes first."
-                )
-            session.exec(delete(Reckoning).where(Reckoning.id == rid))
+            from sqlalchemy import text
+            session.execute(
+                text(
+                    """
+                    WITH RECURSIVE descendants AS (
+                        SELECT :rid AS id
+                        UNION ALL
+                        SELECT r.id FROM reckoning r
+                        JOIN descendants d ON r.parent_reckoning_id = d.id
+                    )
+                    DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+                    """
+                ),
+                {"rid": rid},
+            )
             session.commit()
         self._load_group_concepts()
 

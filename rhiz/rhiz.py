@@ -16,14 +16,14 @@ def _init_posthog():
 
 posthog = _init_posthog() if os.getenv("POSTHOG_SECRET_KEY") else None
 
-# posthog.capture('test-id', 'test-event')
-posthog_script = (
-    rx.script(src="/posthog.js") if os.getenv("POSTHOG_PROJECT_API_KEY") else None
-)
-
-head_scripts = [rx.script(src="/scrolling.js")]
-if posthog_script is not None:
-    head_scripts.append(posthog_script)
+# Always include the PostHog client-side script. The API key is hardcoded
+# in assets/posthog.js, so we just need the <script> tag to load it.
+# This must NOT be gated by an env var, because the env var is only
+# available at runtime (not during Docker build / static export).
+head_scripts = [
+    rx.script(src="/scrolling.js"),
+    rx.script(src="/posthog.js"),
+]
 
 app = rx.App(
     head_components=head_scripts,
