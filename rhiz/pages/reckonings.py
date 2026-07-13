@@ -451,24 +451,41 @@ class YourDraftsPageState(ReckoningsPageState):
         yield self.get_reckonings()
 
     def delete_reckoning(self, rid):
-        """Delete a reckoning and all its children (comments, votes)."""
+        """Delete a reckoning. Admins can cascade-delete with children;
+        non-admins can only delete if the concept has no children."""
         with rx.session() as session:
-            from sqlalchemy import text
-            session.execute(
-                text(
-                    """
-                    WITH RECURSIVE descendants AS (
-                        SELECT :rid AS id
-                        UNION ALL
-                        SELECT r.id FROM reckoning r
-                        JOIN descendants d ON r.parent_reckoning_id = d.id
+            if self.user.role >= 2:
+                # Admin: cascade delete with all children
+                from sqlalchemy import text
+                session.execute(
+                    text(
+                        """
+                        WITH RECURSIVE descendants AS (
+                            SELECT :rid AS id
+                            UNION ALL
+                            SELECT r.id FROM reckoning r
+                            JOIN descendants d ON r.parent_reckoning_id = d.id
+                        )
+                        DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+                        """
+                    ),
+                    {"rid": rid},
+                )
+                session.commit()
+            else:
+                # Non-admin: only delete if no children
+                child_count = session.exec(
+                    select(func.count(Reckoning.id)).where(
+                        Reckoning.parent_reckoning_id == rid
                     )
-                    DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
-                    """
-                ),
-                {"rid": rid},
-            )
-            session.commit()
+                ).first()
+                if child_count and child_count > 0:
+                    return rx.window_alert(
+                        "This concept has comments or votes and cannot be deleted. "
+                        "Remove all comments and votes first."
+                    )
+                session.exec(delete(Reckoning).where(Reckoning.id == rid))
+                session.commit()
         return self.get_reckonings()
 
     def set_search(self, search):
@@ -523,24 +540,41 @@ class NewConceptsPageState(ReckoningsPageState):
         yield self.get_reckonings()
 
     def delete_reckoning(self, rid):
-        """Delete a reckoning and all its children (comments, votes)."""
+        """Delete a reckoning. Admins can cascade-delete with children;
+        non-admins can only delete if the concept has no children."""
         with rx.session() as session:
-            from sqlalchemy import text
-            session.execute(
-                text(
-                    """
-                    WITH RECURSIVE descendants AS (
-                        SELECT :rid AS id
-                        UNION ALL
-                        SELECT r.id FROM reckoning r
-                        JOIN descendants d ON r.parent_reckoning_id = d.id
+            if self.user.role >= 2:
+                # Admin: cascade delete with all children
+                from sqlalchemy import text
+                session.execute(
+                    text(
+                        """
+                        WITH RECURSIVE descendants AS (
+                            SELECT :rid AS id
+                            UNION ALL
+                            SELECT r.id FROM reckoning r
+                            JOIN descendants d ON r.parent_reckoning_id = d.id
+                        )
+                        DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+                        """
+                    ),
+                    {"rid": rid},
+                )
+                session.commit()
+            else:
+                # Non-admin: only delete if no children
+                child_count = session.exec(
+                    select(func.count(Reckoning.id)).where(
+                        Reckoning.parent_reckoning_id == rid
                     )
-                    DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
-                    """
-                ),
-                {"rid": rid},
-            )
-            session.commit()
+                ).first()
+                if child_count and child_count > 0:
+                    return rx.window_alert(
+                        "This concept has comments or votes and cannot be deleted. "
+                        "Remove all comments and votes first."
+                    )
+                session.exec(delete(Reckoning).where(Reckoning.id == rid))
+                session.commit()
         return self.get_reckonings()
 
     def set_search(self, search):
@@ -593,24 +627,41 @@ class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
         yield self.get_reckonings()
 
     def delete_reckoning(self, rid):
-        """Delete a reckoning and all its children (comments, votes)."""
+        """Delete a reckoning. Admins can cascade-delete with children;
+        non-admins can only delete if the concept has no children."""
         with rx.session() as session:
-            from sqlalchemy import text
-            session.execute(
-                text(
-                    """
-                    WITH RECURSIVE descendants AS (
-                        SELECT :rid AS id
-                        UNION ALL
-                        SELECT r.id FROM reckoning r
-                        JOIN descendants d ON r.parent_reckoning_id = d.id
+            if self.user.role >= 2:
+                # Admin: cascade delete with all children
+                from sqlalchemy import text
+                session.execute(
+                    text(
+                        """
+                        WITH RECURSIVE descendants AS (
+                            SELECT :rid AS id
+                            UNION ALL
+                            SELECT r.id FROM reckoning r
+                            JOIN descendants d ON r.parent_reckoning_id = d.id
+                        )
+                        DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+                        """
+                    ),
+                    {"rid": rid},
+                )
+                session.commit()
+            else:
+                # Non-admin: only delete if no children
+                child_count = session.exec(
+                    select(func.count(Reckoning.id)).where(
+                        Reckoning.parent_reckoning_id == rid
                     )
-                    DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
-                    """
-                ),
-                {"rid": rid},
-            )
-            session.commit()
+                ).first()
+                if child_count and child_count > 0:
+                    return rx.window_alert(
+                        "This concept has comments or votes and cannot be deleted. "
+                        "Remove all comments and votes first."
+                    )
+                session.exec(delete(Reckoning).where(Reckoning.id == rid))
+                session.commit()
         return self.get_reckonings()
 
     def set_search(self, search):
@@ -685,24 +736,41 @@ class TrendingConceptsBySupportPageState(ReckoningsPageState):
         yield self.get_reckonings()
 
     def delete_reckoning(self, rid):
-        """Delete a reckoning and all its children (comments, votes)."""
+        """Delete a reckoning. Admins can cascade-delete with children;
+        non-admins can only delete if the concept has no children."""
         with rx.session() as session:
-            from sqlalchemy import text
-            session.execute(
-                text(
-                    """
-                    WITH RECURSIVE descendants AS (
-                        SELECT :rid AS id
-                        UNION ALL
-                        SELECT r.id FROM reckoning r
-                        JOIN descendants d ON r.parent_reckoning_id = d.id
+            if self.user.role >= 2:
+                # Admin: cascade delete with all children
+                from sqlalchemy import text
+                session.execute(
+                    text(
+                        """
+                        WITH RECURSIVE descendants AS (
+                            SELECT :rid AS id
+                            UNION ALL
+                            SELECT r.id FROM reckoning r
+                            JOIN descendants d ON r.parent_reckoning_id = d.id
+                        )
+                        DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+                        """
+                    ),
+                    {"rid": rid},
+                )
+                session.commit()
+            else:
+                # Non-admin: only delete if no children
+                child_count = session.exec(
+                    select(func.count(Reckoning.id)).where(
+                        Reckoning.parent_reckoning_id == rid
                     )
-                    DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
-                    """
-                ),
-                {"rid": rid},
-            )
-            session.commit()
+                ).first()
+                if child_count and child_count > 0:
+                    return rx.window_alert(
+                        "This concept has comments or votes and cannot be deleted. "
+                        "Remove all comments and votes first."
+                    )
+                session.exec(delete(Reckoning).where(Reckoning.id == rid))
+                session.commit()
         return self.get_reckonings()
 
     def set_search(self, search):
@@ -782,24 +850,41 @@ class YourConceptsPageState(ReckoningsPageState):
         yield self.get_reckonings()
 
     def delete_reckoning(self, rid):
-        """Delete a reckoning and all its children (comments, votes)."""
+        """Delete a reckoning. Admins can cascade-delete with children;
+        non-admins can only delete if the concept has no children."""
         with rx.session() as session:
-            from sqlalchemy import text
-            session.execute(
-                text(
-                    """
-                    WITH RECURSIVE descendants AS (
-                        SELECT :rid AS id
-                        UNION ALL
-                        SELECT r.id FROM reckoning r
-                        JOIN descendants d ON r.parent_reckoning_id = d.id
+            if self.user.role >= 2:
+                # Admin: cascade delete with all children
+                from sqlalchemy import text
+                session.execute(
+                    text(
+                        """
+                        WITH RECURSIVE descendants AS (
+                            SELECT :rid AS id
+                            UNION ALL
+                            SELECT r.id FROM reckoning r
+                            JOIN descendants d ON r.parent_reckoning_id = d.id
+                        )
+                        DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+                        """
+                    ),
+                    {"rid": rid},
+                )
+                session.commit()
+            else:
+                # Non-admin: only delete if no children
+                child_count = session.exec(
+                    select(func.count(Reckoning.id)).where(
+                        Reckoning.parent_reckoning_id == rid
                     )
-                    DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
-                    """
-                ),
-                {"rid": rid},
-            )
-            session.commit()
+                ).first()
+                if child_count and child_count > 0:
+                    return rx.window_alert(
+                        "This concept has comments or votes and cannot be deleted. "
+                        "Remove all comments and votes first."
+                    )
+                session.exec(delete(Reckoning).where(Reckoning.id == rid))
+                session.commit()
         return self.get_reckonings()
 
     def set_search(self, search):
@@ -852,24 +937,41 @@ class ComparePageState(ReckoningsPageState):
         yield self.get_reckonings()
 
     def delete_reckoning(self, rid):
-        """Delete a reckoning and all its children (comments, votes)."""
+        """Delete a reckoning. Admins can cascade-delete with children;
+        non-admins can only delete if the concept has no children."""
         with rx.session() as session:
-            from sqlalchemy import text
-            session.execute(
-                text(
-                    """
-                    WITH RECURSIVE descendants AS (
-                        SELECT :rid AS id
-                        UNION ALL
-                        SELECT r.id FROM reckoning r
-                        JOIN descendants d ON r.parent_reckoning_id = d.id
+            if self.user.role >= 2:
+                # Admin: cascade delete with all children
+                from sqlalchemy import text
+                session.execute(
+                    text(
+                        """
+                        WITH RECURSIVE descendants AS (
+                            SELECT :rid AS id
+                            UNION ALL
+                            SELECT r.id FROM reckoning r
+                            JOIN descendants d ON r.parent_reckoning_id = d.id
+                        )
+                        DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+                        """
+                    ),
+                    {"rid": rid},
+                )
+                session.commit()
+            else:
+                # Non-admin: only delete if no children
+                child_count = session.exec(
+                    select(func.count(Reckoning.id)).where(
+                        Reckoning.parent_reckoning_id == rid
                     )
-                    DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
-                    """
-                ),
-                {"rid": rid},
-            )
-            session.commit()
+                ).first()
+                if child_count and child_count > 0:
+                    return rx.window_alert(
+                        "This concept has comments or votes and cannot be deleted. "
+                        "Remove all comments and votes first."
+                    )
+                session.exec(delete(Reckoning).where(Reckoning.id == rid))
+                session.commit()
         return self.get_reckonings()
 
     def set_search(self, search):
@@ -969,24 +1071,41 @@ class ConceptPageState(ReckoningsPageState):
         yield self.get_reckonings()
 
     def delete_reckoning(self, rid):
-        """Delete a reckoning and all its children (comments, votes)."""
+        """Delete a reckoning. Admins can cascade-delete with children;
+        non-admins can only delete if the concept has no children."""
         with rx.session() as session:
-            from sqlalchemy import text
-            session.execute(
-                text(
-                    """
-                    WITH RECURSIVE descendants AS (
-                        SELECT :rid AS id
-                        UNION ALL
-                        SELECT r.id FROM reckoning r
-                        JOIN descendants d ON r.parent_reckoning_id = d.id
+            if self.user.role >= 2:
+                # Admin: cascade delete with all children
+                from sqlalchemy import text
+                session.execute(
+                    text(
+                        """
+                        WITH RECURSIVE descendants AS (
+                            SELECT :rid AS id
+                            UNION ALL
+                            SELECT r.id FROM reckoning r
+                            JOIN descendants d ON r.parent_reckoning_id = d.id
+                        )
+                        DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+                        """
+                    ),
+                    {"rid": rid},
+                )
+                session.commit()
+            else:
+                # Non-admin: only delete if no children
+                child_count = session.exec(
+                    select(func.count(Reckoning.id)).where(
+                        Reckoning.parent_reckoning_id == rid
                     )
-                    DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
-                    """
-                ),
-                {"rid": rid},
-            )
-            session.commit()
+                ).first()
+                if child_count and child_count > 0:
+                    return rx.window_alert(
+                        "This concept has comments or votes and cannot be deleted. "
+                        "Remove all comments and votes first."
+                    )
+                session.exec(delete(Reckoning).where(Reckoning.id == rid))
+                session.commit()
         return self.get_reckonings()
 
     def set_search(self, search):
@@ -1030,24 +1149,41 @@ class CommentsPageState(ReckoningsPageState):
         yield self.get_reckonings()
 
     def delete_reckoning(self, rid):
-        """Delete a reckoning and all its children (comments, votes)."""
+        """Delete a reckoning. Admins can cascade-delete with children;
+        non-admins can only delete if the concept has no children."""
         with rx.session() as session:
-            from sqlalchemy import text
-            session.execute(
-                text(
-                    """
-                    WITH RECURSIVE descendants AS (
-                        SELECT :rid AS id
-                        UNION ALL
-                        SELECT r.id FROM reckoning r
-                        JOIN descendants d ON r.parent_reckoning_id = d.id
+            if self.user.role >= 2:
+                # Admin: cascade delete with all children
+                from sqlalchemy import text
+                session.execute(
+                    text(
+                        """
+                        WITH RECURSIVE descendants AS (
+                            SELECT :rid AS id
+                            UNION ALL
+                            SELECT r.id FROM reckoning r
+                            JOIN descendants d ON r.parent_reckoning_id = d.id
+                        )
+                        DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+                        """
+                    ),
+                    {"rid": rid},
+                )
+                session.commit()
+            else:
+                # Non-admin: only delete if no children
+                child_count = session.exec(
+                    select(func.count(Reckoning.id)).where(
+                        Reckoning.parent_reckoning_id == rid
                     )
-                    DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
-                    """
-                ),
-                {"rid": rid},
-            )
-            session.commit()
+                ).first()
+                if child_count and child_count > 0:
+                    return rx.window_alert(
+                        "This concept has comments or votes and cannot be deleted. "
+                        "Remove all comments and votes first."
+                    )
+                session.exec(delete(Reckoning).where(Reckoning.id == rid))
+                session.commit()
         return self.get_reckonings()
 
     def set_search(self, search):
