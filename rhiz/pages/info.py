@@ -170,7 +170,7 @@ Additionally, you agree not to:
 
 6. **Analytics**
 
-We may use third-party Service Providers to monitor and analyze the use of our Service.
+We may use third-party Service Providers to monitor and analyze the use of our Service. When you log in, we associate your usage data with your account to understand how our service is used across devices. We do not use session replay or record what you see on screen. We respect Do Not Track signals — if your browser sends a DNT header, analytics collection is automatically disabled.
 
 7. **No Use By Minors**
 

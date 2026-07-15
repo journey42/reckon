@@ -363,6 +363,22 @@ class AuthState(AppState):
 
                 session.commit()
 
-                return rx.redirect(self._post_login_target())
+                # Identify user in PostHog for cross-device tracking
+                try:
+                    from rhiz.rhiz import posthog
+                    if posthog:
+                        posthog.capture(
+                            "login",
+                            distinct_id=f"user-{self.user.id}",
+                            properties={"username": self.user.username},
+                        )
+                except Exception:
+                    pass
+
+                # Call posthog.identify on the client side
+                return [
+                    rx.call_script(f"if(window.posthog)posthog.identify('user-{self.user.id}')"),
+                    rx.redirect(self._post_login_target()),
+                ]
             else:
                 return rx.window_alert("Invalid username or password.")

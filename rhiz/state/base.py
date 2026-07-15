@@ -515,6 +515,13 @@ class AppState(rx.State):
         return self.user is not None
 
     @rx.var(auto_deps=False, deps=["user"])
+    def posthog_distinct_id(self) -> str:
+        """User ID for PostHog cross-device tracking."""
+        if self.user:
+            return f"user-{self.user.id}"
+        return ""
+
+    @rx.var(auto_deps=False, deps=["user"])
     def user_can_manage_groups(self) -> bool:
         """True if the current user may create/manage groups (role or per-user flag).
 
