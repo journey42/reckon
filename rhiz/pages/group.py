@@ -80,7 +80,7 @@ class GroupPageState(ReckoningsPageState):
         yield HowItWorksDialogState.set_group_info(
             self.group_name, self.founding_question
         )
-        return rx.call_script("scrollToSavedPosition();")
+        return rx.call_script("if(typeof scrollToSavedPosition==='function')scrollToSavedPosition();")
 
     def _load_group_concepts(self):
         """Load all concepts in this group, ordered by traction desc.

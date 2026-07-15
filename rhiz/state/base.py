@@ -471,7 +471,7 @@ class AppState(rx.State):
     support_button_pulsing: bool = False
 
     def scroll_to_saved_position(self):
-        return rx.call_script("scrollToSavedPosition();")
+        return rx.call_script("if(typeof scrollToSavedPosition==='function')scrollToSavedPosition();")
 
     def save_scroll_position(self):
         return rx.call_script("saveScrollPosition();")
