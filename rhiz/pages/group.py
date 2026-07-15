@@ -261,8 +261,10 @@ class GroupPageState(ReckoningsPageState):
         self._load_group_concepts()
 
     def graduate_concept(self, rid: int):
-        """Graduate a group concept to the main site by clearing its group_id.
-        Only the group creator can graduate concepts.
+        """Graduate a group concept to the main site.
+
+        Sets is_graduated=True so the concept becomes visible in site-wide
+        feeds while remaining visible in its group.
         """
         if not self.is_group_owner:
             return
@@ -272,7 +274,7 @@ class GroupPageState(ReckoningsPageState):
                 select(Reckoning).where(Reckoning.id == rid)
             ).first()
             if concept is not None and concept.group_id == self.group_id_val:
-                concept.group_id = None
+                concept.is_graduated = True
                 session.add(concept)
                 session.commit()
         self._load_group_concepts()

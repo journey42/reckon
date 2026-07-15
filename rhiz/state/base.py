@@ -108,6 +108,7 @@ class Reckoning(Model, table=True):
     group_id: Optional[int] = Field(
         default=None, foreign_key="group.id", nullable=True, index=True
     )
+    is_graduated: bool = Field(default=False)
 
     # textembedding: Optional[TextEmbedding] = Relationship(back_populates="reckoning")
 

@@ -58,11 +58,12 @@ from urllib.parse import quote
 
 
 def _exclude_private_groups():
-    """SQLAlchemy filter: only site-wide or public-group reckonings.
+    """SQLAlchemy filter: only site-wide, public-group, or graduated concepts.
 
     Site-wide concepts have group_id IS NULL. Public-group concepts have
-    group_id pointing at a Group with is_public=True. Private group concepts
-    are excluded from all site-wide feeds.
+    group_id pointing at a Group with is_public=True. Graduated concepts
+    have is_graduated=True (they keep their group_id but are also visible
+    site-wide). Private group concepts that are not graduated are excluded.
     """
     from rhiz.state.base import Group
 
@@ -71,6 +72,7 @@ def _exclude_private_groups():
         Reckoning.group_id.in_(
             select(Group.id).where(Group.is_public == True)  # noqa: E712
         ),
+        Reckoning.is_graduated == True,  # noqa: E712
     )
 
 

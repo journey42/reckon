@@ -136,7 +136,17 @@ def main():
             conn.execute(text("INSERT INTO appsetting (key, value) VALUES ('auto_signup_enabled', 'false')"))
             print("[migrate] Seeded auto_signup_enabled=false", flush=True)
 
-        # 6. Ensure alembic_version table exists for future Alembic-based migrations
+        # 6. Add is_graduated column to reckoning (concept graduation flag)
+        reckoning_cols = [c["name"].lower() for c in inspector.get_columns("reckoning")]
+        if "is_graduated" not in reckoning_cols:
+            print("[migrate] Adding is_graduated column to reckoning...", flush=True)
+            conn.execute(
+                text("ALTER TABLE reckoning ADD COLUMN IF NOT EXISTS is_graduated BOOLEAN DEFAULT FALSE")
+            )
+        else:
+            print("[migrate] is_graduated column already exists on reckoning.", flush=True)
+
+        # 7. Ensure alembic_version table exists for future Alembic-based migrations
         conn.execute(
             text(
                 "CREATE TABLE IF NOT EXISTS alembic_version "
