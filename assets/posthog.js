@@ -4,7 +4,7 @@ if (!window.__posthog_loaded__) {
   if (window.posthog && typeof window.posthog.init === 'function') {
     window.posthog.init('phc_rQPhVDnHM6wgc44Eq3lQayCH4rSOZH3jevGH2B4aFpo', {
       api_host: 'https://app.posthog.com',
-      opt_out_capturing_by_default: true,
+      respect_dnt: true,
       disable_session_recording: true,
     });
   }
