@@ -146,6 +146,67 @@ def main():
         else:
             print("[migrate] is_graduated column already exists on reckoning.", flush=True)
 
+        # 8. Create groupmember table (explicit group membership tracking)
+        if "groupmember" not in tables:
+            print("[migrate] Creating groupmember table...", flush=True)
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS groupmember ("
+                    "id SERIAL NOT NULL, "
+                    "user_id INTEGER NOT NULL REFERENCES \"user\"(id), "
+                    "group_id INTEGER NOT NULL REFERENCES \"group\"(id), "
+                    "joined_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(), "
+                    "PRIMARY KEY (id), "
+                    "CONSTRAINT uq_user_group UNIQUE (user_id, group_id))"
+                )
+            )
+        else:
+            print("[migrate] groupmember table already exists.", flush=True)
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_groupmember_user_id "
+                "ON groupmember(user_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_groupmember_group_id "
+                "ON groupmember(group_id)"
+            )
+        )
+
+        # 9. Create usersession table (cookie-backed persistent logins).
+        #    Without this, losing server-side Reflex state logs users out.
+        if "usersession" not in tables:
+            print("[migrate] Creating usersession table...", flush=True)
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS usersession ("
+                    "id SERIAL NOT NULL, "
+                    "token_hash VARCHAR NOT NULL, "
+                    "user_id INTEGER NOT NULL REFERENCES \"user\"(id), "
+                    "created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(), "
+                    "last_used_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(), "
+                    "expires_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, "
+                    "revoked BOOLEAN NOT NULL DEFAULT FALSE, "
+                    "PRIMARY KEY (id))"
+                )
+            )
+        else:
+            print("[migrate] usersession table already exists.", flush=True)
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_usersession_token_hash "
+                "ON usersession(token_hash)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_usersession_user_id "
+                "ON usersession(user_id)"
+            )
+        )
+
         # 7. Ensure alembic_version table exists for future Alembic-based migrations
         conn.execute(
             text(

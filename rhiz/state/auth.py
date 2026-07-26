@@ -15,6 +15,7 @@ from rhiz.utils.comms import send_password_reset_email, send_verification_email
 from rhiz.utils.verification import generate_token, is_group_origin, TOKEN_TTL_HOURS
 from rhiz.utils.urls import safe_next_path
 from rhiz.utils.security import hash_password, verify_password
+from rhiz.utils.sessions import revoke_all_for_user
 from urllib.parse import quote
 
 
@@ -26,6 +27,12 @@ class AuthState(AppState):
     current_password: str = ""
     password: str = ""
     confirm_password: str = ""
+
+    @rx.var
+    def is_group_context(self) -> bool:
+        """True if the user arrived from a group link (?next=/group/...)."""
+        nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
+        return bool(nxt) and nxt.startswith("/group/")
 
     @rx.event
     def set_email(self, value: str) -> None:
@@ -137,7 +144,7 @@ class AuthState(AppState):
                 # Normal signup
                 if auto_signup:
                     # Auto-enabled: log them in and send to home (or group)
-                    self.user = new_user
+                    self.start_session(new_user)
                     target = safe_next_path(nxt) or "/"
                     return rx.redirect(target)
                 # Manual approval: show pending page
@@ -153,7 +160,7 @@ class AuthState(AppState):
                 new_user.verification_expires_at = None
                 session.add(new_user)
                 session.commit()
-                self.user = new_user
+                self.start_session(new_user)
                 return rx.redirect(safe_next_path(nxt) or "/")
 
             # Auto-signup is off: email a verification link that re-enables
@@ -255,7 +262,6 @@ class AuthState(AppState):
             user.password = hash_password(self.password)
             user.updated_at = datetime.now(timezone.utc)
             session.add(user)
-            self.user = user
 
             log = Log(
                 user_id=user.id,
@@ -265,6 +271,11 @@ class AuthState(AppState):
             )
             session.add(log)
             session.commit()
+
+            # Changing the password invalidates sessions everywhere else, then
+            # issues a fresh one for this browser.
+            revoke_all_for_user(session, user.id)
+            self.start_session(user)
 
             return rx.redirect("/reset_password_successful")
 
@@ -351,7 +362,9 @@ class AuthState(AppState):
                     return rx.window_alert(
                         "Account not enabled. We will send you an email when your account is ready."
                     )
-                self.user = user
+                # Persist the session in a cookie so a lost state entry or a
+                # backend restart no longer logs the user out.
+                self.start_session(user)
 
                 log = Log(
                     user_id=self.user.id,

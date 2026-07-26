@@ -13,7 +13,10 @@ reflex.db
 .env
 AGENTS.md
 .playwright-mcp/
+.playwright-cli/
 alembic/
 ornith_harness/
 docs/superpowers/
 alembic/
+run_dev.sh
+run_staging.sh

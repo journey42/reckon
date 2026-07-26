@@ -4,9 +4,8 @@ import os
 import reflex as rx
 from typing import Optional, List
 from sqlmodel import Field, Relationship, select, SQLModel
-from sqlalchemy import text
+from sqlalchemy import text, UniqueConstraint
 from datetime import datetime
-import asyncio
 from dataclasses import dataclass
 from rhiz.utils.time import calculate_elapsed_time
 
@@ -56,6 +55,8 @@ class User(Model, table=True):
     logs: List["Log"] = Relationship(back_populates="user")
 
     feedback: List["Feedback"] = Relationship(back_populates="user")
+
+    group_members: List["GroupMember"] = Relationship(back_populates="user")
 
 
 # from sqlalchemy.types import TypeDecorator, ARRAY
@@ -397,6 +398,46 @@ class Group(Model, table=True):
     )
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
+    members: List["GroupMember"] = Relationship(back_populates="group")
+
+
+class GroupMember(Model, table=True):
+    """Tracks which users belong to which groups.
+
+    Created automatically when a logged-in user visits a group page or
+    submits content. Admins can also add members directly by email.
+    """
+
+    user_id: int = Field(foreign_key="user.id", nullable=False, index=True)
+    group_id: int = Field(foreign_key="group.id", nullable=False, index=True)
+    joined_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+    user: Optional["User"] = Relationship(back_populates="group_members")
+    group: Optional["Group"] = Relationship(back_populates="members")
+
+    __table_args__ = (UniqueConstraint("user_id", "group_id", name="uq_user_group"),)
+
+
+class UserSession(Model, table=True):
+    """A persistent login session, keyed by an opaque token held in a cookie.
+
+    Reflex keeps ``AppState.user`` in server-side state, which is lost whenever
+    the backend restarts, the state manager evicts the entry, or the browser
+    gets a new client token. That is what made users appear to be "kicked out"
+    mid-session. This table lets us re-hydrate the logged-in user from a cookie
+    so a lost state entry is no longer a logout.
+
+    Only the SHA-256 hash of the token is stored, so a database leak does not
+    hand over usable sessions.
+    """
+
+    token_hash: str = Field(nullable=False, index=True, unique=True)
+    user_id: int = Field(foreign_key="user.id", nullable=False, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    last_used_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    expires_at: datetime = Field(nullable=False)
+    revoked: bool = Field(default=False, nullable=False)
+
 
 class Feedback(Model, table=True):
     """A table of Feedback."""
@@ -458,11 +499,32 @@ def _is_toolbar_enabled() -> bool:
     return value.strip().lower() not in {"0", "false", "off"}
 
 
+def _is_secure_cookie() -> bool:
+    """Send the auth cookie only over HTTPS when deployed.
+
+    Derived from PUBLIC_BASE_URL so local http://localhost testing still works
+    while production (https://) gets the Secure flag.
+    """
+    return os.getenv("PUBLIC_BASE_URL", "http://localhost:3000").startswith("https://")
+
+
 class AppState(rx.State):
     """The base state for the app."""
 
     user: Optional[User] = None
-    is_running: bool = False
+
+    # Opaque session token, persisted client-side so that losing server-side
+    # state (backend restart, eviction, new client token) is no longer a
+    # logout. Only its SHA-256 hash is stored server-side.
+    auth_token: str = rx.Cookie(
+        "",
+        name="rhiz_auth",
+        path="/",
+        max_age=30 * 24 * 60 * 60,
+        same_site="lax",
+        secure=_is_secure_cookie(),
+    )
+
     toolbar_enabled: bool = _is_toolbar_enabled()
     show_support_nudge: bool = False
     support_nudge_concept_id: Optional[int] = None
@@ -499,16 +561,63 @@ class AppState(rx.State):
 
         return path_segments[-1] if path_segments else default
 
+    def start_session(self, user: User) -> None:
+        """Mark ``user`` as logged in and persist the session in a cookie.
+
+        Call this instead of assigning ``self.user`` directly, so the login
+        survives a backend restart or a lost state entry.
+        """
+        from rhiz.utils.sessions import create_session
+
+        self.user = user
+        with rx.session() as session:
+            self.auth_token = create_session(session, user.id)
+
+    def _hydrate_user(self) -> bool:
+        """Rebuild ``self.user`` from the auth cookie when state was lost.
+
+        Returns True if a user is present afterwards. This is what stops the
+        "kicked out mid-interaction" behaviour: a missing state entry is
+        recovered from the cookie instead of bouncing to /login.
+        """
+        if self.user is not None:
+            return True
+        if not self.auth_token:
+            return False
+
+        from rhiz.utils.sessions import resolve_session
+
+        with rx.session() as session:
+            user = resolve_session(session, self.auth_token)
+
+        if user is None:
+            # Stale/expired/revoked cookie - clear it so we stop retrying.
+            self.auth_token = ""
+            return False
+
+        self.user = user
+        return True
+
     def logout(self):
-        """Log out a user."""
+        """Log out a user and revoke the persisted session."""
+        from rhiz.utils.sessions import revoke_session
+
+        if self.auth_token:
+            with rx.session() as session:
+                revoke_session(session, self.auth_token)
         self.reset()
         return rx.redirect("/login")
 
     def check_login(self):
-        """Check if a user is logged in."""
-        if (not self.logged_in) or (not self.user.enabled):
+        """Check if a user is logged in and enabled.
+
+        Attempts cookie-based re-hydration before redirecting, so a lost
+        server-side state entry no longer forces a logout.
+        """
+        self._hydrate_user()
+        if not self.logged_in or not self.user.enabled:
             return rx.redirect("/login")
-        # return State.check_if_user_enabled
+        return None
 
     @rx.var
     def logged_in(self) -> bool:
@@ -533,31 +642,24 @@ class AppState(rx.State):
 
         return can_manage_groups(self.user)
 
-    @rx.event(background=True)
-    async def check_if_user_enabled(self):
-        """Check if a user is enabled."""
-        if self.is_running:
-            return
-        async with self:
-            self.is_running = True
-        while True:
-            if not self.logged_in:
-                print("User is not logged in exiting check_if_user_enabled")
-                return
+    def check_user_enabled(self):
+        """Check if the current user is enabled.
 
+        Replaces the background polling task which caused race conditions and
+        lock contention. Called at key points: on_load handlers, before
+        write operations, and after login.
+        """
+        self._hydrate_user()
+        if self.logged_in and not self.user.enabled:
+            # Disabled account: revoke every session so other devices stop too.
+            from rhiz.utils.sessions import revoke_all_for_user
+
+            user_id = self.user.id
             with rx.session() as session:
-                async with self:
-                    self.user = session.exec(
-                        select(User).where(User.id == self.user.id)
-                    ).first()
-            if self.user and not self.user.enabled:
-                async with self:
-                    self.reset()
-                    print(
-                        "User is not enabled. Resetting and redirecting to /login. Exiting check_if_user_enabled."
-                    )
-                    return rx.redirect("/login")
-            await asyncio.sleep(1)
+                revoke_all_for_user(session, user_id)
+            self.reset()
+            return rx.redirect("/login")
+        return None
 
     # reckonings: list[Reckoning]
     _db_updated: bool = False

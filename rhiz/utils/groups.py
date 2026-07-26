@@ -1,10 +1,11 @@
 """Data-access helpers for group pages."""
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlmodel import select
 
-from rhiz.state.base import Group, GroupStatus, Reckoning, ReckoningTypes
+from rhiz.state.base import Group, GroupStatus, GroupMember, Reckoning, ReckoningTypes, User
 from rhiz.utils.slugs import slugify, unique_slug
 
 
@@ -137,3 +138,83 @@ def delete_group(session, group_id: int, owner_id: int | None = None) -> None:
     session.commit()
 
     session.expire_all()
+
+
+# ── Group membership helpers ──────────────────────────────────────────
+
+def get_membership(session, user_id: int, group_id: int) -> Optional[GroupMember]:
+    """Return the membership row for a user+group, or None."""
+    return session.exec(
+        select(GroupMember).where(
+            GroupMember.user_id == user_id,
+            GroupMember.group_id == group_id,
+        )
+    ).first()
+
+
+def is_member(session, user_id: int, group_id: int) -> bool:
+    """Check if a user is a member of a group."""
+    return get_membership(session, user_id, group_id) is not None
+
+
+def join_group(session, user_id: int, group_id: int) -> Optional[GroupMember]:
+    """Add a user to a group. Returns the membership (new or existing)."""
+    existing = get_membership(session, user_id, group_id)
+    if existing:
+        return existing
+    member = GroupMember(user_id=user_id, group_id=group_id)
+    session.add(member)
+    session.commit()
+    session.refresh(member)
+    return member
+
+
+def leave_group(session, user_id: int, group_id: int) -> bool:
+    """Remove a user from a group. Returns True if a row was deleted."""
+    member = get_membership(session, user_id, group_id)
+    if member is None:
+        return False
+    session.delete(member)
+    session.commit()
+    return True
+
+
+def add_member_by_email(session, email: str, group_id: int) -> Optional[GroupMember]:
+    """Find a user by email and add them to a group.
+
+    Returns the membership row on success, or None if the user was not found.
+    """
+    user = session.exec(select(User).where(User.email == email)).first()
+    if user is None:
+        return None
+    return join_group(session, user.id, group_id)
+
+
+def get_group_members(session, group_id: int) -> list[dict]:
+    """Return a list of {id, username, email, joined_at} for all members."""
+    rows = session.exec(
+        select(GroupMember, User.username, User.email)
+        .join(User, User.id == GroupMember.user_id)
+        .where(GroupMember.group_id == group_id)
+        .order_by(GroupMember.joined_at)
+    ).all()
+    return [
+        {
+            "id": m.id,
+            "user_id": m.user_id,
+            "username": username,
+            "email": email,
+            "joined_at": m.joined_at,
+        }
+        for m, username, email in rows
+    ]
+
+
+def remove_member(session, member_id: int) -> bool:
+    """Remove a specific membership by its ID."""
+    member = session.exec(select(GroupMember).where(GroupMember.id == member_id)).first()
+    if member is None:
+        return False
+    session.delete(member)
+    session.commit()
+    return True

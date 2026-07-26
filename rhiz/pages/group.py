@@ -19,7 +19,7 @@ from sqlalchemy.orm import noload
 from rhiz.styles import page_params, read_only_text_style
 from rhiz.utils.db import insert_text_with_embedding, find_similar_texts_with_join
 from rhiz.utils.parsing import remove_html_tags
-from rhiz.utils.groups import get_group_by_slug
+from rhiz.utils.groups import get_group_by_slug, join_group
 from rhiz.pages.reckonings import (
     ReckoningsPageState,
     page,
@@ -59,6 +59,11 @@ class GroupPageState(ReckoningsPageState):
         return self.get_path_param("slug", "")
 
     def on_load(self):
+        # Check enabled status (replaces background polling)
+        result = self.check_user_enabled()
+        if result:
+            return result
+
         self.page_type = 7
         self.group_not_found = False
         self.reckonings = []
@@ -75,6 +80,10 @@ class GroupPageState(ReckoningsPageState):
             self.founding_concept_id = group.concept_id
             self.is_group_public = group.is_public
             self.is_group_owner = (group.created_by == self.user.id or (self.user and self.user.role >= 2)) if self.user else False
+
+            # Auto-create membership for logged-in users visiting a group page
+            if self.logged_in:
+                join_group(session, self.user.id, group.id)
 
         self._load_group_concepts()
         yield HowItWorksDialogState.set_group_info(
@@ -280,12 +289,12 @@ class GroupPageState(ReckoningsPageState):
         self._load_group_concepts()
 
     def _require_login_redirect_for_submission(self):
-        """Redirect anonymous users to signup with a group return path."""
+        """Redirect anonymous/disabled users to login with a group return path."""
         if not self.logged_in:
             from urllib.parse import quote
 
             target = f"/group/{self.group_slug}"
-            return rx.redirect(f"/signup?next={quote(target, safe='/')}")
+            return rx.redirect(f"/login?next={quote(target, safe='/')}")
         if not self.user.enabled:
             return rx.redirect("/login")
         return None

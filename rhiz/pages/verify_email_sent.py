@@ -13,8 +13,18 @@ def verify_email_sent():
                 rx.heading("Check your email", size="6"),
                 rx.text(
                     "We've sent you a link to verify your email and activate "
-                    "your account. Open it, then log in to join the group.",
+                    "your account.",
                     size="3",
+                ),
+                rx.callout(
+                    rx.text(
+                        "1. Click the verification link in your email\n"
+                        "2. Log in with your credentials\n"
+                        "3. You'll be taken to the group page",
+                        size="2",
+                    ),
+                    color_scheme="gray",
+                    variant="soft",
                 ),
                 rx.link("Back to login", href="/login"),
                 spacing="3",

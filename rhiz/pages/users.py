@@ -11,6 +11,7 @@ from rhiz.layouts import profile_layout
 from rhiz.utils.validations import validate_username, validate_email, validate_role
 from dataclasses import dataclass
 from rhiz.utils.comms import send_welcome_email
+from rhiz.utils.sessions import revoke_all_for_user
 
 
 class WelcomeEmailConfirmationDialogState(AppState):
@@ -223,6 +224,10 @@ class UserEditorState(AppState):
                                 user.email
                             )
                             yield WelcomeEmailConfirmationDialogState.visible()
+                        else:
+                            # Disabling an account must kill its live sessions,
+                            # otherwise a cookie would keep it usable.
+                            revoke_all_for_user(session, user.id)
                     elif col == column_names.role:
                         is_valid, message = validate_role(val["data"])
                         if not is_valid:

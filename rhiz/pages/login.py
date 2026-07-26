@@ -1,4 +1,8 @@
-"""Login page. Uses auth_layout to render UI shared with the sign up page."""
+"""Login page. Uses auth_layout to render UI shared with the sign up page.
+
+This is the default auth landing page. When a user comes from a group link,
+they see a contextual message about joining that group.
+"""
 
 import reflex as rx
 from rhiz.layouts import auth_layout
@@ -14,8 +18,26 @@ from rhiz.styles import (
 
 @rx.page(route="/login", **page_params)
 def login():
-    """The login page."""
+    """The login page — default entry point for authentication.
+
+    When the URL includes ?next=/group/... it shows a contextual message
+    about joining the group.
+    """
+
     return auth_layout(
+        rx.cond(
+            AuthState.is_group_context,
+            rx.callout(
+                rx.text(
+                    "You're joining a group. Log in with your existing account, "
+                    "or create one below.",
+                    size="2",
+                ),
+                color_scheme="blue",
+                variant="soft",
+            ),
+            rx.fragment(),
+        ),
         rx.form(
             rx.flex(
                 rx.input(
@@ -48,7 +70,6 @@ def login():
             rx.link("Forgot password?", href="/request_reset_password", **link_style),
         ),
         rx.text(
-            rx.link("Don't have an account yet?", href="/signup", **link_style),
+            rx.link("Create an account", href="/signup", **link_style),
         ),
-        # rx.text("Copyright 2024 - Rhiz Forum LLC.", **page_footer_style)
     )

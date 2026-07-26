@@ -4,6 +4,9 @@ Visible to anyone entitled to create groups (GROUP_CREATE_MIN_ROLE). Lists
 only the groups this user created, with share link + QR, and lets them
 open/close or delete their own. Site-wide moderation lives on the admin-only
 /groups page.
+
+Also shows groups the user has explicitly joined (via GroupMember) and
+groups they've participated in through content submission.
 """
 
 import reflex as rx
@@ -28,6 +31,9 @@ class YourGroupsState(AppState):
         return can_manage_groups(self.user)
 
     def on_load(self):
+        result = self.check_user_enabled()
+        if result:
+            return result
         result = self.check_login()
         if result:
             return result
@@ -37,8 +43,30 @@ class YourGroupsState(AppState):
         self.rows = []
         base = public_base_url()
         seen_ids = set()
+
+        def _add_group(g):
+            """Add a group to the list if not already present."""
+            if g.id in seen_ids:
+                return
+            seen_ids.add(g.id)
+            url = f"{base}/group/{g.slug}"
+            self.rows.append(
+                {
+                    "id": g.id,
+                    "slug": g.slug,
+                    "name": g.name,
+                    "status": g.status,
+                    "is_public": g.is_public,
+                    "url": url,
+                    "qr": qr_data_uri(url),
+                    "creator": "",
+                    "is_owner": g.created_by == self.user.id
+                        or (self.user and self.user.role >= 2),
+                }
+            )
+
         with rx.session() as session:
-            # Groups the user created (only if they can create groups)
+            # 1. Groups the user created (only if they can create groups)
             if can_manage_groups(self.user):
                 created = session.exec(
                     select(Group)
@@ -46,23 +74,22 @@ class YourGroupsState(AppState):
                     .order_by(Group.created_at.desc())
                 ).all()
                 for g in created:
-                    seen_ids.add(g.id)
-                    url = f"{base}/group/{g.slug}"
-                    self.rows.append(
-                        {
-                            "id": g.id,
-                            "slug": g.slug,
-                            "name": g.name,
-                            "status": g.status,
-                            "is_public": g.is_public,
-                            "url": url,
-                            "qr": qr_data_uri(url),
-                            "creator": "",
-                            "is_owner": True,
-                        }
-                    )
+                    _add_group(g)
 
-            # Groups the user has participated in (via reckonings with group_id)
+            # 2. Groups the user is explicitly a member of (via GroupMember)
+            from rhiz.state.base import GroupMember
+            memberships = session.exec(
+                select(GroupMember)
+                .where(GroupMember.user_id == self.user.id)
+                .order_by(GroupMember.joined_at.desc())
+            ).all()
+            for m in memberships:
+                g = session.exec(select(Group).where(Group.id == m.group_id)).first()
+                if g:
+                    _add_group(g)
+
+            # 3. Groups the user has participated in (via reckonings with group_id)
+            #    — legacy fallback for users who interacted before membership tracking
             from rhiz.state.base import Reckoning
             from sqlalchemy import distinct
             participated_ids = session.exec(
@@ -77,43 +104,16 @@ class YourGroupsState(AppState):
                     continue
                 g = session.exec(select(Group).where(Group.id == gid)).first()
                 if g:
-                    seen_ids.add(g.id)
-                    url = f"{base}/group/{g.slug}"
-                    self.rows.append(
-                        {
-                            "id": g.id,
-                            "slug": g.slug,
-                            "name": g.name,
-                            "status": g.status,
-                            "is_public": g.is_public,
-                            "url": url,
-                            "qr": qr_data_uri(url),
-                            "creator": "",
-                            "is_owner": g.created_by == self.user.id or (self.user and self.user.role >= 2),
-                        }
-                    )
+                    _add_group(g)
 
-            # Group the user signed up from (if not already shown above)
+            # 4. Group the user signed up from (if not already shown above)
             signup_slug = getattr(self.user, "signup_group_slug", None)
             if signup_slug:
                 affinity = session.exec(
                     select(Group).where(Group.slug == signup_slug)
                 ).first()
-                if affinity and affinity.id not in seen_ids:
-                    url = f"{base}/group/{affinity.slug}"
-                    self.rows.append(
-                        {
-                            "id": affinity.id,
-                            "slug": affinity.slug,
-                            "name": affinity.name,
-                            "status": affinity.status,
-                            "is_public": affinity.is_public,
-                            "url": url,
-                            "qr": qr_data_uri(url),
-                            "creator": "",
-                            "is_owner": affinity.created_by == self.user.id or (self.user and self.user.role >= 2),
-                        }
-                    )
+                if affinity:
+                    _add_group(affinity)
 
     def toggle_status(self, group_id: int, current: str):
         if not can_manage_groups(self.user):
