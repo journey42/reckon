@@ -3,7 +3,7 @@
 import reflex as rx
 from sqlmodel import select
 from datetime import datetime, timezone
-from .base import AppState, User, Log
+from .base import AppState, CurrentUser, User, Log
 from rhiz.utils.validations import (
     validate_username,
     validate_email,
@@ -147,8 +147,9 @@ class AuthState(AppState):
                     self.start_session(new_user)
                     target = safe_next_path(nxt) or "/"
                     return rx.redirect(target)
-                # Manual approval: show pending page
-                self.user = new_user
+                # Manual approval: show pending page. No session is issued -
+                # the account is not enabled yet.
+                self.user = CurrentUser.from_user(new_user)
                 return rx.redirect("/signup_successful")
 
             # Group-origin signup

@@ -72,6 +72,13 @@ def resolve_session(session, token: str) -> Optional[User]:
     if not token:
         return None
 
+    # The returned User is used after this session closes, so it must not be
+    # expired on commit below. Without this, the sliding-expiry commit expires
+    # the instance and the caller hits DetachedInstanceError on first attribute
+    # access - which only reproduces once a session is older than
+    # REFRESH_THROTTLE, making it look intermittent.
+    session.expire_on_commit = False
+
     row = session.exec(
         select(UserSession).where(UserSession.token_hash == _hash_token(token))
     ).first()

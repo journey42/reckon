@@ -499,6 +499,46 @@ def _is_toolbar_enabled() -> bool:
     return value.strip().lower() not in {"0", "false", "off"}
 
 
+class CurrentUser(SQLModel):
+    """An immutable snapshot of the logged-in user, held in state.
+
+    Note: intentionally declared WITHOUT ``table=True`` - it is a plain
+    pydantic model with no database identity, mapper or session.
+
+    Deliberately NOT the SQLModel ``User`` table instance. A live ORM object
+    stored in Reflex state becomes detached once its session closes, and
+    expired the moment any session it belongs to commits - so the next
+    attribute read raises ``DetachedInstanceError``. Because that only happens
+    on some code paths, it surfaces intermittently and is easy to ship.
+
+    Snapshotting the handful of fields the app actually needs removes that
+    whole class of bug: this object never talks to the database.
+
+    Anything needing the live row should re-read it by ``id`` inside a session.
+    """
+
+    id: int = 0
+    username: str = ""
+    email: str = ""
+    role: int = 0
+    enabled: bool = False
+    can_create_groups: bool = False
+    signup_group_slug: Optional[str] = None
+
+    @classmethod
+    def from_user(cls, user: "User") -> "CurrentUser":
+        """Build a snapshot. Must be called while ``user`` is session-bound."""
+        return cls(
+            id=user.id or 0,
+            username=user.username or "",
+            email=user.email or "",
+            role=user.role or 0,
+            enabled=bool(user.enabled),
+            can_create_groups=bool(user.can_create_groups),
+            signup_group_slug=user.signup_group_slug,
+        )
+
+
 def _is_secure_cookie() -> bool:
     """Send the auth cookie only over HTTPS when deployed.
 
@@ -511,7 +551,7 @@ def _is_secure_cookie() -> bool:
 class AppState(rx.State):
     """The base state for the app."""
 
-    user: Optional[User] = None
+    user: Optional[CurrentUser] = None
 
     # Opaque session token, persisted client-side so that losing server-side
     # state (backend restart, eviction, new client token) is no longer a
@@ -569,9 +609,10 @@ class AppState(rx.State):
         """
         from rhiz.utils.sessions import create_session
 
-        self.user = user
+        # Snapshot before the ORM instance can be expired or detached.
+        self.user = CurrentUser.from_user(user)
         with rx.session() as session:
-            self.auth_token = create_session(session, user.id)
+            self.auth_token = create_session(session, self.user.id)
 
     def _hydrate_user(self) -> bool:
         """Rebuild ``self.user`` from the auth cookie when state was lost.
@@ -589,13 +630,15 @@ class AppState(rx.State):
 
         with rx.session() as session:
             user = resolve_session(session, self.auth_token)
+            # Snapshot inside the session, while the instance is still bound.
+            snapshot = CurrentUser.from_user(user) if user is not None else None
 
-        if user is None:
+        if snapshot is None:
             # Stale/expired/revoked cookie - clear it so we stop retrying.
             self.auth_token = ""
             return False
 
-        self.user = user
+        self.user = snapshot
         return True
 
     def logout(self):
