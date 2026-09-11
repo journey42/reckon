@@ -20,3 +20,5 @@ docs/superpowers/
 alembic/
 run_dev.sh
 run_staging.sh
+.agents/
+.claude/

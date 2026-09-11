@@ -19,7 +19,7 @@ from sqlalchemy.orm import noload
 from rhiz.styles import page_params, read_only_text_style
 from rhiz.utils.db import insert_text_with_embedding, find_similar_texts_with_join
 from rhiz.utils.parsing import remove_html_tags
-from rhiz.utils.groups import get_group_by_slug, join_group
+from rhiz.utils.groups import get_group_by_slug, join_group, update_group_details
 from rhiz.pages.reckonings import (
     ReckoningsPageState,
     page,
@@ -49,6 +49,60 @@ class GroupPageState(ReckoningsPageState):
 
     # Submission box state
     submission_content: str = ""
+
+    # Edit-headline dialog state (group owner only)
+    show_edit_headline: bool = False
+    edit_name: str = ""
+    edit_founding_question: str = ""
+    edit_error: str = ""
+
+    @rx.event
+    def open_edit_headline(self):
+        """Open the edit dialog pre-filled with the current headline."""
+        self.edit_name = self.group_name
+        self.edit_founding_question = self.founding_question
+        self.edit_error = ""
+        self.show_edit_headline = True
+
+    @rx.event
+    def close_edit_headline(self):
+        self.show_edit_headline = False
+
+    @rx.event
+    def set_edit_name(self, value: str):
+        self.edit_name = value or ""
+
+    @rx.event
+    def set_edit_founding_question(self, value: str):
+        self.edit_founding_question = value or ""
+
+    @rx.event
+    def save_edit_headline(self):
+        """Persist the new name/founding question (owner or admin only)."""
+        self.edit_error = ""
+        if not self.is_group_owner or not self.user:
+            return
+        if not self.edit_name.strip():
+            self.edit_error = "Group name is required."
+            return
+        owner_id = None if self.user.role >= 2 else self.user.id
+        with rx.session() as session:
+            group = update_group_details(
+                session,
+                self.group_id_val,
+                owner_id=owner_id,
+                name=self.edit_name,
+                founding_question=self.edit_founding_question,
+            )
+            if group is None:
+                self.edit_error = "You can only edit groups you created."
+                return
+            self.group_name = group.name
+            self.founding_question = group.founding_question
+        self.show_edit_headline = False
+        yield HowItWorksDialogState.set_group_info(
+            self.group_name, self.founding_question
+        )
 
     # Decision fork: similar concepts shown alongside the user's new submission
     nudge_similar: list[dict] = []
@@ -418,7 +472,23 @@ def group_page():
             navbar(),
             # Group header: name + founding question + submission box
             rx.vstack(
-                rx.heading(GroupPageState.group_name, size="7"),
+                rx.hstack(
+                    rx.heading(GroupPageState.group_name, size="7"),
+                    rx.cond(
+                        GroupPageState.is_group_owner,
+                        rx.button(
+                            "Edit headline",
+                            on_click=GroupPageState.open_edit_headline,
+                            variant="soft",
+                            size="1",
+                            color_scheme="gray",
+                        ),
+                        rx.fragment(),
+                    ),
+                    spacing="3",
+                    align="center",
+                    width="100%",
+                ),
                 rx.text(
                     "Your group has asked:",
                     size="3",
@@ -549,7 +619,55 @@ def group_page():
                 width="100%",
                 padding="24px",
             ),
+            edit_headline_dialog(),
         ),
+    )
+
+
+def edit_headline_dialog():
+    """Modal for group owners to edit the group name + founding question."""
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.dialog.title("Edit headline"),
+                rx.input(
+                    placeholder="Group name",
+                    value=GroupPageState.edit_name,
+                    on_change=GroupPageState.set_edit_name,
+                ),
+                rx.text_area(
+                    placeholder="Founding question",
+                    value=GroupPageState.edit_founding_question,
+                    on_change=GroupPageState.set_edit_founding_question,
+                ),
+                rx.cond(
+                    GroupPageState.edit_error != "",
+                    rx.callout(
+                        GroupPageState.edit_error, color_scheme="red", size="1"
+                    ),
+                    rx.fragment(),
+                ),
+                rx.hstack(
+                    rx.dialog.close(
+                        rx.button(
+                            "Cancel",
+                            variant="soft",
+                            color_scheme="gray",
+                            on_click=GroupPageState.close_edit_headline,
+                        ),
+                    ),
+                    rx.button("Save", on_click=GroupPageState.save_edit_headline),
+                    spacing="3",
+                    justify="end",
+                    width="100%",
+                ),
+                spacing="3",
+                align="stretch",
+                width="100%",
+            ),
+            max_width="480px",
+        ),
+        open=GroupPageState.show_edit_headline,
     )
 
 

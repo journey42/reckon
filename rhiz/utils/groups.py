@@ -90,54 +90,110 @@ def set_group_public(session, group_id: int, is_public: bool) -> None:
 
 
 def delete_group(session, group_id: int, owner_id: int | None = None) -> None:
-    """Delete a group and all its concepts, comments, and votes.
+    """Delete a group and all its concepts, comments, votes, and memberships.
 
     Handles the circular FK: group.concept_id → reckoning.id (NOT NULL) AND
     reckoning.group_id → group.id (nullable).  We null out group_id on all
     affected reckonings first, then delete the group, then delete the
     reckonings.
+
+    Everything runs in a single transaction: a failure (e.g. a leftover
+    membership blocking the group delete) rolls back all steps, so a
+    half-deleted group can never leak its founding concept onto the
+    site-wide feed.
     """
     group = session.exec(select(Group).where(Group.id == group_id)).first()
     if group is None:
         return
     if owner_id is not None and group.created_by != owner_id:
         return
-    from sqlalchemy import text
+    from sqlalchemy import delete as sa_delete, text
 
     concept_id = group.concept_id
 
-    # Step 1: Null out reckoning.group_id for all group-scoped reckonings
-    # so the group row can be deleted (breaks reckoning→group FK).
-    session.execute(
-        text("UPDATE reckoning SET group_id = NULL WHERE group_id = :gid"),
-        {"gid": group_id},
-    )
-    session.commit()
+    try:
+        # Step 1: Remove group memberships (FK blocks the group delete
+        # otherwise — this is what made deletes fail before).
+        session.execute(
+            sa_delete(GroupMember).where(GroupMember.group_id == group_id)
+        )
 
-    # Step 2: Delete the group row (concept_id FK still references the
-    # founding concept, but group→reckoning direction is fine).
-    session.delete(group)
-    session.commit()
+        # Step 2: Null out reckoning.group_id for all group-scoped
+        # reckonings so the group row can be deleted (breaks
+        # reckoning→group FK).
+        session.execute(
+            text("UPDATE reckoning SET group_id = NULL WHERE group_id = :gid"),
+            {"gid": group_id},
+        )
 
-    # Step 3: Now delete all the reckonings — the founding concept and
-    # all its descendants (comments, votes, sub-concepts).
-    session.execute(
-        text(
-            """
-            WITH RECURSIVE descendants AS (
-                SELECT :concept_id AS id
-                UNION ALL
-                SELECT r.id FROM reckoning r
-                JOIN descendants d ON r.parent_reckoning_id = d.id
-            )
-            DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
-            """
-        ),
-        {"concept_id": concept_id},
-    )
-    session.commit()
+        # Step 3: Delete the group row (concept_id FK still references the
+        # founding concept, but group→reckoning direction is fine).
+        # Flush explicitly: raw SQL below does not trigger autoflush.
+        session.delete(group)
+        session.flush()
+
+        # Step 4: Delete all the reckonings — the founding concept and all
+        # its descendants (comments, votes, sub-concepts).
+        session.execute(
+            text(
+                """
+                WITH RECURSIVE descendants AS (
+                    SELECT :concept_id AS id
+                    UNION ALL
+                    SELECT r.id FROM reckoning r
+                    JOIN descendants d ON r.parent_reckoning_id = d.id
+                )
+                DELETE FROM reckoning WHERE id IN (SELECT id FROM descendants)
+                """
+            ),
+            {"concept_id": concept_id},
+        )
+
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
 
     session.expire_all()
+
+
+def update_group_details(
+    session,
+    group_id: int,
+    owner_id: int | None = None,
+    name: str | None = None,
+    founding_question: str | None = None,
+) -> Optional[Group]:
+    """Update a group's name and/or founding question (headline).
+
+    Keeps the founding concept's content in sync with the founding question.
+    Only the group's creator (or an admin, via owner_id=None) may call this.
+    Returns the updated group, or None if not found / not authorised.
+    """
+    group = session.exec(select(Group).where(Group.id == group_id)).first()
+    if group is None:
+        return None
+    if owner_id is not None and group.created_by != owner_id:
+        return None
+    if name is not None:
+        cleaned = name.strip()
+        if not cleaned:
+            return None
+        group.name = cleaned
+    if founding_question is not None:
+        cleaned = founding_question.strip()
+        group.founding_question = cleaned
+        concept = session.exec(
+            select(Reckoning).where(Reckoning.id == group.concept_id)
+        ).first()
+        if concept is not None:
+            concept.content = cleaned
+            concept.updated_at = datetime.now(timezone.utc)
+            session.add(concept)
+    session.add(group)
+    session.commit()
+    session.refresh(group)
+    return group
 
 
 # ── Group membership helpers ──────────────────────────────────────────
