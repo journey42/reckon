@@ -2,7 +2,7 @@
 
 import reflex as rx
 from rhiz.components.buttons import (
-    legend_button,
+    live_qa_button,
     trending_concepts_button,
     your_concepts_button,
     logo_button,
@@ -13,7 +13,7 @@ from rhiz.components.feedback_dialog import (
     FeedbackDialogState,
     general_feedback_options,
 )
-from rhiz.components.legend_dialog import legend_dialog, LegendDialogState
+from rhiz.components.legend_dialog import legend_dialog
 from rhiz.components.how_it_works_dialog import (
     how_it_works_dialog,
     HowItWorksDialogState,
@@ -54,6 +54,10 @@ def _authenticated_menu_items() -> rx.Component:
         rx.cond(
             AppState.user.role == UserTypes.admin,
             rx.menu.item("All Groups", on_click=rx.redirect("/groups")),
+        ),
+        rx.cond(
+            AppState.user.role == UserTypes.admin,
+            rx.menu.item("All Live Rooms", on_click=rx.redirect("/live/all")),
         ),
         rx.cond(
             AppState.user.role == UserTypes.admin,
@@ -100,7 +104,7 @@ def app_logo() -> rx.Component:
                         groups_button(),
                         rx.fragment(),
                     ),
-                    legend_button(on_click=LegendDialogState.visible),
+                    live_qa_button(),
                     spacing="5",
                     style={"gap": "24px"},
                     align="center",

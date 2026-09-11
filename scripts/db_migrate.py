@@ -207,6 +207,95 @@ def main():
             )
         )
 
+        # 10. Live Q&A room mode: additive columns on group + reckoning.
+        # All nullable/defaulted so existing rows are unaffected.
+        group_cols = [c["name"].lower() for c in inspector.get_columns("group")]
+        for col, ddl in [
+            ("is_room", "ALTER TABLE \"group\" ADD COLUMN IF NOT EXISTS is_room BOOLEAN DEFAULT FALSE"),
+            ("closing_note", "ALTER TABLE \"group\" ADD COLUMN IF NOT EXISTS closing_note TEXT"),
+            ("similarity_threshold", "ALTER TABLE \"group\" ADD COLUMN IF NOT EXISTS similarity_threshold FLOAT"),
+            ("close_at", "ALTER TABLE \"group\" ADD COLUMN IF NOT EXISTS close_at TIMESTAMP WITHOUT TIME ZONE"),
+            ("closed_at", "ALTER TABLE \"group\" ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP WITHOUT TIME ZONE"),
+        ]:
+            if col not in group_cols:
+                print(f"[migrate] Adding {col} column to group...", flush=True)
+                conn.execute(text(ddl))
+            else:
+                print(f"[migrate] {col} column already exists on group.", flush=True)
+
+        reckoning_cols = [c["name"].lower() for c in inspector.get_columns("reckoning")]
+        for col in ("edited_at", "removed_at"):
+            if col not in reckoning_cols:
+                print(f"[migrate] Adding {col} column to reckoning...", flush=True)
+                conn.execute(
+                    text(
+                        f"ALTER TABLE reckoning ADD COLUMN IF NOT EXISTS {col} "
+                        "TIMESTAMP WITHOUT TIME ZONE"
+                    )
+                )
+            else:
+                print(f"[migrate] {col} column already exists on reckoning.", flush=True)
+
+        # 11. roomparticipant: anonymous per-device participation in a room.
+        if "roomparticipant" not in tables:
+            print("[migrate] Creating roomparticipant table...", flush=True)
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS roomparticipant ("
+                    "id SERIAL NOT NULL, "
+                    "room_id INTEGER NOT NULL REFERENCES \"group\"(id), "
+                    "device_hash VARCHAR NOT NULL, "
+                    "current_answer_id INTEGER REFERENCES reckoning(id), "
+                    "supported_answer_id INTEGER REFERENCES reckoning(id), "
+                    "created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(), "
+                    "last_seen_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(), "
+                    "PRIMARY KEY (id))"
+                )
+            )
+        else:
+            print("[migrate] roomparticipant table already exists.", flush=True)
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_roomparticipant_device_hash "
+                "ON roomparticipant(device_hash)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_roomparticipant_room_id "
+                "ON roomparticipant(room_id)"
+            )
+        )
+
+        # 12. roomswap: who switched from their wording to another answer.
+        if "roomswap" not in tables:
+            print("[migrate] Creating roomswap table...", flush=True)
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS roomswap ("
+                    "id SERIAL NOT NULL, "
+                    "room_id INTEGER NOT NULL REFERENCES \"group\"(id), "
+                    "participant_id INTEGER NOT NULL REFERENCES roomparticipant(id), "
+                    "from_reckoning_id INTEGER NOT NULL REFERENCES reckoning(id), "
+                    "to_reckoning_id INTEGER NOT NULL REFERENCES reckoning(id), "
+                    "created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(), "
+                    "PRIMARY KEY (id))"
+                )
+            )
+        else:
+            print("[migrate] roomswap table already exists.", flush=True)
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_roomswap_room_id ON roomswap(room_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_roomswap_participant_id "
+                "ON roomswap(participant_id)"
+            )
+        )
+
         # 7. Ensure alembic_version table exists for future Alembic-based migrations
         conn.execute(
             text(
@@ -214,18 +303,36 @@ def main():
                 "(version_num VARCHAR(32) NOT NULL, PRIMARY KEY (version_num))"
             )
         )
-        # Stamp at 1a879f6b06c3 (our rename migration) so future Alembic migrations
-        # can build on top of it.
+        # Stamp at the latest applied-by-SQL revision so `reflex run` (which
+        # checks the alembic chain) doesn't refuse to start. Advance this
+        # whenever a new migration is added to scripts/db_migrate.py.
+        LATEST_SQL_MIGRATION = "a9b8c7d6e5f4"
         existing = conn.execute(
             text("SELECT version_num FROM alembic_version")
         ).fetchone()
         if not existing:
             conn.execute(
                 text(
-                    "INSERT INTO alembic_version (version_num) VALUES ('1a879f6b06c3')"
+                    "INSERT INTO alembic_version (version_num) "
+                    f"VALUES ('{LATEST_SQL_MIGRATION}')"
                 )
             )
-            print("[migrate] Stamped alembic_version at 1a879f6b06c3.", flush=True)
+            print(
+                f"[migrate] Stamped alembic_version at {LATEST_SQL_MIGRATION}.",
+                flush=True,
+            )
+        elif existing[0] != LATEST_SQL_MIGRATION:
+            conn.execute(
+                text(
+                    "UPDATE alembic_version SET version_num = :v"
+                ),
+                {"v": LATEST_SQL_MIGRATION},
+            )
+            print(
+                f"[migrate] Advanced alembic_version stamp {existing[0]} -> "
+                f"{LATEST_SQL_MIGRATION}.",
+                flush=True,
+            )
         else:
             print(
                 f"[migrate] alembic_version already stamped at {existing[0]}.",

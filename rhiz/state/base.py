@@ -121,6 +121,10 @@ class Reckoning(Model, table=True):
         default=None, foreign_key="reckoning.id", index=True
     )
 
+    # Live Q&A room fields (nullable; always NULL outside room mode).
+    edited_at: Optional[datetime] = Field(default=None, nullable=True)
+    removed_at: Optional[datetime] = Field(default=None, nullable=True)
+
     # Define the relationship with remote_side
     parent_reckoning: Optional["Reckoning"] = Relationship(
         back_populates="child_reckonings",
@@ -398,6 +402,14 @@ class Group(Model, table=True):
     )
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
+    # Live Q&A room mode. All nullable/defaulted so existing groups are
+    # unaffected (is_room=FALSE ⇒ behaviour identical to a plain group).
+    is_room: bool = Field(default=False)
+    closing_note: Optional[str] = Field(default=None, nullable=True)
+    similarity_threshold: Optional[float] = Field(default=None, nullable=True)
+    close_at: Optional[datetime] = Field(default=None, nullable=True)
+    closed_at: Optional[datetime] = Field(default=None, nullable=True)
+
     members: List["GroupMember"] = Relationship(back_populates="group")
 
 
@@ -416,6 +428,48 @@ class GroupMember(Model, table=True):
     group: Optional["Group"] = Relationship(back_populates="members")
 
     __table_args__ = (UniqueConstraint("user_id", "group_id", name="uq_user_group"),)
+
+
+class RoomParticipant(Model, table=True):
+    """Anonymous device participation in a live Q&A room.
+
+    One row per device per room. The device holds a long-lived random cookie
+    token (``rhiz_device``); only a per-room SHA-256 hash of it is stored, so
+    identity cannot be correlated across rooms from the database.
+
+    ``current_answer_id`` is the device's live answer (implicit self-support);
+    when the device swaps to another answer it is cleared and
+    ``supported_answer_id`` records what they moved to. A device has at most
+    one authorship or one swap per room.
+    """
+
+    room_id: int = Field(foreign_key="group.id", nullable=False, index=True)
+    device_hash: str = Field(nullable=False, unique=True)
+    current_answer_id: Optional[int] = Field(
+        default=None, foreign_key="reckoning.id", nullable=True
+    )
+    supported_answer_id: Optional[int] = Field(
+        default=None, foreign_key="reckoning.id", nullable=True
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    last_seen_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class RoomSwap(Model, table=True):
+    """A record of a participant switching from their own wording to another
+    answer — the consolidation story the client wants reported.
+
+    ``from_reckoning_id`` is the participant's withdrawn wording,
+    ``to_reckoning_id`` the answer they switched to.
+    """
+
+    room_id: int = Field(foreign_key="group.id", nullable=False, index=True)
+    participant_id: int = Field(
+        foreign_key="roomparticipant.id", nullable=False, index=True
+    )
+    from_reckoning_id: int = Field(foreign_key="reckoning.id", nullable=False)
+    to_reckoning_id: int = Field(foreign_key="reckoning.id", nullable=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
 
 class UserSession(Model, table=True):

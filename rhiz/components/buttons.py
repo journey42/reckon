@@ -91,6 +91,19 @@ def legend_button(*args, **kwargs):
     return create_button("/legend.svg", content="The Legend", **kwargs)
 
 
+def live_qa_button(*args, **kwargs):
+    """Main-nav icon linking to the live Q&A facilitator dashboard."""
+    params = button_params["main_menu"].copy()
+    params.update(kwargs)
+    return rx.link(
+        rx.tooltip(
+            rx.button(rx.icon("zap", size=24), **params),
+            content="Live Q&A",
+        ),
+        href="/live",
+    )
+
+
 def groups_button(*args, **kwargs):
     """Main-nav icon linking to the current user's groups ("Your Groups").
 
