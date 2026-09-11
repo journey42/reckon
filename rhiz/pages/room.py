@@ -59,7 +59,20 @@ def _is_secure_cookie() -> bool:
 # than live-results polling on conference wifi.
 AUTO_REFRESH_MS = 20000
 
-REFRESH_SCRIPT = f"setTimeout(function(){{window.location.reload();}}, {AUTO_REFRESH_MS});"
+# Reload the page after AUTO_REFRESH_MS unless the user is mid-interaction:
+# a focused input/textarea (answer box, edit draft) or an open dialog
+# (Radix sets data-state="open") defers the reload instead of wiping it.
+REFRESH_SCRIPT = (
+    "(function(){"
+    f"var DELAY={AUTO_REFRESH_MS};"
+    "function tick(){setTimeout(function(){"
+    "var el=document.activeElement;"
+    "var busy=(el&&(el.tagName==='TEXTAREA'||el.tagName==='INPUT'))"
+    "||document.querySelector('[data-state=\"open\"]');"
+    "if(busy){tick();}else{window.location.reload();}"
+    "},DELAY);}"
+    "tick();})();"
+)
 
 
 class RoomState(AppState):
@@ -99,6 +112,14 @@ class RoomState(AppState):
             if abs(self.threshold - value) < 0.01:
                 return label
         return "Balanced"
+
+    @rx.var
+    def swaps_summary(self) -> str:
+        n = self.total_swaps
+        if n == 0:
+            return ""
+        unit = "participant" if n == 1 else "participants"
+        return f"{n} {unit} switched from their own wording to another answer."
 
     # Participant (this device)
     has_answer: bool = False
@@ -432,25 +453,39 @@ def _facilitator_controls() -> rx.Component:
             rx.cond(
                 RoomState.room_qr != "",
                 rx.hstack(
-                    rx.image(
-                        src=RoomState.room_qr,
-                        width="180px",
-                        height="180px",
-                        alt="Room QR code",
-                        border="1px solid #e2e8f0",
-                        border_radius="8px",
-                        padding="8px",
-                        background="white",
-                    ),
                     rx.vstack(
-                        rx.text(
-                            "Show this QR to your audience", size="2", weight="medium"
+                        rx.image(
+                            src=RoomState.room_qr,
+                            width="160px",
+                            height="160px",
+                            alt="Room QR code",
+                            border="1px solid #e2e8f0",
+                            border_radius="8px",
+                            padding="8px",
+                            background="white",
+                            flex_shrink="0",
                         ),
-                        rx.text(RoomState.room_url, size="1", color="#64748b"),
-                        spacing="1",
+                        rx.vstack(
+                            rx.text(
+                                "Show this QR to your audience",
+                                size="2",
+                                weight="medium",
+                            ),
+                            rx.text(
+                                RoomState.room_url,
+                                size="1",
+                                color="#64748b",
+                                word_break="break-all",
+                            ),
+                            spacing="1",
+                            width="100%",
+                            min_width="0",
+                        ),
+                        spacing="2",
+                        align="start",
+                        width="100%",
                     ),
-                    spacing="4",
-                    align="center",
+                    width="100%",
                     class_name="no-print",
                 ),
                 rx.fragment(),
@@ -542,7 +577,7 @@ def _answer_box() -> rx.Component:
 
 def _waiting_note() -> rx.Component:
     return rx.vstack(
-        rx.icon("check-circle", size=32, color="#16a34a"),
+        rx.icon("circle-check", size=32, color="#16a34a"),
         rx.text(
             "Your answer is in. Results appear here automatically when "
             "the question closes.",
@@ -587,11 +622,6 @@ def _my_answer_view() -> rx.Component:
     return rx.vstack(
         rx.hstack(
             rx.badge("Your answer", color_scheme="blue", variant="soft"),
-            rx.cond(
-                RoomState.my_answer_edited,
-                rx.text("edited", size="1", color="#64748b"),
-                rx.fragment(),
-            ),
             spacing="2",
             align="center",
         ),
@@ -681,11 +711,10 @@ def _artifact() -> rx.Component:
             RoomState.results,
             lambda item, rank: _result_item_ranked(item, rank),
         ),
-        rx.text(
-            f"{RoomState.total_swaps} participants switched from their own "
-            "wording to another answer.",
-            size="2",
-            color="#64748b",
+        rx.cond(
+            RoomState.total_swaps > 0,
+            rx.text(RoomState.swaps_summary, size="2", color="#64748b"),
+            rx.fragment(),
         ),
         spacing="3",
         align="stretch",
@@ -711,7 +740,12 @@ def _result_item_ranked(item: dict, rank: int) -> rx.Component:
                 item["removed"],
                 rx.fragment(),
                 rx.vstack(
-                    rx.text(item["content"], size="3", color="#0f172a"),
+                    rx.text(
+                        item["content"],
+                        size="3",
+                        color="#0f172a",
+                        word_break="break-word",
+                    ),
                     rx.hstack(
                         rx.text(f"Support: {item['support']}", size="1", color="#475569"),
                         rx.cond(
@@ -848,7 +882,7 @@ def room_page() -> rx.Component:
             spacing="4",
             align="stretch",
             width="100%",
-            padding="0 0 48px 0",
+            padding="0 20px 48px 20px",
         ),
     )
 

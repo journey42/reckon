@@ -471,7 +471,12 @@ def _admin_row(r: dict) -> rx.Component:
                 align="center",
             ),
             rx.text(r["question"], size="3", weight="medium"),
-            rx.link(r["url"], href=r["url"], size="1"),
+            rx.link(
+                r["url"],
+                href=r["url"],
+                size="1",
+                word_break="break-all",
+            ),
             spacing="2",
             align="stretch",
             width="100%",
