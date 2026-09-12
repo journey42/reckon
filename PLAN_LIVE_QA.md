@@ -167,6 +167,28 @@ Minimal header, no site navigation, mobile-first. State machine by
 - `/live/all` (admin role): every room, status, counts, links.
 - Admin can tombstone answers from a closed room's artifact.
 
+## Flaky-network rehearsal
+
+Run in a real browser with the connection dropped at each risky moment, against
+a restored production snapshot:
+
+- **Submit during a drop** — the event is queued and delivered exactly once
+  when signal returns: one answer row, no duplicate, and the similar-answer
+  nudge then appears as normal.
+- **Swap during a drop** — one `roomswap` row, the withdrawn wording is
+  tombstoned, and the supporting state survives a reload.
+- **Close while the tab is offline** — on reconnect the tab renders the
+  artifact with the closing note.
+- **Auto-refresh while offline** — this was a real defect: the 20s reload fired
+  with no connection and left the tab on the browser's "site can't be reached"
+  page, which destroys the app and its own retry timer, so nothing recovered on
+  its own. The refresh script now also defers when `navigator.onLine === false`;
+  retested, an offline tab stays on the waiting screen and reaches the artifact
+  after reconnecting.
+- An *initial* page load with no connection still shows the browser error page.
+  That is unavoidable web behaviour, not app state; the fix is that the app no
+  longer puts a working tab into that state.
+
 ## Live-page removal wins
 
 - No ranked feed polling. The only background activity is the waiting
@@ -202,6 +224,52 @@ Two caveats worth keeping: the local single-port dev stack proxies
 `/_event` through Next and is not representative; and `aiohttp`'s client
 defaults to 100 connections, which looks exactly like a server-side ceiling
 until the limit is lifted.
+
+### What the current Azure footprint actually is
+
+| Component | Setting |
+| --- | --- |
+| `rhiz-backend` (Container Apps) | **0.5 vCPU, 1 GiB**, min 1 / max 3 replicas |
+| `reckon-db` (Postgres Flexible) | **Standard_B1ms** — 1 vCore, 2 GiB, *burstable* |
+| Postgres `max_connections` | **100** (15 in use idle) |
+| Frontend | Azure Static Web App (serves the room pages; not in the load path) |
+
+What the rehearsal above does and does not transfer:
+
+- **Transfers**: topology (backend-only granian on its own port, websockets
+  direct — as the container runs), code paths, real data volumes from the
+  snapshot, and Reflex's pool defaults. Connection cost is per-socket bytes and
+  file descriptors, which are hardware-independent in shape.
+- **Does not transfer**: absolute latency. Queries ran against loopback
+  Postgres, so ~1.5–2.9ms per reload is optimistic; in-region app→DB adds
+  roughly an order of magnitude per round trip, so assume ~10–30ms per reload.
+  At 15 reloads/s that is still well under one connection in flight and a small
+  fraction of one core, so the conclusion (large headroom) holds — but the
+  burstable DB is the component with the least margin.
+
+Event-day sizing, in priority order:
+
+1. **Postgres is the thing to upgrade.** B1ms is a burstable SKU with 1 vCore
+   and CPU credits; sustained load spends credits and then throttles hard, and
+   throttling shows up as slow *everything* because every page load waits on
+   queries. Moving to a general-purpose or memory-optimized tier (e.g.
+   `Standard_D2ds_v4` / `D4ds_v4`, or the non-burstable `GeneralPurpose` family)
+   is a few minutes of downtime and removes the one failure mode the rehearsal
+   cannot rule out.
+2. **Raise the backend to 1 vCPU** (from 0.5). Cheap, and the websocket
+   handshake queue is single-threaded per replica — 300 simultaneous connects
+   measured 66ms p50 on a full core, so half a core roughly doubles it.
+3. **Pre-scale rather than relying on autoscale.** ACA scales on HTTP traffic;
+   the first 300 attendees scanning a QR code in one minute can arrive before a
+   scale-out completes and a new replica needs a cold start plus DB connection
+   setup. Setting `minReplicas: 2–3` before the session removes that race.
+4. Leave `max_connections` at 100 but check the arithmetic: 3 replicas ×
+   (5 pool + 10 overflow) = up to 45, which fits, and nothing in the room flow
+   needs more.
+
+If the client wants certainty rather than inference, the same rehearsal can be
+pointed at staging (`WS_URL` + `DB_URL` env vars) with `connections 300` and
+`reloads`, which measures the real Azure sizes directly.
 
 ## Guardrails
 
@@ -246,4 +314,5 @@ until the limit is lifted.
 12. Regression invariant: existing groups render identically with rooms present
 13. Load: 300 waiting tabs refreshing every 20s within budget — measured,
     see "Load rehearsal" above
-14. Wifi drop mid-flow → recovery, no data loss
+14. Wifi drop mid-flow → recovery, no data loss — measured, see "Flaky-network
+    rehearsal" below

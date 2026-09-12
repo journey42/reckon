@@ -60,8 +60,11 @@ def _is_secure_cookie() -> bool:
 AUTO_REFRESH_MS = 20000
 
 # Reload the page after AUTO_REFRESH_MS unless the user is mid-interaction:
-# a focused input/textarea (answer box, edit draft) or an open dialog
-# (Radix sets data-state="open") defers the reload instead of wiping it.
+# a focused input/textarea (answer box, edit draft), an open dialog, or an
+# offline device. Skipping the reload while offline matters — reloading with no
+# connection lands the tab on the browser's "site can't be reached" error page,
+# which destroys the app and its own retry timer, so the attendee is stuck on a
+# chrome error screen instead of recovering when signal returns.
 REFRESH_SCRIPT = (
     "(function(){"
     f"var DELAY={AUTO_REFRESH_MS};"
@@ -69,7 +72,7 @@ REFRESH_SCRIPT = (
     "var el=document.activeElement;"
     "var busy=(el&&(el.tagName==='TEXTAREA'||el.tagName==='INPUT'))"
     "||document.querySelector('[data-state=\"open\"]');"
-    "if(busy){tick();}else{window.location.reload();}"
+    "if(busy||navigator.onLine===false){tick();}else{window.location.reload();}"
     "},DELAY);}"
     "tick();})();"
 )
