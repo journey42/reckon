@@ -57,6 +57,9 @@ class GroupsAdminState(AppState):
             rows = session.exec(
                 select(Group, User.username)
                 .outerjoin(User, User.id == Group.created_by)
+                # Live Q&A rooms have their own dashboard (/live, /live/all);
+                # they are groups internally but must not clutter this page.
+                .where(Group.is_room == False)  # noqa: E712
                 .order_by(Group.created_at.desc())
             ).all()
             for g, creator_username in rows:

@@ -2,6 +2,7 @@
 
 import reflex as rx
 from rhiz.components.buttons import (
+    legend_button,
     live_qa_button,
     trending_concepts_button,
     your_concepts_button,
@@ -13,7 +14,7 @@ from rhiz.components.feedback_dialog import (
     FeedbackDialogState,
     general_feedback_options,
 )
-from rhiz.components.legend_dialog import legend_dialog
+from rhiz.components.legend_dialog import legend_dialog, LegendDialogState
 from rhiz.components.how_it_works_dialog import (
     how_it_works_dialog,
     HowItWorksDialogState,
@@ -105,6 +106,7 @@ def app_logo() -> rx.Component:
                         rx.fragment(),
                     ),
                     live_qa_button(),
+                    legend_button(on_click=LegendDialogState.visible),
                     spacing="5",
                     style={"gap": "24px"},
                     align="center",

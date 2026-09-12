@@ -76,6 +76,10 @@ def signup():
             spacing="2",
         ),
         rx.text(
-            rx.link("Already have an account? Log in", href="/login", **link_style),
+            rx.link(
+                "Already have an account? Log in",
+                href=AuthState.login_link,
+                **link_style,
+            ),
         ),
     )

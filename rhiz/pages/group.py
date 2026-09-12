@@ -128,6 +128,11 @@ class GroupPageState(ReckoningsPageState):
             if group is None:
                 self.group_not_found = True
                 return
+            # Live Q&A rooms are Groups internally, but they must only render
+            # through /room/<slug> — the group feed would expose pre-close
+            # answers. Send any such link to the room page instead.
+            if group.is_room:
+                return rx.redirect(f"/room/{group.slug}")
             self.group_id_val = group.id
             self.group_name = group.name
             self.founding_question = group.founding_question

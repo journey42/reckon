@@ -3,7 +3,7 @@
 import reflex as rx
 from sqlmodel import select
 from datetime import datetime, timezone
-from .base import AppState, CurrentUser, User, Log
+from .base import AppState, CurrentUser, User, Log, Group
 from rhiz.utils.validations import (
     validate_username,
     validate_email,
@@ -33,6 +33,26 @@ class AuthState(AppState):
         """True if the user arrived from a group link (?next=/group/...)."""
         nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
         return bool(nxt) and nxt.startswith("/group/")
+
+    @rx.var
+    def signup_link(self) -> str:
+        """Link to /signup that preserves the ?next return path."""
+        nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
+        if nxt and nxt.startswith("/") and not nxt.startswith("//"):
+            from urllib.parse import quote
+
+            return f"/signup?next={quote(nxt, safe='/')}"
+        return "/signup"
+
+    @rx.var
+    def login_link(self) -> str:
+        """Link to /login that preserves the ?next return path."""
+        nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
+        if nxt and nxt.startswith("/") and not nxt.startswith("//"):
+            from urllib.parse import quote
+
+            return f"/login?next={quote(nxt, safe='/')}"
+        return "/login"
 
     @rx.event
     def set_email(self, value: str) -> None:
@@ -122,6 +142,18 @@ class AuthState(AppState):
                 )
             )
             session.commit()
+
+            # Group-origin signup: connect the new account to the group
+            # immediately, so the account is a member even if the redirect
+            # to the group page is lost (new tab, dropped next param, etc.).
+            if signup_group_slug:
+                from rhiz.utils.groups import join_group, get_group_by_slug
+
+                group = session.exec(
+                    select(Group).where(Group.slug == signup_group_slug)
+                ).first()
+                if group is not None:
+                    join_group(session, new_user.id, group.id)
 
             # Capture PostHog event for signup.
             try:
@@ -374,6 +406,22 @@ class AuthState(AppState):
                     created_at=datetime.now(timezone.utc),
                 )
                 session.add(log)
+
+                # Group-affinity signup: ensure the membership exists. Covers
+                # accounts that signed up via a group link but completed email
+                # verification (or first login) without ever loading the
+                # group page — the visit-based auto-join never fired for them.
+                affinity_slug = getattr(user, "signup_group_slug", None)
+                if affinity_slug:
+                    from rhiz.utils.groups import get_membership, join_group
+
+                    group = session.exec(
+                        select(Group).where(Group.slug == affinity_slug)
+                    ).first()
+                    if group is not None and not get_membership(
+                        session, user.id, group.id
+                    ):
+                        join_group(session, user.id, group.id)
 
                 session.commit()
 

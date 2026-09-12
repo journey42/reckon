@@ -45,8 +45,12 @@ class YourGroupsState(AppState):
         seen_ids = set()
 
         def _add_group(g):
-            """Add a group to the list if not already present."""
-            if g.id in seen_ids:
+            """Add a group to the list if not already present.
+
+            Live Q&A rooms are Groups internally but belong on /live, not
+            here — skip them everywhere.
+            """
+            if g.id in seen_ids or g.is_room:
                 return
             seen_ids.add(g.id)
             url = f"{base}/group/{g.slug}"
