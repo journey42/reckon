@@ -22,8 +22,11 @@ from sqlmodel import select, func
 import reflex as rx
 
 from rhiz.state.base import (
+    Feedback,
     Group,
+    GroupMember,
     GroupStatus,
+    Log,
     Reckoning,
     ReckoningTypes,
     RoomParticipant,
@@ -191,6 +194,138 @@ def set_threshold(session, room_id: int, threshold: float) -> Optional[Group]:
     session.commit()
     session.refresh(group)
     return group
+
+
+def delete_room(
+    session,
+    room_id: int,
+    owner_id: int | None = None,
+    actor_id: int | None = None,
+) -> bool:
+    """Permanently delete a live Q&A room and everything inside it.
+
+    Rooms must NOT be deleted through :func:`rhiz.utils.groups.delete_group`:
+    that helper nulls out ``reckoning.group_id`` so a group's concepts survive
+    as site-wide content. Room answers are anonymous, room-scoped, and are not
+    children of the founding concept, so nulling them would publish every
+    answer to the public feed. Here the content is deleted with the room.
+
+    ``owner_id`` restricts the delete to that user's room (facilitator path);
+    pass ``None`` for admins. ``actor_id`` is who to credit in the audit log
+    (an admin deleting someone else's room has no ``owner_id`` to reuse).
+    Returns True if a room was deleted.
+    """
+    group = session.exec(select(Group).where(Group.id == room_id)).first()
+    if group is None or not group.is_room:
+        return False
+    if owner_id is not None and group.created_by != owner_id:
+        return False
+
+    from sqlalchemy import delete as sa_delete, text
+
+    concept_id = group.concept_id
+
+    try:
+        # Every reckoning that belongs to the room: the founding concept and
+        # its subtree, plus the anonymous answers (which hang off the room,
+        # not off the founding concept).
+        room_reckoning_ids = session.execute(
+            text(
+                """
+                WITH RECURSIVE s AS (
+                    SELECT r.id FROM reckoning r
+                    WHERE r.group_id = :gid OR r.id = :cid
+                    UNION
+                    SELECT child.id FROM reckoning child
+                    JOIN s ON child.parent_reckoning_id = s.id
+                )
+                SELECT id FROM s
+                """
+            ),
+            {"gid": room_id, "cid": concept_id},
+        ).all()
+        ids = [row[0] for row in room_reckoning_ids]
+
+        # Anonymous device records and the swap story reference both the room
+        # and its answers, so they go first.
+        session.execute(sa_delete(RoomSwap).where(RoomSwap.room_id == room_id))
+        session.execute(
+            sa_delete(RoomParticipant).where(RoomParticipant.room_id == room_id)
+        )
+        session.execute(
+            sa_delete(GroupMember).where(GroupMember.group_id == room_id)
+        )
+        if ids:
+            session.execute(
+                sa_delete(Feedback).where(Feedback.subject_reckoning_id.in_(ids))
+            )
+
+        # Break the reckoning -> group FK, then drop the group. The group's
+        # own concept_id FK still points at the founding concept, which is why
+        # the group row has to go before that concept does. Reflex sessions do
+        # not autoflush, so flush explicitly before the raw SQL below.
+        session.execute(
+            text("UPDATE reckoning SET group_id = NULL WHERE group_id = :gid"),
+            {"gid": room_id},
+        )
+        session.delete(group)
+        session.flush()
+
+        # Delete the reckonings leaves-first: the self-referencing
+        # parent_reckoning_id FK is checked per row, so a parent cannot go
+        # before the children that still reference it.
+        remaining = list(ids)
+        while remaining:
+            deleted = session.execute(
+                text(
+                    """
+                    DELETE FROM reckoning
+                    WHERE id = ANY(CAST(:ids AS INT[]))
+                      AND id <> ALL(
+                          SELECT parent_reckoning_id FROM reckoning
+                          WHERE parent_reckoning_id = ANY(CAST(:ids AS INT[]))
+                      )
+                    """
+                ),
+                {"ids": remaining},
+            )
+            session.flush()
+            if not deleted.rowcount:
+                # Only reachable if the parent graph contains a cycle; clear
+                # what is left rather than strand orphaned content.
+                session.execute(
+                    text("DELETE FROM reckoning WHERE id = ANY(CAST(:ids AS INT[]))"),
+                    {"ids": remaining},
+                )
+                break
+            remaining = [
+                row[0]
+                for row in session.execute(
+                    text(
+                        "SELECT id FROM reckoning WHERE id = ANY(CAST(:ids AS INT[]))"
+                    ),
+                    {"ids": remaining},
+                ).all()
+            ]
+
+        session.add(
+            Log(
+                user_id=actor_id if actor_id is not None else owner_id,
+                content=(
+                    f"deleted live room {room_id} "
+                    f"({len(ids)} reckoning{'' if len(ids) == 1 else 's'})"
+                ),
+                type="admin",
+                created_at=datetime.utcnow(),
+            )
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+    session.expire_all()
+    return True
 
 
 def room_status(session, group: Group) -> dict:

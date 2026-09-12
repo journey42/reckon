@@ -107,6 +107,14 @@ def delete_group(session, group_id: int, owner_id: int | None = None) -> None:
         return
     if owner_id is not None and group.created_by != owner_id:
         return
+    # A live Q&A room must never be deleted this way: nulling group_id would
+    # publish its anonymous answers site-wide. Hand off to the room-aware
+    # helper, which deletes the content with the room.
+    if group.is_room:
+        from rhiz.utils.rooms import delete_room
+
+        delete_room(session, group_id, owner_id=owner_id)
+        return
     from sqlalchemy import delete as sa_delete, text
 
     concept_id = group.concept_id

@@ -21,6 +21,7 @@ from rhiz.utils.rooms import (
     THRESHOLD_CHOICES,
     close_room,
     create_room,
+    delete_room,
     enforce_deadline,
     extend_room,
 )
@@ -47,6 +48,13 @@ class LiveState(AppState):
     close_room_name: str = ""
     close_note_input: str = ""
     close_error: str = ""
+
+    # Delete dialog (per room)
+    show_delete_dialog: bool = False
+    delete_room_id: int = 0
+    delete_room_name: str = ""
+    delete_room_open: bool = False
+    delete_error: str = ""
 
     @rx.var
     def duration_labels(self) -> list[str]:
@@ -162,14 +170,22 @@ class LiveState(AppState):
     def extend(self, room_id: int):
         with rx.session() as session:
             room = session.get(Group, room_id)
-            if room is not None and room.created_by == self.user.id:
+            if room is not None and self._may_manage(room):
                 extend_room(session, room_id)
         self._refresh()
+
+    def _may_manage(self, room: Group) -> bool:
+        """Facilitators manage their own rooms; admins manage any of them."""
+        if self.user is None or not room.is_room:
+            return False
+        return room.created_by == self.user.id or self.user.role >= 2
 
     def open_close(self, room_id: int):
         with rx.session() as session:
             room = session.get(Group, room_id)
-            self.close_room_name = room.founding_question if room else ""
+            if room is None or not self._may_manage(room):
+                return
+            self.close_room_name = room.founding_question
         self.close_room_id = room_id
         self.close_note_input = ""
         self.close_error = ""
@@ -186,15 +202,67 @@ class LiveState(AppState):
             return
         with rx.session() as session:
             room = session.get(Group, self.close_room_id)
-            if room is None or room.created_by != self.user.id:
+            if room is None or not self._may_manage(room):
                 return
             close_room(session, room.id, closing_note=self.close_note_input)
         self.show_close_dialog = False
         self._refresh()
 
+    # ------------------------------------------------------------------
+    # Deleting a room
+    # ------------------------------------------------------------------
+
+    def open_delete(self, room_id: int):
+        with rx.session() as session:
+            room = session.get(Group, room_id)
+            if room is None or not self._may_manage(room):
+                return
+            self.delete_room_name = room.founding_question
+            self.delete_room_open = room.status == GroupStatus.open
+            self.delete_room_id = room_id
+        self.delete_error = ""
+        self.show_delete_dialog = True
+
+    def cancel_delete(self):
+        self.show_delete_dialog = False
+        self.delete_room_id = 0
+        self.delete_error = ""
+
+    def confirm_delete(self):
+        """Permanently delete a room.
+
+        Facilitators delete their own rooms; admins delete any. Room content
+        is anonymous and room-scoped, so it is deleted with the room rather
+        than surviving as site-wide content (see utils.rooms.delete_room).
+        """
+        if not self.delete_room_id:
+            return
+        is_admin = bool(self.user and self.user.role >= 2)
+        with rx.session() as session:
+            room = session.get(Group, self.delete_room_id)
+            if room is None or not room.is_room:
+                self.delete_error = "That room no longer exists."
+                return
+            if not self._may_manage(room):
+                self.delete_error = "You can only delete your own rooms."
+                return
+            delete_room(
+                session,
+                room.id,
+                owner_id=None if is_admin else self.user.id,
+                actor_id=self.user.id,
+            )
+        self.show_delete_dialog = False
+        self.delete_room_id = 0
+        self._refresh()
+
 
 class LiveAdminState(LiveState):
     """Admin view: every room, not just mine."""
+
+    def _refresh(self):
+        # Keep showing the admin list (every room) after an action.
+        self._refresh_all()
 
     def on_load(self):
         result = self.check_user_enabled()
@@ -290,6 +358,13 @@ def _room_row(r: dict, state_cls) -> rx.Component:
                         rx.link("View results", href=r["url"], size="1"),
                     ),
                 ),
+                rx.button(
+                    "Delete",
+                    on_click=state_cls.open_delete(r["id"]),
+                    color_scheme="red",
+                    variant="ghost",
+                    size="1",
+                ),
                 spacing="2",
                 wrap="wrap",
             ),
@@ -361,7 +436,7 @@ def _create_dialog() -> rx.Component:
     )
 
 
-def _close_note_dialog() -> rx.Component:
+def _close_note_dialog(state_cls) -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
             rx.vstack(
@@ -372,14 +447,14 @@ def _close_note_dialog() -> rx.Component:
                 ),
                 rx.text_area(
                     placeholder="Closing note (optional)",
-                    value=LiveState.close_note_input,
-                    on_change=LiveState.set_close_note_input,
+                    value=state_cls.close_note_input,
+                    on_change=state_cls.set_close_note_input,
                     width="100%",
                     min_height="80px",
                 ),
                 rx.cond(
-                    LiveState.close_error != "",
-                    rx.callout(LiveState.close_error, color_scheme="red", size="1"),
+                    state_cls.close_error != "",
+                    rx.callout(state_cls.close_error, color_scheme="red", size="1"),
                     rx.fragment(),
                 ),
                 rx.hstack(
@@ -388,11 +463,13 @@ def _close_note_dialog() -> rx.Component:
                             "Cancel",
                             variant="soft",
                             color_scheme="gray",
-                            on_click=LiveState.cancel_close,
+                            on_click=state_cls.cancel_close,
                         ),
                     ),
                     rx.button(
-                        "Close now", color_scheme="red", on_click=LiveState.confirm_close
+                        "Close now",
+                        color_scheme="red",
+                        on_click=state_cls.confirm_close,
                     ),
                     spacing="3",
                     justify="end",
@@ -404,7 +481,75 @@ def _close_note_dialog() -> rx.Component:
             ),
             max_width="480px",
         ),
-        open=LiveState.show_close_dialog,
+        open=state_cls.show_close_dialog,
+    )
+
+
+def _delete_dialog(state_cls) -> rx.Component:
+    """Confirm permanent deletion of a room and all of its answers."""
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.dialog.title("Delete this room?"),
+                rx.cond(
+                    state_cls.delete_room_name != "",
+                    rx.text(
+                        state_cls.delete_room_name,
+                        size="3",
+                        weight="medium",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.callout(
+                    "This permanently deletes the room, every anonymous answer, "
+                    "and the results page. The link stops working. This cannot "
+                    "be undone.",
+                    color_scheme="red",
+                    variant="soft",
+                    size="2",
+                ),
+                rx.cond(
+                    state_cls.delete_room_open,
+                    rx.text(
+                        "This room is still live — participants will lose their "
+                        "answers immediately.",
+                        size="2",
+                        color="#b91c1c",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    state_cls.delete_error != "",
+                    rx.callout(state_cls.delete_error, color_scheme="red", size="1"),
+                    rx.fragment(),
+                ),
+                rx.hstack(
+                    rx.dialog.close(
+                        rx.button(
+                            "Cancel",
+                            variant="soft",
+                            color_scheme="gray",
+                            on_click=state_cls.cancel_delete,
+                        ),
+                    ),
+                    rx.dialog.close(
+                        rx.button(
+                            "Delete room",
+                            color_scheme="red",
+                            on_click=state_cls.confirm_delete,
+                        ),
+                    ),
+                    spacing="3",
+                    justify="end",
+                    width="100%",
+                ),
+                spacing="3",
+                align="stretch",
+                width="100%",
+            ),
+            max_width="480px",
+        ),
+        open=state_cls.show_delete_dialog,
     )
 
 
@@ -442,7 +587,8 @@ def live_page():
                 lambda r: _room_row(r, LiveState),
             ),
             _create_dialog(),
-            _close_note_dialog(),
+            _close_note_dialog(LiveState),
+            _delete_dialog(LiveState),
             spacing="4",
             align="stretch",
             width="100%",
@@ -457,7 +603,7 @@ def live():
     return live_page()
 
 
-def _admin_row(r: dict) -> rx.Component:
+def _admin_row(r: dict, state_cls) -> rx.Component:
     return rx.card(
         rx.vstack(
             rx.hstack(
@@ -477,6 +623,29 @@ def _admin_row(r: dict) -> rx.Component:
                 size="1",
                 word_break="break-all",
             ),
+            # Admin moderation: close a live room, or delete any room.
+            rx.hstack(
+                rx.cond(
+                    r["is_open"],
+                    rx.button(
+                        "Close",
+                        on_click=state_cls.open_close(r["id"]),
+                        color_scheme="red",
+                        variant="soft",
+                        size="1",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.button(
+                    "Delete",
+                    on_click=state_cls.open_delete(r["id"]),
+                    color_scheme="red",
+                    variant="ghost",
+                    size="1",
+                ),
+                spacing="2",
+                wrap="wrap",
+            ),
             spacing="2",
             align="stretch",
             width="100%",
@@ -493,7 +662,10 @@ def live_all():
         rx.vstack(
             rx.heading("All Live Rooms", size="6"),
             rx.text(
-                "Every live Q&A room, including closed artifacts.", size="2"
+                "Every live Q&A room, including closed artifacts. Close a live "
+                "room to freeze it, or delete one to remove it and its "
+                "anonymous answers permanently.",
+                size="2",
             ),
             rx.cond(
                 LiveAdminState.rows.length() == 0,
@@ -502,8 +674,10 @@ def live_all():
             ),
             rx.foreach(
                 LiveAdminState.rows,
-                _admin_row,
+                lambda r: _admin_row(r, LiveAdminState),
             ),
+            _close_note_dialog(LiveAdminState),
+            _delete_dialog(LiveAdminState),
             spacing="4",
             align="stretch",
             width="100%",
