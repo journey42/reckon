@@ -623,13 +623,21 @@ def room_results(session, group: Group) -> dict:
     }
 
 
-def remove_answer_admin(session, reckoning_id: int) -> bool:
-    """Post-close admin removal: tombstone the answer, keep rank position."""
+def remove_answer_admin(
+    session, reckoning_id: int, room_id: int | None = None
+) -> bool:
+    """Post-close admin removal: tombstone the answer, keep rank position.
+
+    ``room_id`` scopes the action to a single room; when given, an id that
+    belongs to any other room is refused.
+    """
     row = session.get(Reckoning, reckoning_id)
     if row is None or row.group_id is None:
         return False
     group = session.get(Group, row.group_id)
     if group is None or not group.is_room:
+        return False
+    if room_id is not None and group.id != room_id:
         return False
     row.removed_at = datetime.utcnow()
     session.add(row)

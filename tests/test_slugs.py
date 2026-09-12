@@ -10,7 +10,16 @@ def test_slugify_collapses_and_trims():
 
 
 def test_slugify_empty_fallback():
-    assert slugify("!!!") == "debate"
+    # Nothing usable survives sanitising, so the documented fallback is used.
+    assert slugify("!!!") == "group"
+
+
+def test_slugify_all_whitespace_fallback():
+    assert slugify("   ") == "group"
+
+
+def test_slugify_none_fallback():
+    assert slugify(None) == "group"
 
 
 def test_unique_slug_appends_suffix():

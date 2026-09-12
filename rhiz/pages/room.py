@@ -368,10 +368,17 @@ class RoomState(AppState):
         self.threshold = threshold
 
     def admin_remove_answer(self, reckoning_id: int):
-        if not self.can_remove:
+        # Re-check the role server-side instead of trusting the cached var,
+        # and scope the delete to this room so a crafted event id cannot touch
+        # another room's (or the main site's) content.
+        self._hydrate_user()
+        if not (self.user and self.user.role >= 2):
             return
         with rx.session() as session:
-            remove_answer_admin(session, reckoning_id)
+            room = get_room(session, self.room_slug)
+            if room is None:
+                return
+            remove_answer_admin(session, reckoning_id, room_id=room.id)
         self._reload()
 
     def _reload(self):
@@ -739,10 +746,26 @@ def _result_item_ranked(item: dict, rank: int) -> rx.Component:
                 rx.badge(f"#{rank + 1}", variant="soft"),
                 rx.cond(
                     item["removed"],
-                    rx.badge("Removed by facilitator", color_scheme="gray"),
+                    rx.badge("Removed by moderator", color_scheme="gray"),
+                    rx.fragment(),
+                ),
+                rx.spacer(),
+                # Post-close moderation: admins can remove an answer from the
+                # published artifact. Hidden from print.
+                rx.cond(
+                    RoomState.can_remove & ~item["removed"],
+                    rx.button(
+                        "Remove",
+                        on_click=RoomState.admin_remove_answer(item["id"]),
+                        color_scheme="red",
+                        variant="soft",
+                        size="1",
+                        class_name="no-print",
+                    ),
                     rx.fragment(),
                 ),
                 spacing="2",
+                width="100%",
             ),
             rx.cond(
                 item["removed"],

@@ -13,7 +13,7 @@ from datetime import datetime
 import reflex as rx
 from sqlmodel import select, func
 
-from rhiz.state.base import AppState, Group, GroupStatus, Reckoning, RoomParticipant
+from rhiz.state.base import AppState, Group, GroupStatus, Reckoning, User
 from rhiz.utils.rooms import (
     DURATION_CHOICES,
     DEFAULT_DURATION_MINUTES,
@@ -25,7 +25,6 @@ from rhiz.utils.rooms import (
     enforce_deadline,
     extend_room,
 )
-from rhiz.utils.permissions import can_manage_groups
 from rhiz.utils.qr import qr_data_uri
 from rhiz.styles import page_params
 from rhiz.components import container, navbar
@@ -116,6 +115,7 @@ class LiveState(AppState):
                         "url": url,
                         "qr": qr_data_uri(url),
                         "is_public": room.is_public,
+                        "creator": "",
                     }
                 )
 
@@ -279,12 +279,15 @@ class LiveAdminState(LiveState):
         self.rows = []
         base = public_base_url()
         with rx.session() as session:
-            rooms = session.exec(
-                select(Group)
+            # Outer join so each room's creator comes back in one query,
+            # matching how the admin Groups page lists its rows.
+            pairs = session.exec(
+                select(Group, User.username)
+                .outerjoin(User, User.id == Group.created_by)
                 .where(Group.is_room == True)  # noqa: E712
                 .order_by(Group.created_at.desc())
             ).all()
-            for room in rooms:
+            for room, creator_username in pairs:
                 room = enforce_deadline(session, room)
                 answers = session.exec(
                     select(func.count(Reckoning.id)).where(
@@ -293,6 +296,12 @@ class LiveAdminState(LiveState):
                         Reckoning.id != room.concept_id,
                     )
                 ).one()
+                remaining = 0
+                if room.status == GroupStatus.open and room.close_at:
+                    remaining = max(
+                        0,
+                        int((room.close_at - datetime.utcnow()).total_seconds()),
+                    )
                 url = f"{base}/room/{room.slug}"
                 self.rows.append(
                     {
@@ -302,10 +311,15 @@ class LiveAdminState(LiveState):
                         "status": room.status,
                         "is_open": room.status == GroupStatus.open,
                         "answers_text": f"{answers} answers",
-                        "remaining_text": "",
+                        "remaining_text": (
+                            f"closes in ~{remaining // 60} min"
+                            if room.status == GroupStatus.open and remaining > 0
+                            else ""
+                        ),
                         "url": url,
-                        "qr": "",
+                        "qr": qr_data_uri(url),
                         "is_public": room.is_public,
+                        "creator": creator_username or "Unknown",
                     }
                 )
 
@@ -315,36 +329,61 @@ class LiveAdminState(LiveState):
 # ----------------------------------------------------------------------
 
 def _room_row(r: dict, state_cls) -> rx.Component:
+    """A single room card.
+
+    Deliberately mirrors :func:`rhiz.pages.group_common.group_row` so the live
+    pages read like the Groups pages: a responsive flex (stacked into a column
+    on small screens so the buttons stay tappable rather than clipping off the
+    right edge), share link + QR on the left, soft action buttons on the right.
+    """
     return rx.card(
-        rx.vstack(
-            rx.hstack(
-                rx.badge(
-                    rx.cond(r["is_open"], "Live", "Closed"),
-                    color_scheme=rx.cond(r["is_open"], "green", "gray"),
-                    variant="soft",
+        rx.flex(
+            rx.vstack(
+                rx.heading(r["question"], size="3"),
+                rx.link(
+                    r["url"],
+                    href=r["url"],
+                    size="1",
+                    width="100%",
+                    style={"wordBreak": "break-all"},
                 ),
+                rx.text("Status: ", r["status"], size="1"),
+                rx.text(r["answers_text"], size="1", color="gray"),
                 rx.cond(
                     r["remaining_text"] != "",
-                    rx.text(r["remaining_text"], size="1", color="#64748b"),
+                    rx.text(r["remaining_text"], size="1", color="gray"),
                     rx.fragment(),
                 ),
-                rx.spacer(),
-                rx.text(r["answers_text"], size="1", color="#64748b"),
-                spacing="2",
-                align="center",
-                width="100%",
+                rx.cond(
+                    r["creator"] != "",
+                    rx.text("Created by: ", r["creator"], size="1", color="gray"),
+                    rx.fragment(),
+                ),
+                align="start",
+                spacing="1",
+                flex_grow="1",
+                min_width="0",
             ),
-            rx.text(r["question"], size="3", weight="medium"),
-            rx.hstack(
+            rx.cond(
+                r["qr"] != "",
+                rx.image(
+                    src=r["qr"],
+                    width="96px",
+                    height="96px",
+                    flex_shrink="0",
+                ),
+                rx.fragment(),
+            ),
+            rx.vstack(
                 rx.cond(
                     r["is_open"],
                     rx.fragment(
-                        rx.link("Open room", href=r["url"], size="1"),
                         rx.button(
-                            f"Extend +15 min",
+                            "Extend +15 min",
                             on_click=state_cls.extend(r["id"]),
                             variant="soft",
                             size="1",
+                            width=rx.breakpoints(initial="100%", sm="auto"),
                         ),
                         rx.button(
                             "Close",
@@ -352,24 +391,27 @@ def _room_row(r: dict, state_cls) -> rx.Component:
                             color_scheme="red",
                             variant="soft",
                             size="1",
+                            width=rx.breakpoints(initial="100%", sm="auto"),
                         ),
                     ),
-                    rx.fragment(
-                        rx.link("View results", href=r["url"], size="1"),
-                    ),
+                    rx.fragment(),
                 ),
                 rx.button(
                     "Delete",
                     on_click=state_cls.open_delete(r["id"]),
                     color_scheme="red",
-                    variant="ghost",
+                    variant="soft",
                     size="1",
+                    width=rx.breakpoints(initial="100%", sm="auto"),
                 ),
                 spacing="2",
-                wrap="wrap",
+                width=rx.breakpoints(initial="100%", sm="auto"),
+                flex_shrink="0",
             ),
-            spacing="2",
-            align="stretch",
+            direction=rx.breakpoints(initial="column", sm="row"),
+            align=rx.breakpoints(initial="stretch", sm="center"),
+            wrap="wrap",
+            gap="12px",
             width="100%",
         ),
         width="100%",
@@ -603,57 +645,6 @@ def live():
     return live_page()
 
 
-def _admin_row(r: dict, state_cls) -> rx.Component:
-    return rx.card(
-        rx.vstack(
-            rx.hstack(
-                rx.badge(
-                    rx.cond(r["is_open"], "Live", "Closed"),
-                    color_scheme=rx.cond(r["is_open"], "green", "gray"),
-                    variant="soft",
-                ),
-                rx.text(r["answers_text"], size="1", color="#64748b"),
-                spacing="2",
-                align="center",
-            ),
-            rx.text(r["question"], size="3", weight="medium"),
-            rx.link(
-                r["url"],
-                href=r["url"],
-                size="1",
-                word_break="break-all",
-            ),
-            # Admin moderation: close a live room, or delete any room.
-            rx.hstack(
-                rx.cond(
-                    r["is_open"],
-                    rx.button(
-                        "Close",
-                        on_click=state_cls.open_close(r["id"]),
-                        color_scheme="red",
-                        variant="soft",
-                        size="1",
-                    ),
-                    rx.fragment(),
-                ),
-                rx.button(
-                    "Delete",
-                    on_click=state_cls.open_delete(r["id"]),
-                    color_scheme="red",
-                    variant="ghost",
-                    size="1",
-                ),
-                spacing="2",
-                wrap="wrap",
-            ),
-            spacing="2",
-            align="stretch",
-            width="100%",
-        ),
-        width="100%",
-    )
-
-
 @rx.page(route="/live/all", on_load=LiveAdminState.on_load, **page_params)
 def live_all():
     """Admin visibility over every live room."""
@@ -674,7 +665,7 @@ def live_all():
             ),
             rx.foreach(
                 LiveAdminState.rows,
-                lambda r: _admin_row(r, LiveAdminState),
+                lambda r: _room_row(r, LiveAdminState),
             ),
             _close_note_dialog(LiveAdminState),
             _delete_dialog(LiveAdminState),
