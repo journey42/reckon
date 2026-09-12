@@ -90,6 +90,12 @@ class RoomState(AppState):
     room_qr: str = ""
     room_url: str = ""
 
+    # True once on_load has hydrated the real state. Until then the page
+    # renders a spinner instead of default-state UI — otherwise every
+    # auto-refresh would briefly flash the answer form (has_answer
+    # defaults to False) even after the participant has answered.
+    loaded: bool = False
+
     # Room
     room_slug: str = ""
     room_question: str = ""
@@ -150,6 +156,7 @@ class RoomState(AppState):
     def on_load(self):
         self.room_slug = self.get_path_param("slug", "")
         self.room_not_found = False
+        self.loaded = False
         self.error = ""
         self.show_nudge = False
         self.editing = False
@@ -175,6 +182,7 @@ class RoomState(AppState):
                 self.room_url = f"{public_base_url()}/room/{room.slug}"
                 self.room_qr = qr_data_uri(self.room_url)
             self._load_for_status(session, room)
+        self.loaded = True
 
     def _load_for_status(self, session, room):
         info = room_status(session, room)
@@ -828,7 +836,6 @@ def room_page() -> rx.Component:
     return rx.box(
         rx.html(f"<style>{_PRINT_CSS}</style>"),
         container(
-            _room_header(),
             rx.cond(
                 RoomState.room_not_found,
                 rx.center(
@@ -840,42 +847,54 @@ def room_page() -> rx.Component:
                     ),
                     min_height="60vh",
                 ),
-                rx.vstack(
-                    _facilitator_controls(),
-                    rx.heading(RoomState.room_question, size="6"),
-                    # ---- closed: the artifact ----
-                    rx.cond(
-                        RoomState.room_status == "closed",
-                        _artifact(),
-                        # ---- open: participant flow ----
-                        rx.vstack(
-                            _nudge_screen(),
-                            rx.cond(
-                                RoomState.show_nudge,
-                                rx.fragment(),
+                # Before on_load hydrates, render only a spinner: default
+                # state would show the answer form to participants who
+                # already answered (and "Closes in ~0 min" in the header).
+                rx.cond(
+                    RoomState.loaded,
+                    rx.vstack(
+                        _room_header(),
+                        _facilitator_controls(),
+                        rx.heading(RoomState.room_question, size="6"),
+                        # ---- closed: the artifact ----
+                        rx.cond(
+                            RoomState.room_status == "closed",
+                            _artifact(),
+                            # ---- open: participant flow ----
+                            rx.vstack(
+                                _nudge_screen(),
                                 rx.cond(
-                                    RoomState.is_supporting,
-                                    rx.vstack(
-                                        _supporting_note(),
-                                        _facilitator_answer_box(),
-                                        spacing="3",
-                                        width="100%",
-                                    ),
+                                    RoomState.show_nudge,
+                                    rx.fragment(),
                                     rx.cond(
-                                        RoomState.has_answer,
-                                        _my_answer_view(),
-                                        _answer_box(),
+                                        RoomState.is_supporting,
+                                        rx.vstack(
+                                            _supporting_note(),
+                                            _facilitator_answer_box(),
+                                            spacing="3",
+                                            width="100%",
+                                        ),
+                                        rx.cond(
+                                            RoomState.has_answer,
+                                            _my_answer_view(),
+                                            _answer_box(),
+                                        ),
                                     ),
                                 ),
+                                spacing="4",
+                                align="stretch",
+                                width="100%",
                             ),
-                            spacing="4",
-                            align="stretch",
-                            width="100%",
                         ),
+                        spacing="4",
+                        align="stretch",
+                        width="100%",
                     ),
-                    spacing="4",
-                    align="stretch",
-                    width="100%",
+                    rx.center(
+                        rx.spinner(size="3"),
+                        min_height="50vh",
+                        width="100%",
+                    ),
                 ),
             ),
             _close_dialog(),
