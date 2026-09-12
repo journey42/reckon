@@ -176,6 +176,33 @@ Minimal header, no site navigation, mobile-first. State machine by
 - No facilitator live view to build; the facilitator watches the room, not a
   screen.
 
+### Load rehearsal (measured — `scripts/load_test.py`)
+
+Run against a scratch database restored from a production snapshot, with the
+backend on its own port (the topology production uses: static frontend on
+Azure Static Web App, websocket clients straight to the container).
+
+| Measurement | Result |
+| --- | --- |
+| 300 concurrent websockets | 300/300 in 0.6s, handshake p50 66ms / p95 108ms |
+| Cost per held connection | 1 fd, ~148 KB RSS; +43MB total, flat over 20s, released on close |
+| 600 concurrent (2x headroom) | 600/600 in 2.3s, ~159 KB/connection |
+| Waiting-tab reload | ~1.5ms of DB work (1–3 queries) |
+| Artifact reload (40 answers) | ~2.9ms of DB work (4 queries) |
+| A 300-phone room needs | 15 loads/s ≈ 2.4% (waiting) / 4.4% (artifact) of one worker |
+
+Latency stayed flat from 16 to 128 concurrent loaders, so the default
+connection pool (5 + 10 overflow) is nowhere near binding: a load holds a
+connection for ~2–3ms, so ~15 loads/s keeps well under one connection in
+flight. The close transition — every tab reloading into the ranked artifact
+inside one 20s window — is the same 15/s at the higher per-load cost, still
+single-digit percent of a worker.
+
+Two caveats worth keeping: the local single-port dev stack proxies
+`/_event` through Next and is not representative; and `aiohttp`'s client
+defaults to 100 connections, which looks exactly like a server-side ceiling
+until the limit is lifted.
+
 ## Guardrails
 
 - Room slug unguessable; room pages render a minimal header (no site nav)
@@ -217,5 +244,6 @@ Minimal header, no site navigation, mobile-first. State machine by
 10. Admin: /live/all lists all rooms; post-close removal → tombstone
 11. Isolation audit: no room content on any site-wide surface
 12. Regression invariant: existing groups render identically with rooms present
-13. Load: 300 waiting tabs refreshing every 20s within budget
+13. Load: 300 waiting tabs refreshing every 20s within budget — measured,
+    see "Load rehearsal" above
 14. Wifi drop mid-flow → recovery, no data loss

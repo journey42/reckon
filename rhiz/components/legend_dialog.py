@@ -46,6 +46,8 @@ def legend_dialog(*args, **kwargs):
                     rx.text("Trending Concepts"),
                     rx.icon("users", size=28),
                     rx.text("Your Groups"),
+                    rx.icon("zap", size=28),
+                    rx.text("Live Q&A"),
                     rx.image(src="/submit.svg", **image_params),
                     rx.text("Submit"),
                     rx.image(src="/compare_concepts.svg", **image_params),
