@@ -279,12 +279,14 @@ class ReckoningsPageState(AppState):
         self._append_next_window()
 
     def _require_login_redirect(self):
-        """Gate write/nav actions on the public comments page.
+        """Gate write/nav actions behind login, preserving the return path.
 
-        Anonymous visitors are sent to signup with a return path; when the
-        concept they're on is a group, that path is the /group/<slug> link so
-        is_debate_origin() matches and the account auto-enables after email
-        verification. Logged-in-but-not-enabled users keep the old /login gate.
+        Login-first, matching the group pages: an existing account holder whose
+        session state was lost (a backend restart, an evicted state entry, a new
+        tab) used to land on /signup here and be told "User with that email
+        already exists", which reads as "I can't make an account". The login page
+        offers "Create an account" and carries ?next through, so new users still
+        arrive at signup with their return path intact.
         """
         if not self.logged_in:
             target = self.router.url.path or "/"
@@ -299,7 +301,7 @@ class ReckoningsPageState(AppState):
                         group = get_group_for_concept(session, cid)
                     if group is not None:
                         target = f"/group/{group.slug}"
-            return rx.redirect(f"/signup?next={quote(target, safe='/')}")
+            return rx.redirect(f"/login?next={quote(target, safe='/')}")
         if not self.user.enabled:
             return rx.redirect("/login")
         return None
@@ -1784,7 +1786,7 @@ def render_comment(state, c: Reckoning):
     )
 
 
-def render_concept_template(state, c: Reckoning, item_attributes: dict):
+def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_comments: bool = False):
     """Display for an individual item (vote or concept) in the feed, dynamically adapting based on attributes."""
     item_id = getattr(c, item_attributes["id"])
     content = getattr(c, item_attributes["content"])
@@ -1927,7 +1929,42 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict):
                 ),
                 None,
             ),
-            grid_template_columns="1fr 1fr 0.5fr 1fr 2fr 1fr 10fr 1fr 1fr 1fr 1fr",
+            # Comment entry points. These were missing from feed rows, so a
+            # concept could only be commented on after drilling into its detail
+            # page — users in a group saw vote buttons but no way to comment.
+            # Spacers keep the grid columns aligned for rows that cannot be
+            # commented on (votes).
+            rx.cond(
+                allow_comments,
+                support_comment_button(
+                    on_click=state.new_comment(
+                        content, ReckoningTypes.support, item_id
+                    )
+                ),
+                rx.spacer(),
+            ),
+            rx.cond(allow_comments, rx.text(c.supports), rx.spacer()),
+            rx.cond(
+                allow_comments,
+                poo_comment_button(
+                    on_click=state.new_comment(
+                        content, ReckoningTypes.point_of_order, item_id
+                    )
+                ),
+                rx.spacer(),
+            ),
+            rx.cond(allow_comments, rx.text(c.points_of_order), rx.spacer()),
+            rx.cond(
+                allow_comments,
+                detract_from_comment_button(
+                    on_click=state.new_comment(
+                        content, ReckoningTypes.detract, item_id
+                    )
+                ),
+                rx.spacer(),
+            ),
+            rx.cond(allow_comments, rx.text(c.detracts), rx.spacer()),
+            grid_template_columns="1fr 1fr 0.5fr 1fr 2fr 1fr 10fr 1fr 1fr 1fr 1fr 1fr 0.5fr 1fr 0.5fr 1fr 0.5fr",
             **interior_grid_style,
         ),
         **reckoning_grid_style,
@@ -1957,7 +1994,7 @@ attributes_for_concept = {
 
 def render_concept(state, c: Reckoning):
     return render_concept_template(
-        state, c, attributes_for_concept
+        state, c, attributes_for_concept, allow_comments=True
     )  # To render a concept
 
 
