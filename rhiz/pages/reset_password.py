@@ -1,6 +1,7 @@
 """reset password page."""
 
 import reflex as rx
+from rhiz.components import password_hint_text
 from rhiz.layouts import profile_layout
 from rhiz.state.profile import ProfileState
 from rhiz.styles import link_style
@@ -27,6 +28,7 @@ def reset_password():
                 on_blur=ProfileState.set_password,
                 **input_style,
             ),
+            password_hint_text(),
             rx.input(
                 type="password",
                 placeholder="Confirm New Password",

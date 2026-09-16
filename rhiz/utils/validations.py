@@ -21,21 +21,48 @@ def validate_username(username):
     return True, "Username is valid."
 
 
+PASSWORD_MIN_LENGTH = 8
+
+# A short list of the passwords nobody should be able to pick. Deliberately
+# tiny: the old policy demanded an uppercase letter, a digit and a symbol from
+# a fixed set, which produced "Test@1234"-style passwords people could not
+# remember and a signup flow that felt broken. Length plus this blocklist is
+# what NIST SP 800-63B actually recommends; composition rules are discouraged.
+COMMON_PASSWORDS = {
+    "password",
+    "password1",
+    "password123",
+    "passw0rd",
+    "qwertyuiop",
+    "qwerty123",
+    "12345678",
+    "123456789",
+    "1234567890",
+    "11111111",
+    "00000000",
+    "abcdefgh",
+    "iloveyou",
+    "letmein1",
+    "welcome1",
+    "admin123",
+}
+
+
 def validate_password(password):
-    if len(password) < 8:
-        return False, "Password must be at least 8 characters long."
-    if not re.search("[a-z]", password):
-        return False, "Password must contain at least one lowercase letter."
-    if not re.search("[A-Z]", password):
-        return False, "Password must contain at least one uppercase letter."
-    if not re.search("[0-9]", password):
-        return False, "Password must contain at least one number."
-    if not re.search("[_@$!%*?&#]", password):
-        return (
-            False,
-            "Password must contain at least one special character (_@$!%*?&#).",
-        )
-    return True, "Password is strong."
+    """Accept any password of PASSWORD_MIN_LENGTH or more that is not one of
+    the handful of catastrophically common choices. Spaces are allowed so
+    passphrases work."""
+    if not password or len(password) < PASSWORD_MIN_LENGTH:
+        return False, f"Please use at least {PASSWORD_MIN_LENGTH} characters."
+    if password.strip().lower() in COMMON_PASSWORDS:
+        return False, "That password is too common — please choose another."
+    return True, "Password is good."
+
+
+def password_hint() -> str:
+    """One-line guidance to show beside a password field, so people know the
+    rule before they hit submit rather than via a popup afterwards."""
+    return f"At least {PASSWORD_MIN_LENGTH} characters. Any combination, spaces welcome — pick something memorable."
 
 
 def validate_role(role):

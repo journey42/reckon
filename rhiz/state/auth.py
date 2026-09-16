@@ -133,6 +133,10 @@ class AuthState(AppState):
                 # Auto-enable normal signups (no manual approval needed)
                 new_user.enabled = True
             session.add(new_user)
+            session.commit()
+            # Logged after the commit: before it, new_user.id is still None, so
+            # every "signed up" row was written with a NULL user and the signup
+            # history could not be attributed to anyone.
             session.add(
                 Log(
                     user_id=new_user.id,
@@ -254,9 +258,12 @@ class AuthState(AppState):
                 updated_at=None,
             )
             session.add(user)
+            session.commit()
 
+            # Was self.user.id, which is None for an anonymous registration and
+            # made this handler raise before it could redirect.
             log = Log(
-                user_id=self.user.id,
+                user_id=user.id,
                 content="registered",
                 type="user",
                 created_at=datetime.now(timezone.utc),

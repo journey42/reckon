@@ -1,6 +1,7 @@
 """register page. Uses auth_layout to render UI shared with the login page."""
 
 import reflex as rx
+from rhiz.components import password_hint_text
 from rhiz.layouts import auth_layout
 from rhiz.state.auth import AuthState
 from rhiz.styles import button_style
@@ -31,6 +32,7 @@ def register():
                 on_blur=AuthState.set_password,
                 **input_style,
             ),
+            password_hint_text(),
             rx.input(
                 type="password",
                 placeholder="Confirm password",

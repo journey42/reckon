@@ -1,6 +1,7 @@
 """Re-export components."""
 
 from .container import container
+from .hints import password_hint_text
 from .navbar import navbar
 from .editor import editor
 from .tiptap_editor import TiptapEditor
