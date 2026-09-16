@@ -1349,7 +1349,7 @@ def parent_reckoning(state):
                 max_width="100%",
                 **read_only_text_style,
             ),
-            rx.grid(
+            rx.flex(
                 rx.cond(
                     (state.parent.user_id != state.user.id),
                     feedback_button(
@@ -1448,8 +1448,13 @@ def parent_reckoning(state):
                     )
                 ),
                 rx.text(state.parent.detracts),
-                grid_template_columns="1fr 1fr 11fr 1fr 0.5fr 1fr 0.5fr 0.5fr 1fr 0.5fr 1fr 0.5fr 1fr 0.5fr",
-                **interior_grid_style,
+                # Was a fixed 14-track grid; on phones the rightmost buttons
+                # (detract, feedback) landed past the viewport edge.
+                direction="row",
+                wrap="wrap",
+                align="center",
+                gap="6px",
+                width="100%",
             ),
             **reckoning_grid_style,
             position="relative",
@@ -1501,8 +1506,8 @@ def render_comment(state, c: Reckoning):
         on_click=state.new_comment(c.content, ReckoningTypes.support, c.id)
     )
 
-    return rx.grid(
-        rx.grid(
+    return rx.flex(
+        rx.flex(
             rx.cond(
                 (state.page_type == 4),
                 rx.cond(
@@ -1523,7 +1528,7 @@ def render_comment(state, c: Reckoning):
                                 (
                                     c.parent_user_vote_history == ReckoningTypes.no_vote
                                 ),  # & (c.user_id != state.user.id),
-                                rx.fragment(
+                                rx.flex(
                                     no_upvote_concept_button(
                                         on_click=state.vote_on_concept(
                                             c.parent_id, ReckoningTypes.up_vote
@@ -1536,6 +1541,10 @@ def render_comment(state, c: Reckoning):
                                         )
                                     ),
                                     rx.text(c.parent_down_votes),
+                                    direction="row",
+                                    align="center",
+                                    gap="2px",
+                                    flex_shrink="0",
                                 ),
                                 None,
                             ),
@@ -1543,7 +1552,7 @@ def render_comment(state, c: Reckoning):
                                 (
                                     c.parent_user_vote_history == ReckoningTypes.up_vote
                                 ),  # | (c.user_id == state.user.id),
-                                rx.fragment(
+                                rx.flex(
                                     upvote_concept_button(
                                         on_click=state.vote_on_concept(
                                             c.parent_id, ReckoningTypes.up_vote
@@ -1556,6 +1565,10 @@ def render_comment(state, c: Reckoning):
                                         )
                                     ),
                                     rx.text(c.parent_down_votes),
+                                    direction="row",
+                                    align="center",
+                                    gap="2px",
+                                    flex_shrink="0",
                                 ),
                                 None,
                             ),
@@ -1564,7 +1577,7 @@ def render_comment(state, c: Reckoning):
                                     c.parent_user_vote_history
                                     == ReckoningTypes.down_vote
                                 ),
-                                rx.fragment(
+                                rx.flex(
                                     no_upvote_concept_button(
                                         on_click=state.vote_on_concept(
                                             c.parent_id, ReckoningTypes.up_vote
@@ -1577,11 +1590,18 @@ def render_comment(state, c: Reckoning):
                                         )
                                     ),
                                     rx.text(c.parent_down_votes),
+                                    direction="row",
+                                    align="center",
+                                    gap="2px",
+                                    flex_shrink="0",
                                 ),
                                 None,
                             ),
-                            grid_template_columns="1fr 18fr 1fr 1fr 1fr 1fr",
-                            **interior_grid_style,
+                            direction="row",
+                            wrap="wrap",
+                            align="center",
+                            gap="6px",
+                            width="100%",
                         ),
                     ),
                     rx.grid(
@@ -1630,15 +1650,16 @@ def render_comment(state, c: Reckoning):
                             ),
                             position="relative",
                         ),
-                        rx.grid(
+                        rx.flex(
                             view_parent_button(
                                 on_click=rx.redirect(
                                     f"/comments/{c.parent_reckoning_id}"
                                 ),
                             ),
                             rx.spacer(),
-                            grid_template_columns="1fr 22fr",
-                            **interior_grid_style,
+                            direction="row",
+                            align="center",
+                            width="100%",
                         ),
                         **interior_grid_style,
                     ),
@@ -1746,6 +1767,8 @@ def render_comment(state, c: Reckoning):
                                 direction="row",
                                 spacing="3",
                                 size="1",
+                                wrap="wrap",
+                                max_width="92vw",
                             ),
                             side="top",
                             align="center",
@@ -1756,25 +1779,45 @@ def render_comment(state, c: Reckoning):
                         view_comments_button(
                             on_click=state.view_comments(c.id),
                         ),
-                        rx.spacer(),
+                        None,
                     ),
-                    rx.spacer(),
-                    support_button_component,
-                    rx.text(c.supports),
-                    poo_comment_button(
-                        on_click=state.new_comment(
-                            c.content, ReckoningTypes.point_of_order, c.id
-                        )
+                    rx.flex(
+                        support_button_component,
+                        rx.text(c.supports),
+                        direction="row",
+                        align="center",
+                        gap="2px",
+                        flex_shrink="0",
                     ),
-                    rx.text(c.points_of_order),
-                    detract_from_comment_button(
-                        on_click=state.new_comment(
-                            c.content, ReckoningTypes.detract, c.id
-                        )
+                    rx.flex(
+                        poo_comment_button(
+                            on_click=state.new_comment(
+                                c.content, ReckoningTypes.point_of_order, c.id
+                            )
+                        ),
+                        rx.text(c.points_of_order),
+                        direction="row",
+                        align="center",
+                        gap="2px",
+                        flex_shrink="0",
                     ),
-                    rx.text(c.detracts),
-                    grid_template_columns="1fr 1fr 14fr 1fr 1fr 1fr 1fr 1fr 1fr",
-                    **interior_grid_style,
+                    rx.flex(
+                        detract_from_comment_button(
+                            on_click=state.new_comment(
+                                c.content, ReckoningTypes.detract, c.id
+                            )
+                        ),
+                        rx.text(c.detracts),
+                        direction="row",
+                        align="center",
+                        gap="2px",
+                        flex_shrink="0",
+                    ),
+                    direction="row",
+                    wrap="wrap",
+                    align="center",
+                    gap="6px",
+                    width="100%",
                 ),
                 **interior_grid_style,
                 position="relative",
@@ -1823,7 +1866,12 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
             ),
             position="relative",
         ),
-        rx.grid(
+        # Actions row. Was a fixed 17-track grid, which could not shrink below
+        # the button icons' widths — on phones (320-390px) the rightmost items
+        # (detract, feedback) were pushed off the page. A wrapping flex lets the
+        # groups flow onto extra lines instead; each button+count pair is its
+        # own flex so a wrap never separates a button from its tally.
+        rx.flex(
             rx.popover.root(
                 rx.popover.trigger(
                     more_button(),
@@ -1868,28 +1916,34 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                         direction="row",
                         spacing="3",
                         size="1",
+                        wrap="wrap",
+                        max_width="92vw",
                     ),
                     side="top",
                     align="center",
                 ),
             ),
-            view_concept_button(
-                on_click=state.view_comments(item_id),
+            rx.flex(
+                view_concept_button(
+                    on_click=state.view_comments(item_id),
+                ),
+                rx.text(total_comments),
+                direction="row",
+                align="center",
+                gap="2px",
+                flex_shrink="0",
             ),
-            rx.text(total_comments),
             compare_concepts_button(
                 on_click=state.compare_concepts(item_id),
             ),
-            rx.spacer(),
             rx.cond(
                 (state.page_type == 5),
                 rx.text(c.similarity),
-                rx.spacer(),
+                None,
             ),
-            rx.spacer(),
             rx.cond(
                 (vote_history == ReckoningTypes.no_vote),
-                rx.fragment(
+                rx.flex(
                     support_button,
                     rx.text(up_votes),
                     no_downvote_concept_button(
@@ -1898,12 +1952,16 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                         )
                     ),
                     rx.text(down_votes),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
                 ),
                 None,
             ),
             rx.cond(
                 (vote_history == ReckoningTypes.up_vote),
-                rx.fragment(
+                rx.flex(
                     upvote_concept_button(on_click=support_action),
                     rx.text(up_votes),
                     no_downvote_concept_button(
@@ -1912,12 +1970,16 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                         )
                     ),
                     rx.text(down_votes),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
                 ),
                 None,
             ),
             rx.cond(
                 (vote_history == ReckoningTypes.down_vote),
-                rx.fragment(
+                rx.flex(
                     no_upvote_concept_button(on_click=support_action),
                     rx.text(up_votes),
                     downvote_concept_button(
@@ -1926,6 +1988,10 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                         )
                     ),
                     rx.text(down_votes),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
                 ),
                 None,
             ),
@@ -1936,36 +2002,57 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
             # commented on (votes).
             rx.cond(
                 allow_comments,
-                support_comment_button(
-                    on_click=state.new_comment(
-                        content, ReckoningTypes.support, item_id
-                    )
+                rx.flex(
+                    support_comment_button(
+                        on_click=state.new_comment(
+                            content, ReckoningTypes.support, item_id
+                        )
+                    ),
+                    rx.text(c.supports),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
                 ),
-                rx.spacer(),
+                None,
             ),
-            rx.cond(allow_comments, rx.text(c.supports), rx.spacer()),
             rx.cond(
                 allow_comments,
-                poo_comment_button(
-                    on_click=state.new_comment(
-                        content, ReckoningTypes.point_of_order, item_id
-                    )
+                rx.flex(
+                    poo_comment_button(
+                        on_click=state.new_comment(
+                            content, ReckoningTypes.point_of_order, item_id
+                        )
+                    ),
+                    rx.text(c.points_of_order),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
                 ),
-                rx.spacer(),
+                None,
             ),
-            rx.cond(allow_comments, rx.text(c.points_of_order), rx.spacer()),
             rx.cond(
                 allow_comments,
-                detract_from_comment_button(
-                    on_click=state.new_comment(
-                        content, ReckoningTypes.detract, item_id
-                    )
+                rx.flex(
+                    detract_from_comment_button(
+                        on_click=state.new_comment(
+                            content, ReckoningTypes.detract, item_id
+                        )
+                    ),
+                    rx.text(c.detracts),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
                 ),
-                rx.spacer(),
+                None,
             ),
-            rx.cond(allow_comments, rx.text(c.detracts), rx.spacer()),
-            grid_template_columns="1fr 1fr 0.5fr 1fr 2fr 1fr 10fr 1fr 1fr 1fr 1fr 1fr 0.5fr 1fr 0.5fr 1fr 0.5fr",
-            **interior_grid_style,
+            direction="row",
+            wrap="wrap",
+            align="center",
+            gap="6px",
+            width="100%",
         ),
         **reckoning_grid_style,
     )

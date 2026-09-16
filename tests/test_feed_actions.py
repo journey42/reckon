@@ -34,15 +34,27 @@ def test_vote_rows_do_not_enable_comments():
     assert "allow_comments" not in src
 
 
-def test_feed_grid_columns_match_row_children():
-    """The row is a CSS grid: if columns and children drift apart, buttons get
-    pushed into the wrong track or clipped. Count both from the source."""
-    src = inspect.getsource(reckonings.render_concept_template)
-    grid_line = [ln for ln in src.splitlines() if "grid_template_columns=" in ln]
-    assert grid_line, "no grid template found"
-    columns = grid_line[-1].split('"')[1].split()
-    # 17 tracks: 11 original + 6 comment slots (3 buttons + 3 tallies).
-    assert len(columns) == 17, f"expected 17 grid tracks, got {len(columns)}"
+def test_feed_action_rows_wrap_instead_of_using_fixed_grids():
+    """Fixed-track grids cannot shrink below the button icons' widths, so on
+    320-390px phones the rightmost actions (detract, feedback) landed past the
+    viewport edge. The action rows must be wrapping flexes with no
+    grid_template_columns left in them."""
+    for name, fn in (
+        ("render_concept_template", reckonings.render_concept_template),
+        ("render_comment", reckonings.render_comment),
+    ):
+        src = inspect.getsource(fn)
+        assert "grid_template_columns=" not in src, (
+            f"{name} still lays its action row out on a fixed grid"
+        )
+        assert 'wrap="wrap"' in src, f"{name} action row does not wrap"
+
+    # The comments page's parent row carries the feedback button and lives in
+    # the comments view function; find it by its detract wiring.
+    parent_src = inspect.getsource(reckonings)
+    assert 'grid_template_columns="1fr 1fr 11fr' not in parent_src, (
+        "the comments-page parent action row is still a fixed grid"
+    )
 
 
 def test_login_gate_is_login_first():
