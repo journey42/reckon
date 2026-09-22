@@ -625,21 +625,24 @@ class NewConceptsPageState(ReckoningsPageState):
 TRENDING_SORT_OPTIONS = ["Most support", "Most upvotes", "Newest", "Oldest"]
 
 
-def _apply_trending_order(self, query, upvote_col, support_col):
+def _apply_trending_order(sort_label, query, upvote_col, support_col):
     """Order a concept query by the selected trending ranking."""
-    if self.sort_label == "Newest":
+    # nulls_last: outer-joined counts are NULL for concepts with zero
+    # support/upvotes, and Postgres sorts NULLs first on DESC — without
+    # nulls_last, zero-support concepts ranked ABOVE popular ones.
+    if sort_label == "Newest":
         return query.order_by(Reckoning.created_at.desc())
-    if self.sort_label == "Oldest":
+    if sort_label == "Oldest":
         return query.order_by(Reckoning.created_at.asc())
-    if self.sort_label == "Most upvotes":
+    if sort_label == "Most upvotes":
         return query.order_by(
-            upvote_col.desc(),
+            upvote_col.desc().nulls_last(),
             Reckoning.created_at.desc(),
         )
     # Default: most supportive comments first; recency only breaks ties
     # so the order is stable across loads.
     return query.order_by(
-        support_col.desc(),
+        support_col.desc().nulls_last(),
         Reckoning.created_at.desc(),
     )
 
@@ -773,6 +776,7 @@ class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
 
         # Order by the user-selected ranking (default: upvotes, then newest)
         query = _apply_trending_order(
+            self.sort_label,
             query,
             up_vote_count_subquery.c.up_vote_count,
             support_count_subquery.c.supportive_comments_count,
@@ -914,6 +918,7 @@ class TrendingConceptsBySupportPageState(ReckoningsPageState):
         # ascending (least support first), which made trending look
         # time-ordered; it is now descending like every other ranking.
         query = _apply_trending_order(
+            self.sort_label,
             query,
             up_vote_count_subquery.c.up_vote_count,
             supportive_comments_count_subquery.c.supportive_comments_count,
