@@ -33,6 +33,7 @@ from rhiz.state.base import (
     RoomSwap,
 )
 from rhiz.utils.db import find_similar_texts_with_join, insert_text_with_embedding
+from rhiz.utils.datetimes import naive_utc
 from rhiz.utils.parsing import remove_html_tags
 
 # Similarity thresholds are cosine distances (lower = stricter).
@@ -141,7 +142,7 @@ def enforce_deadline(session, group: Group) -> Group:
         group.is_room
         and group.status == GroupStatus.open
         and group.close_at is not None
-        and group.close_at <= datetime.utcnow()
+        and naive_utc(group.close_at) <= datetime.utcnow()
     ):
         group.status = GroupStatus.closed
         group.closed_at = datetime.utcnow()
@@ -159,7 +160,7 @@ def extend_room(session, room_id: int, minutes: int = EXTEND_MINUTES) -> Optiona
     enforce_deadline(session, group)
     if group.status != GroupStatus.open:
         return None
-    base = group.close_at or datetime.utcnow()
+    base = naive_utc(group.close_at) or datetime.utcnow()
     if base <= datetime.utcnow():
         base = datetime.utcnow()
     group.close_at = base + timedelta(minutes=minutes)
@@ -354,7 +355,12 @@ def room_status(session, group: Group) -> dict:
     remaining_seconds = 0
     if group.status == GroupStatus.open and group.close_at is not None:
         remaining_seconds = max(
-            0, int((group.close_at - datetime.utcnow()).total_seconds())
+            0,
+            int(
+                (
+                    naive_utc(group.close_at) - datetime.utcnow()
+                ).total_seconds()
+            ),
         )
     return {
         "status": group.status,
@@ -482,7 +488,11 @@ def edit_answer(
     if len(content) > MAX_ANSWER_LENGTH:
         raise ValueError(f"Answers are limited to {MAX_ANSWER_LENGTH} characters.")
 
-    last_touch = answer.edited_at or answer.created_at or datetime.utcnow()
+    last_touch = (
+        naive_utc(answer.edited_at)
+        or naive_utc(answer.created_at)
+        or datetime.utcnow()
+    )
     if datetime.utcnow() - last_touch < timedelta(seconds=EDIT_COOLDOWN_SECONDS):
         raise ValueError("Please wait a few seconds between edits.")
 

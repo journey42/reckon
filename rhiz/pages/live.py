@@ -26,6 +26,7 @@ from rhiz.utils.rooms import (
     extend_room,
 )
 from rhiz.utils.qr import qr_data_uri
+from rhiz.utils.datetimes import naive_utc
 from rhiz.styles import page_params
 from rhiz.components import container, navbar
 from rhiz.pages.group_common import public_base_url
@@ -94,7 +95,9 @@ class LiveState(AppState):
                     remaining = max(
                         0,
                         int(
-                            (room.close_at - datetime.utcnow()).total_seconds()
+                            (
+                                naive_utc(room.close_at) - datetime.utcnow()
+                            ).total_seconds()
                         ),
                     )
                 url = f"{base}/room/{room.slug}"
@@ -300,7 +303,11 @@ class LiveAdminState(LiveState):
                 if room.status == GroupStatus.open and room.close_at:
                     remaining = max(
                         0,
-                        int((room.close_at - datetime.utcnow()).total_seconds()),
+                        int(
+                            (
+                                naive_utc(room.close_at) - datetime.utcnow()
+                            ).total_seconds()
+                        ),
                     )
                 url = f"{base}/room/{room.slug}"
                 self.rows.append(

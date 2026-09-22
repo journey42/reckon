@@ -86,7 +86,10 @@ def resolve_session(session, token: str) -> Optional[User]:
         return None
 
     now = datetime.utcnow()
-    if row.expires_at <= now:
+    from rhiz.utils.datetimes import naive_utc
+
+    expires = naive_utc(row.expires_at)
+    if expires <= now:
         return None
 
     user = session.exec(select(User).where(User.id == row.user_id)).first()
@@ -94,7 +97,7 @@ def resolve_session(session, token: str) -> Optional[User]:
         return None
 
     # Slide the window forward, but avoid writing on every single request.
-    if now - row.last_used_at > REFRESH_THROTTLE:
+    if now - naive_utc(row.last_used_at) > REFRESH_THROTTLE:
         row.last_used_at = now
         row.expires_at = now + SESSION_TTL
         session.add(row)
