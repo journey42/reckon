@@ -625,42 +625,33 @@ class NewConceptsPageState(ReckoningsPageState):
 TRENDING_SORT_OPTIONS = ["Most support", "Most upvotes", "Newest", "Oldest"]
 
 
-class TrendingSortMixin:
-    """User-selectable ranking for the trending pages.
+def _apply_trending_order(self, query, upvote_col, support_col):
+    """Order a concept query by the selected trending ranking."""
+    if self.sort_label == "Newest":
+        return query.order_by(Reckoning.created_at.desc())
+    if self.sort_label == "Oldest":
+        return query.order_by(Reckoning.created_at.asc())
+    if self.sort_label == "Most upvotes":
+        return query.order_by(
+            upvote_col.desc(),
+            Reckoning.created_at.desc(),
+        )
+    # Default: most supportive comments first; recency only breaks ties
+    # so the order is stable across loads.
+    return query.order_by(
+        support_col.desc(),
+        Reckoning.created_at.desc(),
+    )
 
-    The old behavior baked in a hidden time component (ties were broken by
-    recency), which made 'trending' look time-weighted. Now the primary sort
-    is explicit and selectable: pure support, pure upvotes, newest, or oldest.
-    """
 
-    sort_label: str = "Most support"
+class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
 
+    sort_label: str = "Most upvotes"
+
+    @rx.event
     def set_sort_label(self, label: str):
         self.sort_label = label
         return self.get_reckonings()
-
-    def _apply_trending_order(self, query, upvote_col, support_col):
-        """Order the concept query by the selected ranking."""
-        if self.sort_label == "Newest":
-            return query.order_by(Reckoning.created_at.desc())
-        if self.sort_label == "Oldest":
-            return query.order_by(Reckoning.created_at.asc())
-        if self.sort_label == "Most upvotes":
-            return query.order_by(
-                upvote_col.desc(),
-                Reckoning.created_at.desc(),
-            )
-        # Default: most supportive comments first; recency only breaks ties
-        # so the order is stable across loads.
-        return query.order_by(
-            support_col.desc(),
-            Reckoning.created_at.desc(),
-        )
-
-
-class TrendingConceptsByUpvotesPageState(TrendingSortMixin, ReckoningsPageState):
-
-    sort_label: str = "Most upvotes"
 
     def close_complete_modal(self):
         yield self.get_reckonings()
@@ -781,7 +772,7 @@ class TrendingConceptsByUpvotesPageState(TrendingSortMixin, ReckoningsPageState)
             )
 
         # Order by the user-selected ranking (default: upvotes, then newest)
-        query = self._apply_trending_order(
+        query = _apply_trending_order(
             query,
             up_vote_count_subquery.c.up_vote_count,
             support_count_subquery.c.supportive_comments_count,
@@ -790,9 +781,14 @@ class TrendingConceptsByUpvotesPageState(TrendingSortMixin, ReckoningsPageState)
         return query
 
 
-class TrendingConceptsBySupportPageState(TrendingSortMixin, ReckoningsPageState):
+class TrendingConceptsBySupportPageState(ReckoningsPageState):
 
     sort_label: str = "Most support"
+
+    @rx.event
+    def set_sort_label(self, label: str):
+        self.sort_label = label
+        return self.get_reckonings()
 
     def close_complete_modal(self):
         yield self.get_reckonings()
@@ -917,7 +913,7 @@ class TrendingConceptsBySupportPageState(TrendingSortMixin, ReckoningsPageState)
         # Order by the user-selected ranking. NOTE: this used to sort
         # ascending (least support first), which made trending look
         # time-ordered; it is now descending like every other ranking.
-        query = self._apply_trending_order(
+        query = _apply_trending_order(
             query,
             up_vote_count_subquery.c.up_vote_count,
             supportive_comments_count_subquery.c.supportive_comments_count,
