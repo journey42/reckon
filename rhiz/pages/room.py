@@ -24,7 +24,7 @@ import secrets
 import reflex as rx
 from sqlmodel import select
 
-from rhiz.state.base import AppState, RoomParticipant
+from rhiz.state.base import AppState, Reckoning, RoomParticipant
 from rhiz.utils.rooms import (
     EXTEND_MINUTES,
     THRESHOLD_CHOICES,
@@ -36,6 +36,7 @@ from rhiz.utils.rooms import (
     get_room,
     my_answer,
     remove_answer_admin,
+    reopen_room,
     room_results,
     room_status,
     set_threshold,
@@ -89,9 +90,13 @@ class RoomState(AppState):
         secure=_is_secure_cookie(),
     )
 
-    # Facilitator QR for the room (set on load for the facilitator only).
+    # Room QR: shown to everyone while the question is open so participants
+    # can share it with neighbors, not just the facilitator on screen.
     room_qr: str = ""
     room_url: str = ""
+
+    # Shareable plain-text summary of the closed room (download/copy).
+    artifact_text: str = ""
 
     # True once on_load has hydrated the real state. Until then the page
     # renders a spinner instead of default-state UI — otherwise every
@@ -179,11 +184,10 @@ class RoomState(AppState):
                 self.user and (room.created_by == self.user.id or self.user.role >= 2)
             )
             self.can_remove = bool(self.user and self.user.role >= 2)
-            if self.is_facilitator:
-                from rhiz.utils.qr import qr_data_uri
+            from rhiz.utils.qr import qr_data_uri
 
-                self.room_url = f"{public_base_url()}/room/{room.slug}"
-                self.room_qr = qr_data_uri(self.room_url)
+            self.room_url = f"{public_base_url()}/room/{room.slug}"
+            self.room_qr = qr_data_uri(self.room_url)
             self._load_for_status(session, room)
         self.loaded = True
 
@@ -199,6 +203,7 @@ class RoomState(AppState):
             res = room_results(session, room)
             self.results = res["items"]
             self.total_swaps = res["total_swaps"]
+            self.artifact_text = _artifact_text(room, self.results, self.total_swaps)
             return
 
         # Open room: where is this device in the flow?
@@ -357,6 +362,38 @@ class RoomState(AppState):
                 extend_room(session, room.id, EXTEND_MINUTES)
         self._reload()
 
+    def reopen(self):
+        """Reopen a closed room for stragglers (facilitator/admin only)."""
+        if not self.is_facilitator:
+            return
+        with rx.session() as session:
+            room = get_room(session, self.room_slug)
+            if room is not None:
+                reopen_room(session, room.id, EXTEND_MINUTES)
+        self._reload()
+
+    def publish_answer(self, reckoning_id: int):
+        """Publish a room answer to the main site (facilitator/admin only).
+
+        Mirrors the group-concept graduation flow: is_graduated=True keeps
+        the answer in the room artifact while surfacing it in site feeds.
+        Anonymous submissions publish without an author.
+        """
+        if not self.is_facilitator:
+            return
+        with rx.session() as session:
+            room = get_room(session, self.room_slug)
+            if room is None or room.id is None:
+                return
+            answer = session.exec(
+                select(Reckoning).where(Reckoning.id == reckoning_id)
+            ).first()
+            if answer is not None and answer.group_id == room.id:
+                answer.is_graduated = True
+                session.add(answer)
+                session.commit()
+        self._reload()
+
     def set_room_threshold(self, value: str):
         if not self.is_facilitator:
             return
@@ -408,7 +445,13 @@ _PRINT_CSS = """
 def _room_header() -> rx.Component:
     """Minimal header — structurally isolated from site navigation."""
     return rx.hstack(
-        rx.text("Rhiz · Live Q&A", size="3", weight="bold"),
+        rx.link(
+            rx.text("Rhiz", size="3", weight="bold"),
+            href="/",
+            is_external=False,
+            style={"text_decoration": "none"},
+        ),
+        rx.text("· Live Q&A", size="3", weight="bold"),
         rx.spacer(),
         rx.cond(
             RoomState.room_status == "open",
@@ -419,6 +462,17 @@ def _room_header() -> rx.Component:
                 class_name="no-print",
             ),
             rx.badge("Closed", color_scheme="gray", variant="soft"),
+        ),
+        rx.cond(
+            RoomState.is_facilitator & (RoomState.room_status == "closed"),
+            rx.button(
+                "Reopen question",
+                on_click=RoomState.reopen,
+                variant="soft",
+                size="1",
+                class_name="no-print",
+            ),
+            rx.fragment(),
         ),
         width="100%",
         align="center",
@@ -708,9 +762,85 @@ def _my_answer_view() -> rx.Component:
     )
 
 
+def _participant_qr() -> rx.Component:
+    """Compact QR under the question so neighbors can share each other's
+    phone links, not just the facilitator's screen projection."""
+    return rx.cond(
+        RoomState.room_qr != "",
+        rx.hstack(
+            rx.image(
+                src=RoomState.room_qr,
+                width="72px",
+                height="72px",
+                alt="QR code to this question",
+                border="1px solid #e2e8f0",
+                border_radius="8px",
+                padding="4px",
+                background="white",
+            ),
+            rx.vstack(
+                rx.text("Share with a neighbor", size="2", weight="medium"),
+                rx.text(
+                    "Scan to answer from your phone — even sitting side by side.",
+                    size="1",
+                    color="#64748b",
+                ),
+                spacing="1",
+                width="100%",
+                min_width="0",
+            ),
+            spacing="3",
+            align="center",
+            width="100%",
+            class_name="no-print",
+        ),
+        rx.fragment(),
+    )
+
+
+def _artifact_text(room, results: list[dict], total_swaps: int) -> str:
+    """Build the shareable plain-text summary of a closed room."""
+    lines = ["Rhiz · Live Q&A", "", f"Q: {room.founding_question}", ""]
+    rank = 0
+    for item in results:
+        if item.get("removed"):
+            lines.append(f"{rank}. [answer removed by moderator]")
+        else:
+            lines.append(f"{rank}. {item['content']}  ({item['support']} support)")
+        rank += 1
+    if total_swaps:
+        lines.append("")
+        lines.append(f"{total_swaps} participants switched to another answer.")
+    lines.append("")
+    lines.append(f"View online: {public_base_url()}/room/{room.slug}")
+    return "\n".join(lines)
+
+
 def _artifact() -> rx.Component:
     return rx.vstack(
-        rx.heading("Final results", size="5"),
+        rx.hstack(
+            rx.heading("Final results", size="5"),
+            rx.spacer(),
+            rx.button(
+                "Copy text",
+                on_click=rx.set_clipboard(RoomState.artifact_text),
+                variant="soft",
+                size="1",
+                class_name="no-print",
+            ),
+            rx.button(
+                "Download",
+                on_click=rx.download(
+                    data=RoomState.artifact_text,
+                    filename="rhiz-qa-results.txt",
+                ),
+                variant="soft",
+                size="1",
+                class_name="no-print",
+            ),
+            width="100%",
+            align="center",
+        ),
         rx.cond(
             RoomState.closing_note != "",
             rx.callout(
@@ -765,6 +895,23 @@ def _result_item_ranked(item: dict, rank: int) -> rx.Component:
                         size="1",
                         class_name="no-print",
                     ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    RoomState.is_facilitator & ~item["removed"] & ~item["graduated"],
+                    rx.button(
+                        "Publish to site",
+                        on_click=RoomState.publish_answer(item["id"]),
+                        color_scheme="green",
+                        variant="soft",
+                        size="1",
+                        class_name="no-print",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    item["graduated"],
+                    rx.badge("Published", color_scheme="green", size="1"),
                     rx.fragment(),
                 ),
                 spacing="2",
@@ -882,6 +1029,11 @@ def room_page() -> rx.Component:
                         _room_header(),
                         _facilitator_controls(),
                         rx.heading(RoomState.room_question, size="6"),
+                        rx.cond(
+                            RoomState.room_status == "open",
+                            _participant_qr(),
+                            rx.fragment(),
+                        ),
                         # ---- closed: the artifact ----
                         rx.cond(
                             RoomState.room_status == "closed",

@@ -9,17 +9,25 @@ anywhere. These tests pin the invariants that would have caught it.
 
 import inspect
 
+from rhiz.pages.group import GroupPageState
+import rhiz.state.auth as auth_state
 from rhiz.pages import reckonings
 
 
 def test_feed_concept_rows_offer_comment_buttons():
+    """The concept itself is the comment button (client request); points of
+    order and detracts keep their own buttons in feed rows."""
     src = inspect.getsource(reckonings.render_concept_template)
-    for button in (
-        "support_comment_button",
-        "poo_comment_button",
-        "detract_from_comment_button",
-    ):
+    assert (
+        "state.new_comment(content, ReckoningTypes.support, item_id)" in src
+    ), "the concept content is no longer wired to the comment dialog"
+    assert "cursor=\"pointer\"" in src, "concept content is not visibly clickable"
+    for button in ("poo_comment_button", "detract_from_comment_button"):
         assert button in src, f"{button} missing from feed rows"
+    # The old separate support-comment CTA must be gone from the row.
+    assert "support_comment_button" not in src, (
+        "the concept is the comment button now — remove the separate CTA"
+    )
 
 
 def test_render_concept_enables_comments():
@@ -57,12 +65,21 @@ def test_feed_action_rows_wrap_instead_of_using_fixed_grids():
     )
 
 
-def test_login_gate_is_login_first():
-    """Anonymous write attempts must go to /login, not /signup.
+def test_login_gate_is_signup_first():
+    """Anonymous write attempts must go to /signup, not /login (client
+    request: Prolific testers are mostly new users).
 
-    Sending returning users to /signup made "User with that email already
-    exists" look like "I was unable to make an account".
+    Returning users who try an existing email on /signup get bounced to
+    /login with their ?next path preserved, so the old "User with that
+    email already exists" dead-end cannot recur.
     """
     src = inspect.getsource(reckonings.ReckoningsPageState._require_login_redirect)
-    assert "/login?next=" in src
-    assert "/signup?next=" not in src
+    assert "/signup?next=" in src
+    group_src = inspect.getsource(
+        GroupPageState._require_login_redirect_for_submission
+    )
+    assert "/signup?next=" in group_src
+    auth_src = inspect.getsource(auth_state.AuthState)
+    assert "rx.redirect(self.login_link)" in auth_src, (
+        "signup duplicate-email must bounce to /login, not dead-end"
+    )

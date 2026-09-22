@@ -430,6 +430,47 @@ class TestTiming:
         assert close_room(session, room.id) is not None
         assert close_room(session, room.id) is None
 
+    def test_reopen_revives_a_closed_room(self, session, room):
+        """Reopening (for stragglers) restores the answering flow: status
+        open, closed_at and closing note cleared, deadline re-armed."""
+        from rhiz.state.base import Group, GroupStatus
+        from rhiz.utils.rooms import close_room, reopen_room, submit_answer
+
+        p = _participant(session, room, "reopen-device")
+        assert close_room(session, room.id, closing_note="done") is not None
+        reopened = reopen_room(session, room.id)
+        assert reopened is not None
+        row = session.get(Group, room.id)
+        assert row.status == GroupStatus.open
+        assert row.closed_at is None
+        assert row.closing_note is None
+        assert row.close_at > datetime.utcnow()
+        # A straggler can now answer.
+        answer, _ = submit_answer(session, room, p, "Straggler answer")
+        assert answer is not None
+
+    def test_reopen_rejects_open_rooms(self, session, room):
+        from rhiz.utils.rooms import reopen_room
+
+        assert reopen_room(session, room.id) is None
+
+
+@requires_db
+class TestPublishAnswers:
+    def test_graduated_answer_flag(self, session, room):
+        """Publishing a room answer to the main site is the group-concept
+        graduation flag: is_graduated=True keeps it in the artifact while
+        surfacing it in site-wide feeds."""
+        from rhiz.utils.rooms import submit_answer
+
+        p = _participant(session, room, "publish-device")
+        answer, _ = submit_answer(session, room, p, "Answer worth sharing")
+        answer.is_graduated = True
+        session.add(answer)
+        session.commit()
+        session.refresh(answer)
+        assert answer.is_graduated is True
+
 
 @requires_db
 class TestDeletion:

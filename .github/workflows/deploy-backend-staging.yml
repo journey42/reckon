@@ -1,0 +1,114 @@
+name: Deploy Backend (Staging)
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - Dockerfile
+      - requirements.txt
+      - rxconfig.py
+      - rhiz/**
+      - scripts/**
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: rhiz-backend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Log in to Azure
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Log in to ACR
+      run: |
+        token=$(az acr login --name ${{ secrets.ACR_NAME }} --expose-token --output tsv --query accessToken)
+        echo "$token" | docker login ${{ secrets.ACR_LOGIN_SERVER }} --username 00000000-0000-0000-0000-000000000000 --password-stdin
+
+    - name: Build backend image
+      run: |
+        TAG=${GITHUB_SHA::7}
+        docker build \
+          --build-arg API_URL=${{ secrets.PUBLIC_API_URL_STAGING }} \
+          -t ${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${TAG} \
+          .
+
+    - name: Push backend image
+      run: |
+        TAG=${GITHUB_SHA::7}
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${TAG}
+
+    - name: Update Staging Container App
+      uses: azure/cli@v1
+      with:
+        inlineScript: |
+          set -euo pipefail
+          TAG=${GITHUB_SHA::7}
+          DB_CONN="${{ secrets.DB_URL_STAGING }}"
+
+          az containerapp secret set \
+            --name ${{ secrets.CONTAINERAPP_NAME_STAGING }} \
+            --resource-group ${{ secrets.RESOURCE_GROUP }} \
+            --secrets db-url="$DB_CONN"
+
+          NEW_REVISION=$(az containerapp update \
+            --name ${{ secrets.CONTAINERAPP_NAME_STAGING }} \
+            --resource-group ${{ secrets.RESOURCE_GROUP }} \
+            --image ${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${TAG} \
+            --set-env-vars API_URL=${{ secrets.PUBLIC_API_URL_STAGING }} \
+                           PUBLIC_BASE_URL=https://mango-tree-0e1baaf0f.1.azurestaticapps.net \
+                           SUNEDITOR_TOOLBAR_ENABLED=0 \
+                           RUN_MIGRATIONS_ON_START=1 \
+                           DB_URL=secretref:db-url \
+                           POSTHOG_SECRET_KEY=secretref:posthog-key \
+            --query properties.latestRevisionName -o tsv)
+
+          echo "Deployed staging revision: ${NEW_REVISION:-<unknown>}"
+
+          if [ -z "${NEW_REVISION}" ]; then
+            echo "::error::No revision name returned from az containerapp update."
+            exit 1
+          fi
+
+          echo "Waiting for revision ${NEW_REVISION} to become healthy..."
+          STATE=""
+          for i in $(seq 1 18); do
+            STATE=$(az containerapp revision show \
+              --name ${{ secrets.CONTAINERAPP_NAME_STAGING }} \
+              --resource-group ${{ secrets.RESOURCE_GROUP }} \
+              --revision "$NEW_REVISION" \
+              --query properties.runningState -o tsv || true)
+            echo "  [$i] runningState=${STATE:-<none>}"
+            if [ "$STATE" = "Running" ]; then
+              echo "Revision ${NEW_REVISION} is running."
+              break
+            fi
+            if [ "$STATE" = "Failed" ]; then
+              break
+            fi
+            sleep 10
+          done
+
+          az containerapp revision show \
+            --name ${{ secrets.CONTAINERAPP_NAME_STAGING }} \
+            --resource-group ${{ secrets.RESOURCE_GROUP }} \
+            --revision "$NEW_REVISION"
+
+          if [ "$STATE" != "Running" ]; then
+            echo "::error::Staging revision ${NEW_REVISION} did not reach Running (last state: ${STATE:-<none>}). Recent container logs:"
+            az containerapp logs show \
+              --name ${{ secrets.CONTAINERAPP_NAME_STAGING }} \
+              --resource-group ${{ secrets.RESOURCE_GROUP }} \
+              --revision "$NEW_REVISION" \
+              --container ${IMAGE_NAME} \
+              --type console --tail 60 || true
+            exit 1
+          fi

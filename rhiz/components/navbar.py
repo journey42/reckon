@@ -2,7 +2,6 @@
 
 import reflex as rx
 from rhiz.components.buttons import (
-    legend_button,
     live_qa_button,
     trending_concepts_button,
     your_concepts_button,
@@ -30,6 +29,7 @@ def _authenticated_menu_items() -> rx.Component:
         rx.menu.item("Profile", on_click=rx.redirect("/profile")),
         rx.menu.item("Feedback", on_click=FeedbackDialogState.visible),
         rx.menu.item("How To", on_click=rx.redirect("/how_to")),
+        rx.menu.item("Legend", on_click=LegendDialogState.visible),
         rx.menu.item("Terms", on_click=rx.redirect("/terms")),
         rx.menu.item("Privacy", on_click=rx.redirect("/privacy")),
         rx.cond(
@@ -106,7 +106,6 @@ def app_logo() -> rx.Component:
                         rx.fragment(),
                     ),
                     live_qa_button(),
-                    legend_button(on_click=LegendDialogState.visible),
                     spacing="5",
                     style={"gap": "24px"},
                     align="center",

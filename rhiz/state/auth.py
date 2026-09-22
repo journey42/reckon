@@ -94,10 +94,26 @@ class AuthState(AppState):
                 return rx.window_alert("Passwords do not match.")
 
             if session.exec(select(User).where(User.username == self.username)).first():
-                return rx.window_alert("Username already exists.")
+                # Existing account: alert then bounce to /login with the
+                # return path preserved (signup-first funnel keeps new users
+                # on /signup, but the "email taken" path must not read as
+                # "I can't make an account").
+                return [
+                    rx.window_alert(
+                        "That username is already taken — it may be your "
+                        "existing account. Redirecting you to log in."
+                    ),
+                    rx.redirect(self.login_link),
+                ]
 
             if session.exec(select(User).where(User.email == self.email)).first():
-                return rx.window_alert("User with that email already exists.")
+                return [
+                    rx.window_alert(
+                        "An account with that email already exists. "
+                        "Redirecting you to log in."
+                    ),
+                    rx.redirect(self.login_link),
+                ]
 
             nxt = self.router.url.query_parameters.get("next")  # type: ignore[attr-defined]
             group_origin = is_group_origin(nxt)

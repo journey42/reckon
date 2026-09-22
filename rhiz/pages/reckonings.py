@@ -20,8 +20,6 @@ from rhiz.styles import (
 )
 from ..components import container, navbar
 from rhiz.components.buttons import (
-    sort_by_upvotes_button,
-    sort_by_support_button,
     your_drafts_button,
     disabled_delete_button,
     disabled_edit_button,
@@ -281,12 +279,11 @@ class ReckoningsPageState(AppState):
     def _require_login_redirect(self):
         """Gate write/nav actions behind login, preserving the return path.
 
-        Login-first, matching the group pages: an existing account holder whose
-        session state was lost (a backend restart, an evicted state entry, a new
-        tab) used to land on /signup here and be told "User with that email
-        already exists", which reads as "I can't make an account". The login page
-        offers "Create an account" and carries ?next through, so new users still
-        arrive at signup with their return path intact.
+        Signup-first per client request (Prolific funnel: most visitors are
+        new users, so they land on /signup directly — with "Already have an
+        account? Log in" one click away). Returning account holders whose
+        session state was lost and who try an existing email get bounced
+        gracefully from signup to /login with their ?next path preserved.
         """
         if not self.logged_in:
             target = self.router.url.path or "/"
@@ -301,7 +298,7 @@ class ReckoningsPageState(AppState):
                         group = get_group_for_concept(session, cid)
                     if group is not None:
                         target = f"/group/{group.slug}"
-            return rx.redirect(f"/login?next={quote(target, safe='/')}")
+            return rx.redirect(f"/signup?next={quote(target, safe='/')}")
         if not self.user.enabled:
             return rx.redirect("/login")
         return None
@@ -625,7 +622,45 @@ class NewConceptsPageState(ReckoningsPageState):
         return query
 
 
-class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
+TRENDING_SORT_OPTIONS = ["Most support", "Most upvotes", "Newest", "Oldest"]
+
+
+class TrendingSortMixin:
+    """User-selectable ranking for the trending pages.
+
+    The old behavior baked in a hidden time component (ties were broken by
+    recency), which made 'trending' look time-weighted. Now the primary sort
+    is explicit and selectable: pure support, pure upvotes, newest, or oldest.
+    """
+
+    sort_label: str = "Most support"
+
+    def set_sort_label(self, label: str):
+        self.sort_label = label
+        return self.get_reckonings()
+
+    def _apply_trending_order(self, query, upvote_col, support_col):
+        """Order the concept query by the selected ranking."""
+        if self.sort_label == "Newest":
+            return query.order_by(Reckoning.created_at.desc())
+        if self.sort_label == "Oldest":
+            return query.order_by(Reckoning.created_at.asc())
+        if self.sort_label == "Most upvotes":
+            return query.order_by(
+                upvote_col.desc(),
+                Reckoning.created_at.desc(),
+            )
+        # Default: most supportive comments first; recency only breaks ties
+        # so the order is stable across loads.
+        return query.order_by(
+            support_col.desc(),
+            Reckoning.created_at.desc(),
+        )
+
+
+class TrendingConceptsByUpvotesPageState(TrendingSortMixin, ReckoningsPageState):
+
+    sort_label: str = "Most upvotes"
 
     def close_complete_modal(self):
         yield self.get_reckonings()
@@ -703,13 +738,33 @@ class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
             .subquery()
         )
 
+        # Support-comment count subquery, so the user-selectable ranking can
+        # also sort by support without leaving the page.
+        support_count_subquery = (
+            select(
+                ChildReckoning.parent_reckoning_id,
+                func.count(ChildReckoning.id).label("supportive_comments_count"),
+            )
+            .where(ChildReckoning.type == ReckoningTypes.support)
+            .group_by(ChildReckoning.parent_reckoning_id)
+            .subquery()
+        )
+
         # Start building the base query for selecting reckonings and the count of their up_votes
         # Adjust the where condition as needed to filter by specific reckoning types
         query = (
-            select(Reckoning, up_vote_count_subquery.c.up_vote_count)
+            select(
+                Reckoning,
+                up_vote_count_subquery.c.up_vote_count,
+                support_count_subquery.c.supportive_comments_count,
+            )
             .outerjoin(
                 up_vote_count_subquery,
                 Reckoning.id == up_vote_count_subquery.c.parent_reckoning_id,
+            )
+            .outerjoin(
+                support_count_subquery,
+                Reckoning.id == support_count_subquery.c.parent_reckoning_id,
             )
             .where(
                 _and(
@@ -725,16 +780,19 @@ class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
                 func.lower(Reckoning.content).contains(self.search.lower())
             )
 
-        # Apply ordering by up_vote count and then by created_at timestamp
-        query = query.order_by(
-            up_vote_count_subquery.c.up_vote_count.desc(),
-            Reckoning.created_at.desc(),
+        # Order by the user-selected ranking (default: upvotes, then newest)
+        query = self._apply_trending_order(
+            query,
+            up_vote_count_subquery.c.up_vote_count,
+            support_count_subquery.c.supportive_comments_count,
         )
 
         return query
 
 
-class TrendingConceptsBySupportPageState(ReckoningsPageState):
+class TrendingConceptsBySupportPageState(TrendingSortMixin, ReckoningsPageState):
+
+    sort_label: str = "Most support"
 
     def close_complete_modal(self):
         yield self.get_reckonings()
@@ -814,16 +872,33 @@ class TrendingConceptsBySupportPageState(ReckoningsPageState):
             .subquery()
         )
 
+        # Upvote count subquery, so the user-selectable ranking can also sort
+        # by upvotes without leaving the page.
+        up_vote_count_subquery = (
+            select(
+                ChildReckoning.parent_reckoning_id,
+                func.count(ChildReckoning.id).label("up_vote_count"),
+            )
+            .where(ChildReckoning.type == ReckoningTypes.up_vote)
+            .group_by(ChildReckoning.parent_reckoning_id)
+            .subquery()
+        )
+
         # Start building the base query for selecting reckonings and the count of their supportive comments
         query = (
             select(
                 Reckoning,
                 supportive_comments_count_subquery.c.supportive_comments_count,
+                up_vote_count_subquery.c.up_vote_count,
             )
             .outerjoin(
                 supportive_comments_count_subquery,
                 Reckoning.id
                 == supportive_comments_count_subquery.c.parent_reckoning_id,
+            )
+            .outerjoin(
+                up_vote_count_subquery,
+                Reckoning.id == up_vote_count_subquery.c.parent_reckoning_id,
             )
             .where(
                 _and(
@@ -839,10 +914,13 @@ class TrendingConceptsBySupportPageState(ReckoningsPageState):
                 func.lower(Reckoning.content).contains(self.search.lower())
             )
 
-        # Apply ordering by supportive comments count and then by created_at timestamp
-        query = query.order_by(
-            supportive_comments_count_subquery.c.supportive_comments_count.asc(),
-            Reckoning.created_at.asc(),
+        # Order by the user-selected ranking. NOTE: this used to sort
+        # ascending (least support first), which made trending look
+        # time-ordered; it is now descending like every other ranking.
+        query = self._apply_trending_order(
+            query,
+            up_vote_count_subquery.c.up_vote_count,
+            supportive_comments_count_subquery.c.supportive_comments_count,
         )
 
         return query
@@ -1357,6 +1435,47 @@ def parent_reckoning(state):
                     ),
                     disabled_feedback_button(),
                 ),
+                # (...) menu lives here only — it was removed from feed rows so
+                # scrolling stays clean (client request).
+                rx.popover.root(
+                    rx.popover.trigger(
+                        more_button(),
+                    ),
+                    rx.popover.content(
+                        rx.flex(
+                            rx.cond(
+                                (state.parent.user_id == state.user.id),
+                                edit_button(
+                                    **popover_button_style,
+                                    on_click=state.edit_concept(state.parent.id),
+                                ),
+                                rx.fragment(),
+                            ),
+                            rx.cond(
+                                (state.parent.user_id == state.user.id)
+                                | (state.user.role >= 2),
+                                delete_button(
+                                    **popover_button_style,
+                                    on_click=state.delete_reckoning(state.parent.id),
+                                ),
+                                rx.fragment(),
+                            ),
+                            rx.cond(
+                                getattr(state, "is_group_owner", False),
+                                graduate_button(
+                                    on_click=state.graduate_concept(state.parent.id),
+                                ),
+                                rx.fragment(),
+                            ),
+                            direction="row",
+                            spacing="3",
+                            size="1",
+                            wrap="wrap",
+                        ),
+                        side="top",
+                        align="center",
+                    ),
+                ),
                 rx.cond(
                     state.parent.parent_reckoning_id,
                     view_parent_button(
@@ -1492,8 +1611,13 @@ def trending_concepts_navbar(state):
     """The trending component of the navbar."""
     return rx.grid(
         rx.spacer(),
-        sort_by_support_button(),
-        sort_by_upvotes_button(),
+        # User-selectable ranking (replaces the two cross-page sort buttons).
+        rx.select(
+            TRENDING_SORT_OPTIONS,
+            value=state.sort_label,
+            on_change=state.set_sort_label,
+            size="1",
+        ),
         **interior_grid_style,
         grid_template_columns="21fr 1fr 1fr",
         margin="8px 0 0 0",
@@ -1865,64 +1989,21 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                 align="end",
             ),
             position="relative",
+            cursor="pointer",
+            # The concept itself is the comment button: tapping anywhere in the
+            # content opens the same support-comment dialog the (removed)
+            # comment button used to open.
+            on_click=state.new_comment(content, ReckoningTypes.support, item_id),
         ),
         # Actions row. Was a fixed 17-track grid, which could not shrink below
         # the button icons' widths — on phones (320-390px) the rightmost items
         # (detract, feedback) were pushed off the page. A wrapping flex lets the
         # groups flow onto extra lines instead; each button+count pair is its
         # own flex so a wrap never separates a button from its tally.
+        # (...) menu removed from feed rows per client request — it now lives
+        # only on the concept detail page. The compare (cycle) button sits in
+        # the middle as a border between the comment icons and the vote icons.
         rx.flex(
-            rx.popover.root(
-                rx.popover.trigger(
-                    more_button(),
-                ),
-                rx.popover.content(
-                    rx.flex(
-                        rx.cond(
-                            (c.user_id != state.user.id),
-                            feedback_button(
-                                **popover_button_style,
-                                on_click=state.provide_feedback_on_reckoning(item_id),
-                            ),
-                            disabled_feedback_button(**popover_button_style),
-                        ),
-                        rx.cond(
-                            (state.page_type == 1),
-                            edit_button(
-                                **popover_button_style,
-                                on_click=state.edit_concept(item_id),
-                            ),
-                            disabled_edit_button(**popover_button_style),
-                        ),
-                        rx.cond(
-                            (state.page_type == 1)
-                            | (state.user.role >= 2),
-                            delete_button(
-                                **popover_button_style,
-                                on_click=state.delete_reckoning(item_id),
-                            ),
-                            disabled_delete_button(**popover_button_style),
-                        ),
-                        # Graduate button (group pages only, owner only)
-                        rx.cond(
-                            (state.page_type == 7)
-                            & (getattr(state, "is_group_owner", False)),
-                            graduate_button(
-                                on_click=state.graduate_concept(item_id),
-                            ),
-                            rx.fragment(),
-                        ),
-                        rx.fragment(),
-                        direction="row",
-                        spacing="3",
-                        size="1",
-                        wrap="wrap",
-                        max_width="92vw",
-                    ),
-                    side="top",
-                    align="center",
-                ),
-            ),
             rx.flex(
                 view_concept_button(
                     on_click=state.view_comments(item_id),
@@ -1932,9 +2013,6 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                 align="center",
                 gap="2px",
                 flex_shrink="0",
-            ),
-            compare_concepts_button(
-                on_click=state.compare_concepts(item_id),
             ),
             rx.cond(
                 (state.page_type == 5),
@@ -1995,18 +2073,19 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                 ),
                 None,
             ),
-            # Comment entry points. These were missing from feed rows, so a
-            # concept could only be commented on after drilling into its detail
-            # page — users in a group saw vote buttons but no way to comment.
-            # Spacers keep the grid columns aligned for rows that cannot be
-            # commented on (votes).
+            # Comment entry points. The plain support-comment button was
+            # replaced by the concept itself acting as a giant button, so the
+            # support count is shown as a static icon+count. Points-of-order
+            # and detract keep their own buttons (separate comment types).
             rx.cond(
                 allow_comments,
                 rx.flex(
-                    support_comment_button(
-                        on_click=state.new_comment(
-                            content, ReckoningTypes.support, item_id
-                        )
+                    rx.image(
+                        src="/support_comment.svg",
+                        width="24px",
+                        height="24px",
+                        opacity="0.45",
+                        flex_shrink="0",
                     ),
                     rx.text(c.supports),
                     direction="row",
@@ -2047,6 +2126,11 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                     flex_shrink="0",
                 ),
                 None,
+            ),
+            # Compare (the cycle/rerun icon) as the border between the comment
+            # icons on the left and the vote icons on the right.
+            compare_concepts_button(
+                on_click=state.compare_concepts(item_id),
             ),
             direction="row",
             wrap="wrap",

@@ -709,10 +709,17 @@ class AppState(rx.State):
         """Check if a user is logged in and enabled.
 
         Attempts cookie-based re-hydration before redirecting, so a lost
-        server-side state entry no longer forces a logout.
+        server-side state entry no longer forces a logout. Anonymous users
+        land on /signup (signup-first per client request); disabled accounts
+        go to /login. The current path rides along as ?next.
         """
         self._hydrate_user()
-        if not self.logged_in or not self.user.enabled:
+        if not self.logged_in:
+            from urllib.parse import quote
+
+            target = self.router.url.path or "/"
+            return rx.redirect(f"/signup?next={quote(target, safe='/')}")
+        if not self.user.enabled:
             return rx.redirect("/login")
         return None
 

@@ -348,12 +348,17 @@ class GroupPageState(ReckoningsPageState):
         self._load_group_concepts()
 
     def _require_login_redirect_for_submission(self):
-        """Redirect anonymous/disabled users to login with a group return path."""
+        """Redirect anonymous users to signup with a group return path.
+
+        Signup-first per client request; returning users reach /login via the
+        signup page's "Already have an account? Log in" link (which carries
+        ?next through) or the graceful bounce on an existing email.
+        """
         if not self.logged_in:
             from urllib.parse import quote
 
             target = f"/group/{self.group_slug}"
-            return rx.redirect(f"/login?next={quote(target, safe='/')}")
+            return rx.redirect(f"/signup?next={quote(target, safe='/')}")
         if not self.user.enabled:
             return rx.redirect("/login")
         return None

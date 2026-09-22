@@ -169,6 +169,26 @@ def extend_room(session, room_id: int, minutes: int = EXTEND_MINUTES) -> Optiona
     return group
 
 
+def reopen_room(session, room_id: int, minutes: int = EXTEND_MINUTES) -> Optional[Group]:
+    """Reopen a closed room for stragglers (facilitator action).
+
+    Clears closed_at and the closing note, then re-arms the deadline. The
+    artifact view flips back to the answering flow; closing it again
+    regenerates the artifact from the (possibly larger) answer set.
+    """
+    group = session.get(Group, room_id)
+    if group is None or not group.is_room or group.status != GroupStatus.closed:
+        return None
+    group.status = GroupStatus.open
+    group.closed_at = None
+    group.closing_note = None
+    group.close_at = datetime.utcnow() + timedelta(minutes=minutes)
+    session.add(group)
+    session.commit()
+    session.refresh(group)
+    return group
+
+
 def close_room(session, room_id: int, closing_note: str | None = None) -> Optional[Group]:
     """Close a room immediately (facilitator action), with an optional note."""
     group = session.get(Group, room_id)
@@ -591,6 +611,7 @@ def room_results(session, group: Group) -> dict:
                     "id": r.id,
                     "content": "",
                     "support": 0,
+                    "graduated": False,
                     "swaps_in": swaps_in,
                     "edited": False,
                     "removed": True,
@@ -603,6 +624,7 @@ def room_results(session, group: Group) -> dict:
                 "id": r.id,
                 "content": r.content,
                 "support": support,
+                "graduated": bool(r.is_graduated),
                 "swaps_in": swaps_in,
                 "has_swaps": swaps_in > 0,
                 "swaps_text": f"· {swaps_in} switched to this" if swaps_in else "",
