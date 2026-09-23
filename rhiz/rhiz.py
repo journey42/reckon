@@ -4,6 +4,8 @@ import os
 import reflex as rx
 from posthog import Posthog
 
+from rhiz.utils.unfurl import make_unfurl_app
+
 
 def _init_posthog():
     """Initialise PostHog only when explicitly configured."""
@@ -26,6 +28,7 @@ head_scripts = [
 ]
 
 app = rx.App(
+    api_transformer=make_unfurl_app(),
     head_components=[
         # Social unfurl defaults (Discord/X/Slack). Group pages override the
         # description dynamically via their own head_components.
