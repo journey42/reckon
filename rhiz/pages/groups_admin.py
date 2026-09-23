@@ -64,7 +64,7 @@ class GroupsAdminState(AppState):
 
     def _refresh(self):
         self.rows = []
-        if not (self.user and self.user.role == UserTypes.admin):
+        if not self._require_admin():
             return
         base = public_base_url()
         with rx.session() as session:
@@ -108,7 +108,7 @@ class GroupsAdminState(AppState):
         from rhiz.state.base import Log, Reckoning
 
         self.activity = []
-        if not (self.user and self.user.role == UserTypes.admin):
+        if not self._require_admin():
             return
         with rx.session() as session:
             # Per-group post counts + latest post timestamp (volume only).
@@ -199,7 +199,7 @@ class GroupsAdminState(AppState):
         the signup completed. Group contents are never touched.
         """
         self.invite_funnel = []
-        if not (self.user and self.user.role == UserTypes.admin):
+        if not self._require_admin():
             return
         from sqlalchemy import case, func as sa_func
 
@@ -225,7 +225,7 @@ class GroupsAdminState(AppState):
                 )
 
     def toggle_status(self, group_id: int, current: str):
-        if not (self.user and self.user.role == UserTypes.admin):
+        if not self._require_admin():
             return
         new_status = (
             GroupStatus.closed if current == GroupStatus.open else GroupStatus.open
@@ -235,14 +235,14 @@ class GroupsAdminState(AppState):
         self._refresh()
 
     def delete_group(self, group_id: int):
-        if not (self.user and self.user.role == UserTypes.admin):
+        if not self._require_admin():
             return
         with rx.session() as session:
             delete_group(session, group_id)  # admin: delete any group
         self._refresh()
 
     def toggle_public(self, group_id: int):
-        if not (self.user and self.user.role == UserTypes.admin):
+        if not self._require_admin():
             return
         with rx.session() as session:
             group = session.exec(select(Group).where(Group.id == group_id)).first()
@@ -252,8 +252,21 @@ class GroupsAdminState(AppState):
 
     # ── Member management ────────────────────────────────────────────
 
+    def _require_admin(self) -> bool:
+        """Server-side guard for every mutation/lookup on this page.
+
+        The navbar hides admin links from non-admins, but state handlers are
+        reachable by anyone who knows the route — every cross-group data
+        path must enforce the role itself.
+        """
+        return bool(self.user and self.user.role >= UserTypes.admin)
+
     def load_members(self, group_id: int):
-        """Load the member list for a specific group."""
+        """Load the member list for a specific group (admin only)."""
+        if not self._require_admin():
+            self.members = []
+            self.selected_group_id = 0
+            return
         self.selected_group_id = group_id
         self.add_member_email = ""
         self.add_member_message = ""
@@ -272,7 +285,10 @@ class GroupsAdminState(AppState):
         self.add_member_email = value or ""
 
     def add_member(self):
-        """Add a member to the selected group by email."""
+        """Add a member to the selected group by email (admin only)."""
+        if not self._require_admin():
+            self.add_member_message = "Admins only."
+            return
         if not self.add_member_email.strip():
             self.add_member_message = "Please enter an email address."
             return
@@ -292,7 +308,9 @@ class GroupsAdminState(AppState):
             self.add_member_message = f"No user found with email '{self.add_member_email}'."
 
     def remove_member_handler(self, member_id: int):
-        """Remove a member from the selected group."""
+        """Remove a member from the selected group (admin only)."""
+        if not self._require_admin():
+            return
         with rx.session() as session:
             removed = remove_member(session, member_id)
         if removed:

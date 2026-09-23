@@ -3,7 +3,7 @@
 import reflex as rx
 from sqlmodel import select
 from typing import Any, List, Optional
-from rhiz.state.base import User, Log, AppState
+from rhiz.state.base import User, Log, AppState, UserTypes
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from rhiz.styles import button_style, rhiz_data_editor_theme
@@ -160,10 +160,12 @@ class UserEditorState(AppState):
     ]
 
     def on_load(self):
-        """Load the users page."""
+        """Load the users page (admin only — this is cross-user data)."""
         result = self.check_login()
         if result:
             return result
+        if not (self.user and self.user.role >= UserTypes.admin):
+            return rx.redirect("/")
         self.users = get_users()
         from rhiz.state.base import get_setting
         self.auto_signup_enabled = get_setting("auto_signup_enabled", "false").strip().lower() in {
@@ -173,9 +175,14 @@ class UserEditorState(AppState):
     def refresh(self):
         self.users = get_users()
 
+    def _require_admin(self) -> bool:
+        return bool(self.user and self.user.role >= UserTypes.admin)
+
     @rx.event
     def toggle_auto_signup(self):
-        """Toggle open signups on/off."""
+        """Toggle open signups on/off (admin only)."""
+        if not self._require_admin():
+            return
         from rhiz.state.base import set_setting
         self.auto_signup_enabled = not self.auto_signup_enabled
         set_setting("auto_signup_enabled", "true" if self.auto_signup_enabled else "false")

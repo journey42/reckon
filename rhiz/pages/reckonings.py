@@ -1587,14 +1587,27 @@ def search_navbar(state):
 
 
 def your_concepts_navbar(state):
-    """The your concepts component of the navbar."""
-    return rx.grid(
+    """The your concepts component of the navbar.
+
+    A wrapping flex row: the search input grows to fill, the drafts button
+    sits beside it on the same line. (A grid with justify/align from
+    interior_grid_style collapsed to a single track — the input consumed
+    the full row and pushed the button below it.)
+    """
+    return rx.flex(
         rx.input(
-            on_change=state.set_search, placeholder="Search concepts", **input_style
+            on_change=state.set_search,
+            placeholder="Search concepts",
+            size="1",
+            flex_grow="1",
+            width="100%",
         ),
         your_drafts_button(),
-        **interior_grid_style,
-        grid_template_columns="22fr 1fr",
+        direction="row",
+        wrap="wrap",
+        align="center",
+        gap="8px",
+        width="100%",
         margin="8px 0 0 0",
     )
 
