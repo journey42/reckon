@@ -201,14 +201,16 @@ class GroupsAdminState(AppState):
         self.invite_funnel = []
         if not (self.user and self.user.role == UserTypes.admin):
             return
-        from sqlalchemy import func as sa_func
+        from sqlalchemy import case, func as sa_func
 
         with rx.session() as session:
             rows = session.exec(
                 select(
                     User.signup_group_slug,
                     sa_func.count(User.id),
-                    sa_func.sum(sa_func.case((User.enabled == True, 1), else_=0)),  # noqa: E712
+                    sa_func.sum(
+                        case((User.enabled == True, 1), else_=0)  # noqa: E712
+                    ),
                 )
                 .where(User.signup_group_slug != "")
                 .group_by(User.signup_group_slug)
