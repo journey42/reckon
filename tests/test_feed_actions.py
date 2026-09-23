@@ -15,18 +15,36 @@ from rhiz.pages import reckonings
 
 
 def test_feed_concept_rows_offer_comment_buttons():
-    """The concept itself is the comment button (client request); points of
-    order and detracts keep their own buttons in feed rows."""
+    """Comment entry points stay in feed rows; the whole concept is the link
+    to its concepts page (client: declutter — the black view button is gone,
+    the content itself navigates)."""
     src = inspect.getsource(reckonings.render_concept_template)
-    assert (
-        "state.new_comment(content, ReckoningTypes.support, item_id)" in src
-    ), "the concept content is no longer wired to the comment dialog"
+    # Whole concept navigates to the concepts page.
+    assert "on_click=state.view_comments(item_id)" in src
     assert "cursor=\"pointer\"" in src, "concept content is not visibly clickable"
+    # The black view button is gone from the row.
+    assert "view_concept_button" not in src, (
+        "the black view button must be removed from feed rows"
+    )
+    # Comment buttons are real, undimmed buttons again (the greyed static
+    # placeholder read as disabled).
+    assert "support_comment_button" in src
     for button in ("poo_comment_button", "detract_from_comment_button"):
         assert button in src, f"{button} missing from feed rows"
-    # The old separate support-comment CTA must be gone from the row.
-    assert "support_comment_button" not in src, (
-        "the concept is the comment button now — remove the separate CTA"
+    assert 'opacity="0.45"' not in src, (
+        "static dimmed support icon must not come back — it reads as disabled"
+    )
+
+
+def test_compare_button_sits_between_comments_and_votes():
+    """Client: the compare (cycle) button is the centered border between the
+    comment icons (left) and vote icons (right)."""
+    src = inspect.getsource(reckonings.render_concept_template)
+    comments_pos = src.index("poo_comment_button")
+    votes_pos = src.index('(vote_history == ReckoningTypes.no_vote)')
+    compare_pos = src.index("compare_concepts_button(")
+    assert comments_pos < compare_pos < votes_pos, (
+        "compare button must sit between the comment icons and the vote icons"
     )
 
 

@@ -1991,34 +1991,75 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
             ),
             position="relative",
             cursor="pointer",
-            # The concept itself is the comment button: tapping anywhere in the
-            # content opens the same support-comment dialog the (removed)
-            # comment button used to open.
-            on_click=state.new_comment(content, ReckoningTypes.support, item_id),
+            # The whole concept is the link to its concepts page — the black
+            # view button was removed from the action row (declutter). Full
+            # commenting (support/poo/detract) lives on the concepts page.
+            on_click=state.view_comments(item_id),
         ),
-        # Actions row. Was a fixed 17-track grid, which could not shrink below
-        # the button icons' widths — on phones (320-390px) the rightmost items
-        # (detract, feedback) were pushed off the page. A wrapping flex lets the
-        # groups flow onto extra lines instead; each button+count pair is its
-        # own flex so a wrap never separates a button from its tally.
-        # (...) menu removed from feed rows per client request — it now lives
-        # only on the concept detail page. The compare (cycle) button sits in
-        # the middle as a border between the comment icons and the vote icons.
+        # Actions row. Wrapping flex (fixed grids clipped buttons off-page on
+        # phones). Layout per client: comment icons left, compare (cycle)
+        # centered as the border between comments and votes, votes right.
         rx.flex(
-            rx.flex(
-                view_concept_button(
-                    on_click=state.view_comments(item_id),
-                ),
-                rx.text(total_comments),
-                direction="row",
-                align="center",
-                gap="2px",
-                flex_shrink="0",
-            ),
             rx.cond(
                 (state.page_type == 5),
                 rx.text(c.similarity),
                 None,
+            ),
+            # Comment entry points. The support-comment button is a real,
+            # undimmed button again (the static greyed placeholder read as
+            # "disabled"); points-of-order and detract sit beside it.
+            rx.cond(
+                allow_comments,
+                rx.flex(
+                    support_comment_button(
+                        on_click=state.new_comment(
+                            content, ReckoningTypes.support, item_id
+                        )
+                    ),
+                    rx.text(c.supports),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
+                ),
+                None,
+            ),
+            rx.cond(
+                allow_comments,
+                rx.flex(
+                    poo_comment_button(
+                        on_click=state.new_comment(
+                            content, ReckoningTypes.point_of_order, item_id
+                        )
+                    ),
+                    rx.text(c.points_of_order),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
+                ),
+                None,
+            ),
+            rx.cond(
+                allow_comments,
+                rx.flex(
+                    detract_from_comment_button(
+                        on_click=state.new_comment(
+                            content, ReckoningTypes.detract, item_id
+                        )
+                    ),
+                    rx.text(c.detracts),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
+                ),
+                None,
+            ),
+            # Compare (the cycle/rerun icon) as the border between the comment
+            # icons on the left and the vote icons on the right.
+            compare_concepts_button(
+                on_click=state.compare_concepts(item_id),
             ),
             rx.cond(
                 (vote_history == ReckoningTypes.no_vote),
@@ -2073,65 +2114,6 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                     flex_shrink="0",
                 ),
                 None,
-            ),
-            # Comment entry points. The plain support-comment button was
-            # replaced by the concept itself acting as a giant button, so the
-            # support count is shown as a static icon+count. Points-of-order
-            # and detract keep their own buttons (separate comment types).
-            rx.cond(
-                allow_comments,
-                rx.flex(
-                    rx.image(
-                        src="/support_comment.svg",
-                        width="24px",
-                        height="24px",
-                        opacity="0.45",
-                        flex_shrink="0",
-                    ),
-                    rx.text(c.supports),
-                    direction="row",
-                    align="center",
-                    gap="2px",
-                    flex_shrink="0",
-                ),
-                None,
-            ),
-            rx.cond(
-                allow_comments,
-                rx.flex(
-                    poo_comment_button(
-                        on_click=state.new_comment(
-                            content, ReckoningTypes.point_of_order, item_id
-                        )
-                    ),
-                    rx.text(c.points_of_order),
-                    direction="row",
-                    align="center",
-                    gap="2px",
-                    flex_shrink="0",
-                ),
-                None,
-            ),
-            rx.cond(
-                allow_comments,
-                rx.flex(
-                    detract_from_comment_button(
-                        on_click=state.new_comment(
-                            content, ReckoningTypes.detract, item_id
-                        )
-                    ),
-                    rx.text(c.detracts),
-                    direction="row",
-                    align="center",
-                    gap="2px",
-                    flex_shrink="0",
-                ),
-                None,
-            ),
-            # Compare (the cycle/rerun icon) as the border between the comment
-            # icons on the left and the vote icons on the right.
-            compare_concepts_button(
-                on_click=state.compare_concepts(item_id),
             ),
             direction="row",
             wrap="wrap",
