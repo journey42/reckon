@@ -41,22 +41,25 @@ def _posthog_events(event_name: str, distinct_id: str, minutes: int = 20):
     import requests
 
     since = time.time() - minutes * 60
+    project_id = os.environ.get("POSTHOG_PROJECT_ID", "55552")
     resp = requests.get(
-        "https://app.posthog.com/api/events/",
+        f"https://app.posthog.com/api/projects/{project_id}/events/",
         headers={"Authorization": f"Bearer {PH_SECRET}"},
         params={
             "event": event_name,
             "distinct_id": distinct_id,
-            "after": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(since)),
+            "after": time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(since)),
             "limit": 100,
         },
         timeout=30,
     )
+    if resp.status_code in (429, 502, 503, 504):
+        return []  # transient PostHog API error — the poll loop retries
     resp.raise_for_status()
     return resp.json().get("results", [])
 
 
-def _wait_for_event(event_name, distinct_id, timeout_s=180):
+def _wait_for_event(event_name, distinct_id, timeout_s=300):
     """Poll PostHog until the event appears for this distinct_id.
 
     Server-side captures are batched/flushed by the posthog client (default
