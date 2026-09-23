@@ -1633,8 +1633,6 @@ def render_comment(state, c: Reckoning):
 
     return rx.flex(
         rx.flex(
-            direction="column",
-            width="100%",
             rx.cond(
                 (state.page_type == 4),
                 rx.cond(
@@ -1949,6 +1947,8 @@ def render_comment(state, c: Reckoning):
                 grid_template_columns="1fr",
                 width="100%",
             ),
+            direction="column",
+            width="100%",
         ),
         **reckoning_grid_style,
         margin_left=c.depth,
