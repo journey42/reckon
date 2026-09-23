@@ -59,6 +59,8 @@ class GroupsAdminState(AppState):
         if result:
             return result
         self._refresh()
+        self._load_activity()
+        self._load_invite_funnel()
 
     def _refresh(self):
         self.rows = []
