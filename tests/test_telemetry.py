@@ -5,9 +5,10 @@ and group post — verified by running a real signup/group/post on staging and
 confirming each event lands in PostHog. Half-firing reads as working, so
 this test fails loudly when any of the standard events is missing.
 
-Requires: RHIZ_TELEMETRY_TESTS=1, POSTHOG_SECRET_KEY (personal API key for
-the events query API), POSTHOG_PROJECT_API_KEY, and DB_URL pointing at the
-STAGING database (the test looks up the ids of accounts it just created).
+Requires: RHIZ_TELEMETRY_TESTS=1, POSTHOG_PERSONAL_API_KEY (a *personal* API
+key from PostHog Settings — the capture key cannot read events back),
+DB_URL pointing at the STAGING database, and TELEMETRY_GROUP_SLUG set to a
+staging group slug.
 
 Run: RHIZ_TELEMETRY_TESTS=1 DB_URL=<staging-url> pytest tests/test_telemetry.py
 """
@@ -20,7 +21,9 @@ import pytest
 import requests
 
 _TELEMETRY_TESTS = os.environ.get("RHIZ_TELEMETRY_TESTS") == "1"
-PH_SECRET = os.environ.get("POSTHOG_SECRET_KEY", "")
+# Reading events back requires a *personal* API key (Settings -> Personal API
+# keys, phx_...). The project token used for capture cannot read events.
+PH_SECRET = os.environ.get("POSTHOG_PERSONAL_API_KEY", "")
 
 BASE = os.environ.get(
     "TELEMETRY_BASE_URL",
@@ -29,7 +32,7 @@ BASE = os.environ.get(
 
 pytestmark = pytest.mark.skipif(
     not _TELEMETRY_TESTS or not PH_SECRET,
-    reason="set RHIZ_TELEMETRY_TESTS=1 + POSTHOG_SECRET_KEY (+ staging DB_URL)",
+    reason="set RHIZ_TELEMETRY_TESTS=1 + POSTHOG_PERSONAL_API_KEY (+ staging DB_URL)",
 )
 
 
@@ -72,7 +75,7 @@ def _drive_browser(signup_group: str | None):
     from playwright.sync_api import sync_playwright
 
     email = f"telemetry-{uuid.uuid4().hex[:8]}@test.local"
-    username = f"telem-{uuid.uuid4().hex[:6]}"
+    username = f"telem{uuid.uuid4().hex[:6]}"
     url = BASE + "/signup" + (f"?next=/group/{signup_group}" if signup_group else "")
     with sync_playwright() as p:
         b = p.chromium.launch()
@@ -132,7 +135,7 @@ def _drive_browser_for_email(email: str, group_slug: str):
         pg.wait_for_load_state("networkidle", timeout=60000)
         inputs = pg.locator("input")
         inputs.nth(0).fill(email)
-        inputs.nth(1).fill(f"telem-{uuid.uuid4().hex[:6]}")
+        inputs.nth(1).fill(f"telem{uuid.uuid4().hex[:6]}")
         inputs.nth(2).fill("Telemetry_test1")
         inputs.nth(3).fill("Telemetry_test1")
         pg.get_by_role("button").click()
