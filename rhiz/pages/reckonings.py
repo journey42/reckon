@@ -1835,7 +1835,7 @@ def render_comment(state, c: Reckoning):
                     ),
                     position="relative",
                 ),
-                rx.grid(
+                rx.flex(
                     rx.popover.root(
                         rx.popover.trigger(
                             more_button(),
@@ -1944,10 +1944,7 @@ def render_comment(state, c: Reckoning):
                     gap="6px",
                     width="100%",
                 ),
-                **interior_grid_style,
-                position="relative",
             ),
-            **interior_grid_style,
         ),
         **reckoning_grid_style,
         margin_left=c.depth,
