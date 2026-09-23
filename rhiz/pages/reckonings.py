@@ -411,25 +411,16 @@ class ReckoningsPageState(AppState):
                 self.dismiss_support_nudge()
 
             # Capture PostHog event for vote cast.
-            try:
-                from rhiz.rhiz import posthog
+            from rhiz.utils.telemetry import VOTE_CAST, capture
 
-                if posthog and self.user:
-                    posthog.capture(
-                        "vote_cast",
-                        distinct_id=f"user-{self.user.id}",
-                        properties={
-                            "event_type": "vote",
-                            "vote_type": (
-                                "upvote"
-                                if type == ReckoningTypes.up_vote
-                                else "downvote"
-                            ),
-                            "target_reckoning_id": cid,
-                        },
-                    )
-            except Exception:
-                pass  # PostHog failures should not block voting.
+            capture(
+                VOTE_CAST,
+                distinct_id=f"user-{self.user.id}" if self.user else None,
+                vote_type=(
+                    "upvote" if type == ReckoningTypes.up_vote else "downvote"
+                ),
+                target_reckoning_id=cid,
+            )
 
             yield self.save_scroll_position()
             current_path = self.router.url.path or "/"

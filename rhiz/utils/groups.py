@@ -56,21 +56,30 @@ def create_group(session, name: str, founding_question: str, created_by: int):
     session.commit()
     session.refresh(group)
 
-    # Capture PostHog event for group creation.
-    try:
-        from rhiz.rhiz import posthog
+    # Audit row: group creation was previously unlogged, so the client had
+    # no record of new groups (counts + timestamps only; no content).
+    from rhiz.state.base import Log
 
-        if posthog:
-            posthog.capture(
-                "group_created",
-                distinct_id=f"group-{group.id}",
-                properties={
-                    "created_by": created_by,
-                    "name_length": len(name),
-                },
-            )
-    except Exception:
-        pass  # PostHog failures should not block group creation.
+    session.add(
+        Log(
+            user_id=created_by,
+            content=f"created group {group.id}",
+            type="group",
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    session.commit()
+
+    # Capture PostHog event for group creation.
+    from rhiz.utils.telemetry import GROUP_CREATED, capture
+
+    capture(
+        GROUP_CREATED,
+        distinct_id=f"group-{group.id}",
+        created_by=created_by,
+        name_length=len(name),
+        is_room=bool(getattr(group, "is_room", False)),
+    )
 
     return group
 
@@ -223,6 +232,8 @@ def is_member(session, user_id: int, group_id: int) -> bool:
 
 def join_group(session, user_id: int, group_id: int) -> Optional[GroupMember]:
     """Add a user to a group. Returns the membership (new or existing)."""
+    from rhiz.state.base import Log
+
     existing = get_membership(session, user_id, group_id)
     if existing:
         return existing
@@ -230,6 +241,31 @@ def join_group(session, user_id: int, group_id: int) -> Optional[GroupMember]:
     session.add(member)
     session.commit()
     session.refresh(member)
+
+    # Audit row: membership joins were previously invisible — the client had
+    # no record of who joined what, when. Counts + timestamps only; content
+    # stays private to the group.
+    session.add(
+        Log(
+            user_id=user_id,
+            content=f"joined group {group_id}",
+            type="group_join",
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    session.commit()
+
+    # Telemetry: member_joined fired for every join.
+    from rhiz.utils.telemetry import MEMBER_JOINED, capture
+
+    group = session.get(Group, group_id)
+    capture(
+        MEMBER_JOINED,
+        distinct_id=f"user-{user_id}",
+        group_id=group_id,
+        group_slug=group.slug if group is not None else None,
+    )
+
     return member
 
 

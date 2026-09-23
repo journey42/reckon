@@ -12,7 +12,14 @@ member lists per group.
 import reflex as rx
 from sqlmodel import select
 
-from rhiz.state.base import AppState, Group, GroupStatus, UserTypes, User
+from rhiz.state.base import (
+    AppState,
+    Group,
+    GroupStatus,
+    ReckoningTypes,
+    UserTypes,
+    User,
+)
 from rhiz.utils.groups import (
     set_group_status,
     set_group_public,
@@ -29,6 +36,13 @@ from rhiz.pages.group_common import public_base_url, group_row
 
 class GroupsAdminState(AppState):
     rows: list[dict] = []
+
+    # Activity feed: counts + timestamps only — never group content. This is
+    # the client's visibility requirement: see groups being created, members
+    # joining, and posting volume, without seeing what anyone posted.
+    activity: list[dict] = []
+    post_stats: list[dict] = []
+    invite_funnel: list[dict] = []
 
     # Member management state
     selected_group_id: int = 0
@@ -75,6 +89,134 @@ class GroupsAdminState(AppState):
                         "qr": qr_data_uri(url),
                         "creator": creator_username or "Unknown",
                         "is_owner": True,
+                    }
+                )
+
+    # ── Activity panel (counts + timestamps only) ────────────────────
+
+    def _load_activity(self):
+        """Recent group lifecycle events: created / joined / posted.
+
+        Counts and timestamps only — no post content is selected. Sources:
+        the `log` table (created group, joined group) and per-group reckoning
+        counts (posts), which reveal volume but never content.
+        """
+        from datetime import datetime, timezone
+        from sqlalchemy import func as sa_func
+        from rhiz.state.base import Log, Reckoning
+
+        self.activity = []
+        if not (self.user and self.user.role == UserTypes.admin):
+            return
+        with rx.session() as session:
+            # Per-group post counts + latest post timestamp (volume only).
+            post_stats = session.exec(
+                select(
+                    Reckoning.group_id,
+                    sa_func.count(Reckoning.id),
+                    sa_func.max(Reckoning.created_at),
+                )
+                .where(Reckoning.type == ReckoningTypes.concept)
+                .group_by(Reckoning.group_id)
+            ).all()
+            post_counts = {
+                gid: {"posts": n, "last_post": ts} for gid, n, ts in post_stats
+            }
+
+            # Groups with names, for readable rows.
+            groups = {
+                g.id: g.name
+                for g in session.exec(
+                    select(Group).where(Group.is_room == False)  # noqa: E712
+                ).all()
+            }
+
+            # Lifecycle events from the audit log, newest first.
+            logs = session.exec(
+                select(Log)
+                .where(
+                    Log.type.in_(["group", "group_join", "user"])
+                    & Log.content.contains("group")
+                )
+                .order_by(Log.created_at.desc())
+                .limit(60)
+            ).all()
+            usernames = {
+                u.id: u.username
+                for u in session.exec(select(User)).all()
+            }
+            for entry in logs:
+                kind = (
+                    "created"
+                    if entry.type == "group"
+                    else ("joined" if entry.type == "group_join" else None)
+                )
+                if kind is None:
+                    continue
+                # Parse group id from the log content ("created group X" /
+                # "joined group N").
+                gid = None
+                try:
+                    gid = int(entry.content.rsplit(" ", 1)[-1])
+                except (ValueError, IndexError):
+                    pass
+                self.activity.append(
+                    {
+                        "when": entry.created_at.strftime("%b %d %H:%M UTC"),
+                        "who": usernames.get(entry.user_id, "unknown"),
+                        "kind": kind,
+                        "group": groups.get(gid, f"#{gid}" if gid else "?"),
+                    }
+                )
+
+            # Post-volume rows per group (content-never-selected).
+            self.post_stats = [
+                {
+                    "group": groups.get(gid, f"#{gid}"),
+                    "posts": stats["posts"],
+                    "last_post": (
+                        stats["last_post"].strftime("%b %d %H:%M UTC")
+                        if stats["last_post"]
+                        else "never"
+                    ),
+                }
+                for gid, stats in sorted(
+                    post_counts.items(),
+                    key=lambda kv: kv[1]["last_post"] or datetime.min.replace(
+                        tzinfo=None
+                    ),
+                    reverse=True,
+                )
+                if gid in groups
+            ]
+
+    def _load_invite_funnel(self):
+        """Signups that started from a group invite link — did they succeed?
+
+        signup_group_slug records the origin group; enabled records whether
+        the signup completed. Group contents are never touched.
+        """
+        self.invite_funnel = []
+        if not (self.user and self.user.role == UserTypes.admin):
+            return
+        from sqlalchemy import func as sa_func
+
+        with rx.session() as session:
+            rows = session.exec(
+                select(
+                    User.signup_group_slug,
+                    sa_func.count(User.id),
+                    sa_func.sum(sa_func.case((User.enabled == True, 1), else_=0)),  # noqa: E712
+                )
+                .where(User.signup_group_slug != "")
+                .group_by(User.signup_group_slug)
+            ).all()
+            for slug, total, enabled_count in rows:
+                self.invite_funnel.append(
+                    {
+                        "group": slug,
+                        "signups": total,
+                        "joined": enabled_count or 0,
                     }
                 )
 
@@ -239,6 +381,112 @@ def _member_panel():
     )
 
 
+def _activity_panel() -> rx.Component:
+    """Counts + timestamps of group lifecycle activity — never content."""
+    return rx.vstack(
+        rx.heading("Recent activity", size="5"),
+        rx.text(
+            "Groups created, members joined, and posting volume — counts and "
+            "timestamps only. Group contents stay private to their groups.",
+            size="2",
+            color_scheme="gray",
+        ),
+        rx.table.root(
+            rx.table.header(
+                rx.table.row(
+                    rx.table.column_header_cell("When"),
+                    rx.table.column_header_cell("Who"),
+                    rx.table.column_header_cell("Event"),
+                    rx.table.column_header_cell("Group"),
+                )
+            ),
+            rx.table.body(
+                rx.foreach(
+                    GroupsAdminState.activity,
+                    lambda a: rx.table.row(
+                        rx.table.cell(a["when"]),
+                        rx.table.cell(a["who"]),
+                        rx.table.cell(
+                            rx.badge(
+                                a["kind"],
+                                color_scheme=rx.cond(
+                                    a["kind"] == "created", "blue", "green"
+                                ),
+                                variant="soft",
+                            ),
+                        ),
+                        rx.table.cell(a["group"]),
+                    ),
+                )
+            ),
+            size="1",
+            width="100%",
+        ),
+        rx.heading("Posting volume by group", size="4"),
+        rx.table.root(
+            rx.table.header(
+                rx.table.row(
+                    rx.table.column_header_cell("Group"),
+                    rx.table.column_header_cell("Posts"),
+                    rx.table.column_header_cell("Last post"),
+                )
+            ),
+            rx.table.body(
+                rx.foreach(
+                    GroupsAdminState.post_stats,
+                    lambda p: rx.table.row(
+                        rx.table.cell(p["group"]),
+                        rx.table.cell(p["posts"]),
+                        rx.table.cell(p["last_post"]),
+                    ),
+                )
+            ),
+            size="1",
+            width="100%",
+        ),
+        rx.heading("Invite-link signups", size="4"),
+        rx.text(
+            "Signups that started from a group's invite link, and how many "
+            "of those accounts are active members.",
+            size="2",
+            color_scheme="gray",
+        ),
+        rx.table.root(
+            rx.table.header(
+                rx.table.row(
+                    rx.table.column_header_cell("Group"),
+                    rx.table.column_header_cell("Signups via link"),
+                    rx.table.column_header_cell("Joined"),
+                )
+            ),
+            rx.table.body(
+                rx.cond(
+                    GroupsAdminState.invite_funnel.length() == 0,
+                    rx.table.row(
+                        rx.table.cell(
+                            "No signups have come through invite links yet.",
+                            colspan="3",
+                        ),
+                    ),
+                    rx.foreach(
+                        GroupsAdminState.invite_funnel,
+                        lambda f: rx.table.row(
+                            rx.table.cell(f["group"]),
+                            rx.table.cell(f["signups"]),
+                            rx.table.cell(f["joined"]),
+                        ),
+                    ),
+                )
+            ),
+            size="1",
+            width="100%",
+        ),
+        spacing="3",
+        align="stretch",
+        width="100%",
+    )
+
+
 def groups_admin_page():
     return container(
         navbar(),
@@ -263,6 +511,7 @@ def groups_admin_page():
                         GroupsAdminState.rows,
                         lambda r: _group_row_with_members(GroupsAdminState, r),
                     ),
+                    _activity_panel(),
                     spacing="4",
                     align="stretch",
                     width="100%",

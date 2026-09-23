@@ -439,21 +439,15 @@ class GroupPageState(ReckoningsPageState):
                 session.commit()
 
         # Capture PostHog event
-        try:
-            from rhiz.rhiz import posthog
+        from rhiz.utils.telemetry import GROUP_ANSWER_SUBMITTED, capture
 
-            if posthog:
-                posthog.capture(
-                    "group_answer_submitted",
-                    distinct_id=f"user-{self.user.id}",
-                    properties={
-                        "group_slug": self.group_slug,
-                        "content_length": len(self.submission_content),
-                        "has_matches": has_matches,
-                    },
-                )
-        except Exception:
-            pass
+        capture(
+            GROUP_ANSWER_SUBMITTED,
+            distinct_id=f"user-{self.user.id}",
+            group_slug=self.group_slug,
+            content_length=len(self.submission_content),
+            has_matches=has_matches,
+        )
 
         # Clear the submission box and reload the concept feed
         self.submission_content = ""

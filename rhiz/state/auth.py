@@ -176,21 +176,14 @@ class AuthState(AppState):
                     join_group(session, new_user.id, group.id)
 
             # Capture PostHog event for signup.
-            try:
-                from rhiz.rhiz import posthog
+            from rhiz.utils.telemetry import SIGNUP, capture
 
-                if posthog:
-                    posthog.capture(
-                        "signup",
-                        distinct_id=f"user-{new_user.id}",
-                        properties={
-                            "event_type": (
-                                "group_origin" if group_origin else "normal_signup"
-                            ),
-                        },
-                    )
-            except Exception:
-                pass  # PostHog failures should not block signup.
+            capture(
+                SIGNUP,
+                distinct_id=f"user-{new_user.id}",
+                event_type=("group_origin" if group_origin else "normal_signup"),
+                signup_group=signup_group_slug or None,
+            )
 
             if not group_origin:
                 # Normal signup
@@ -449,16 +442,13 @@ class AuthState(AppState):
                 session.commit()
 
                 # Identify user in PostHog for cross-device tracking
-                try:
-                    from rhiz.rhiz import posthog
-                    if posthog:
-                        posthog.capture(
-                            "login",
-                            distinct_id=f"user-{self.user.id}",
-                            properties={"username": self.user.username},
-                        )
-                except Exception:
-                    pass
+                from rhiz.utils.telemetry import LOGIN, capture
+
+                capture(
+                    LOGIN,
+                    distinct_id=f"user-{self.user.id}",
+                    username=self.user.username,
+                )
 
                 # Call posthog.identify on the client side
                 return [
