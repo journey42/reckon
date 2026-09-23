@@ -1600,11 +1600,11 @@ def your_concepts_navbar(state):
             placeholder="Search concepts",
             size="1",
             flex_grow="1",
-            width="100%",
+            min_width="0",
         ),
         your_drafts_button(),
         direction="row",
-        wrap="wrap",
+        wrap="nowrap",
         align="center",
         gap="8px",
         width="100%",
@@ -2216,6 +2216,7 @@ def page(state, *args, infinite_scroll=False, **kwargs):
     return container(
         rx.html("""
             <style>
+            #infinite-load-trigger { display: none !important; }
             @keyframes supportPulse {
               0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(1, 204, 93, 0.45); }
               50% { transform: scale(1.08); box-shadow: 0 0 0 14px rgba(1, 204, 93, 0); }
