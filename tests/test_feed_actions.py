@@ -70,9 +70,13 @@ def test_feed_action_rows_wrap_instead_of_using_fixed_grids():
         ("render_comment", reckonings.render_comment),
     ):
         src = inspect.getsource(fn)
-        assert "grid_template_columns=" not in src, (
-            f"{name} still lays its action row out on a fixed grid"
-        )
+        # A single full-width column ("1fr") is the safe layout for a card
+        # body; multi-track fixed grids are what clipped phones.
+        import re as _re
+        for cols in _re.findall(r'grid_template_columns="([^"]*)"', src):
+            assert cols == "1fr", (
+                f"{name} lays its rows out on a fixed multi-track grid ({cols!r})"
+            )
         assert 'wrap="wrap"' in src, f"{name} action row does not wrap"
 
     # The comments page's parent row carries the feedback button and lives in

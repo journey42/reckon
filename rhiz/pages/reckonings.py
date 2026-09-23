@@ -1944,6 +1944,7 @@ def render_comment(state, c: Reckoning):
                     gap="6px",
                     width="100%",
                 ),
+                grid_template_columns="1fr",
                 width="100%",
             ),
         ),
