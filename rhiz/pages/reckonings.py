@@ -7,7 +7,7 @@ from typing import Optional
 from sqlmodel import select, delete, func
 from sqlalchemy.orm import aliased, noload
 from sqlalchemy import and_ as _and, or_ as _or
-from rhiz.state.base import AppState, Reckoning, ReckoningTypes
+from rhiz.state.base import AppState, Reckoning, ReckoningTypes, UserTypes
 from rhiz.styles import (
     vote_count_and_timestamp_style,
     comment_badge_style,
@@ -335,6 +335,28 @@ class ReckoningsPageState(AppState):
     def graduate_concept(self, rid: int):
         """Graduate a concept to the main site. No-op on non-group pages."""
         pass
+
+    @rx.event
+    def hide_comment(self, cid: int):
+        """Group convener: hide a comment (record kept, content masked)."""
+        from rhiz.utils.moderation import hide_comment
+
+        if not self.logged_in:
+            return
+        with rx.session() as session:
+            hide_comment(session, cid, self.user)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        """Group convener: restore a hidden comment."""
+        from rhiz.utils.moderation import unhide_comment
+
+        if not self.logged_in:
+            return
+        with rx.session() as session:
+            unhide_comment(session, cid, self.user)
+        return self.get_reckonings()
 
     def compare_concepts(self, cid):
         result = self._require_login_redirect()
@@ -1315,6 +1337,21 @@ class CommentsPageState(ReckoningsPageState):
                 "4px" if depth == 0 else (str(depth * 20) + "px")
             )  # Set the depth for each child
             child.compute_tallies(self.user.id if self.user else None, session=session)
+            # Per-row moderation flag: the comment's group convener (or an
+            # admin) may hide/unhide it. Plain Python at load time so the
+            # template can branch on a simple attribute.
+            child.can_moderate = (
+                self.user is not None
+                and child.group_id is not None
+                and (
+                    session.get(Group, child.group_id) is not None
+                    and (
+                        session.get(Group, child.group_id).created_by
+                        == self.user.id
+                        or self.user.role >= UserTypes.admin
+                    )
+                )
+            )
             self.reckonings.append(child)
             if max_depth == -1 or depth < max_depth - 1:
                 self.fetch_children(session, child.id, depth + 1, max_depth)
@@ -1825,11 +1862,23 @@ def render_comment(state, c: Reckoning):
                         ),
                         **comment_badge_style,
                     ),
-                    SafeMarkdown.create(
-                        content=c.content,
-                        class_name="prose",
-                        max_width="100%",
-                        **read_only_text_style,
+                    rx.cond(
+                        c.hidden_by_convener,
+                        rx.box(
+                            rx.text(
+                                "Hidden by group convener",
+                                size="2",
+                                weight="medium",
+                                color_scheme="gray",
+                            ),
+                            padding="14px 8px 12px 8px",
+                        ),
+                        SafeMarkdown.create(
+                            content=c.content,
+                            class_name="prose",
+                            max_width="100%",
+                            **read_only_text_style,
+                        ),
                     ),
                     rx.flex(
                         rx.text(c.elapsed_time, size="1", flex_grow="1"),
@@ -1892,6 +1941,26 @@ def render_comment(state, c: Reckoning):
                                         on_click=state.delete_reckoning(c.id),
                                     ),
                                     disabled_delete_button(**popover_button_style),
+                                ),
+                                # Group convener: hide/unhide (record kept,
+                                # content masked for non-conveners).
+                                rx.cond(
+                                    c.can_moderate & ~c.hidden_by_convener,
+                                    rx.button(
+                                        "Hide",
+                                        **popover_button_style,
+                                        on_click=state.hide_comment(c.id),
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                rx.cond(
+                                    c.can_moderate & c.hidden_by_convener,
+                                    rx.button(
+                                        "Unhide",
+                                        **popover_button_style,
+                                        on_click=state.unhide_comment(c.id),
+                                    ),
+                                    rx.fragment(),
                                 ),
                                 direction="row",
                                 spacing="3",

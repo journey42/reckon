@@ -5,6 +5,7 @@ import reflex as rx
 from typing import Optional, List
 from sqlmodel import Field, Relationship, select, SQLModel
 from sqlalchemy import text, UniqueConstraint
+from typing import ClassVar
 from datetime import datetime
 from dataclasses import dataclass
 from rhiz.utils.time import calculate_elapsed_time
@@ -111,6 +112,13 @@ class Reckoning(Model, table=True):
     )
     is_graduated: bool = Field(default=False)
 
+    # Convener comment-hiding: the group convener can hide a comment without
+    # deleting it — the record stays, non-conveners see "Hidden by group
+    # convener" instead of the content.
+    hidden_by_convener: bool = Field(default=False)
+    hidden_by: Optional[int] = Field(default=None)
+    hidden_at: Optional[datetime] = Field(default=None)
+
     # textembedding: Optional[TextEmbedding] = Relationship(back_populates="reckoning")
 
     user_id: int = Field(foreign_key="user.id", nullable=True, index=True)
@@ -153,6 +161,10 @@ class Reckoning(Model, table=True):
     parent_type: int = 0
     parent_id: int = 0
     parent_user_vote_history: int = ReckoningTypes.no_vote
+    # temp variable used in rendering: may the current user moderate this row
+    # (group convener or admin)? Set at load time, never meaningful in the DB
+    # (mirrors the `depth` render-var pattern).
+    can_moderate: bool = Field(default=False)
     parent_up_votes: int = 0
     parent_down_votes: int = 0
     parent_supports: int = 0

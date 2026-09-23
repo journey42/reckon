@@ -296,6 +296,36 @@ def main():
             )
         )
 
+        # 13. Convener comment-hiding: the group convener can hide comments
+        # (e.g. while a group is still forming) without deleting the record.
+        reckoning_cols = [c["name"].lower() for c in inspector.get_columns("reckoning")]
+        for col, ddl in [
+            (
+                "hidden_by_convener",
+                "ALTER TABLE reckoning ADD COLUMN IF NOT EXISTS "
+                "hidden_by_convener BOOLEAN DEFAULT FALSE",
+            ),
+            (
+                "hidden_by",
+                "ALTER TABLE reckoning ADD COLUMN IF NOT EXISTS hidden_by INTEGER",
+            ),
+            (
+                "hidden_at",
+                "ALTER TABLE reckoning ADD COLUMN IF NOT EXISTS hidden_at "
+                "TIMESTAMP WITHOUT TIME ZONE",
+            ),
+            (
+                "can_moderate",
+                "ALTER TABLE reckoning ADD COLUMN IF NOT EXISTS can_moderate "
+                "BOOLEAN DEFAULT FALSE",
+            ),
+        ]:
+            if col not in reckoning_cols:
+                print(f"[migrate] Adding {col} column to reckoning...", flush=True)
+                conn.execute(text(ddl))
+            else:
+                print(f"[migrate] {col} column already exists on reckoning.", flush=True)
+
         # 7. Ensure alembic_version table exists for future Alembic-based migrations
         conn.execute(
             text(
