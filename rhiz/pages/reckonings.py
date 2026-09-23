@@ -1870,8 +1870,9 @@ def render_comment(state, c: Reckoning):
                                 size="2",
                                 weight="medium",
                                 color_scheme="gray",
+                                style={"fontStyle": "italic"},
                             ),
-                            padding="14px 8px 12px 8px",
+                            padding="14px 8px 12px 44px",
                         ),
                         SafeMarkdown.create(
                             content=c.content,
