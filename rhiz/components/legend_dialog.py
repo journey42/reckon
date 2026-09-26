@@ -25,13 +25,13 @@ def legend_dialog(*args, **kwargs):
             rx.dialog.title(
                 rx.grid(
                     rx.heading("Legend", size="5"),
-                    rx.spacer(),
                     rx.dialog.close(
                         close_button(
                             **dialog_button_style, on_click=LegendDialogState.visible
                         ),
+                        justify_self="end",
                     ),
-                    grid_template_columns="3fr 5fr 1fr",
+                    grid_template_columns="1fr auto",
                 ),
             ),
             rx.vstack(

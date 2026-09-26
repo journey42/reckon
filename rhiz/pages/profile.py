@@ -22,6 +22,8 @@ def profile():
                         placeholder="Email",
                         on_blur=ProfileState.set_email,
                         **input_style,
+                        font_size="2",
+                        padding="8px",
                     ),
                     rx.center(
                         rx.button(
@@ -31,6 +33,8 @@ def profile():
                         )
                     ),
                     **form_box_style,
+                    max_width="640px",
+                    width="100%",
                     direction="column",
                     spacing="2",
                 ),
@@ -42,9 +46,10 @@ def profile():
                     ),
                 ),
                 spacing="4",
-                max_width="480px",
+                max_width="640px",
                 align_items="center",
             ),
             width="100%",
+            min_height="70vh",
         ),
     )

@@ -96,13 +96,13 @@ def feedback_dialog(options: List[str], *args, **kwargs):
             rx.dialog.title(
                 rx.grid(
                     rx.heading("Feedback", size="5"),
-                    rx.spacer(),
                     rx.dialog.close(
                         close_button(
                             **dialog_button_style, on_click=FeedbackDialogState.visible
                         ),
+                        justify_self="end",
                     ),
-                    grid_template_columns="3fr 5fr 1fr",
+                    grid_template_columns="1fr auto",
                 ),
             ),
             rx.form(
