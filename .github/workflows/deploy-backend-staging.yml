@@ -1,14 +1,6 @@
 name: Deploy Backend (Staging)
 
 on:
-  push:
-    branches: [ master ]
-    paths:
-      - Dockerfile
-      - requirements.txt
-      - rxconfig.py
-      - rhiz/**
-      - scripts/**
   workflow_dispatch:
 
 env:
