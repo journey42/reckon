@@ -58,6 +58,11 @@ class GroupsAdminState(AppState):
         result = self.check_login()
         if result:
             return result
+        # /groups is the site-wide moderation page. Regular users (and old
+        # bookmarks / guessed URLs) land here expecting "groups" — send them
+        # to their own groups page instead of a dead-end notice.
+        if not self._require_admin():
+            return rx.redirect("/your_groups")
         self._refresh()
         self._load_activity()
         self._load_invite_funnel()
@@ -546,7 +551,15 @@ def groups_admin_page():
                 padding="24px",
             ),
             rx.center(
-                rx.text("This page is for administrators only."),
+                rx.vstack(
+                    rx.text(
+                        "This page is for administrators only. Redirecting you "
+                        "to your groups…",
+                    ),
+                    rx.link("Your Groups", href="/your_groups"),
+                    spacing="3",
+                    align="center",
+                ),
                 min_height="50vh",
             ),
         ),

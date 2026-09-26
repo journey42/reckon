@@ -174,12 +174,13 @@ class GroupPageState(ReckoningsPageState):
             )
 
             # Per-row moderation flag: the group creator (or an admin) may
-            # hide/unhide concepts here.
+            # hide/unhide concepts here. NOTE: `group` is on_load's local —
+            # use self.is_group_owner (computed there) to avoid a NameError
+            # that killed this handler for non-admin users (the client's
+            # "errors when accessing groups" report).
             user = self.user
             for r in rows:
-                r.can_moderate = user is not None and (
-                    user.role >= UserTypes.admin or group.created_by == user.id
-                )
+                r.can_moderate = user is not None and self.is_group_owner
 
             # Compute traction for each concept
             for r in rows:
