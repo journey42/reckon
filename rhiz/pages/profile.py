@@ -13,6 +13,7 @@ from rhiz.styles import page_params
 @rx.page(on_load=ProfileState.check_login(), **page_params)
 def profile():
     """The profile page."""
+    box_props = {**form_box_style, "max_width": "640px", "width": "100%"}
     return profile_layout(
         rx.center(
             rx.vstack(
@@ -21,9 +22,9 @@ def profile():
                         default_value=ProfileState.user.email,
                         placeholder="Email",
                         on_blur=ProfileState.set_email,
-                        **input_style,
                         font_size="2",
-                        padding="8px",
+                        **input_style,
+                        padding_x="8px",
                     ),
                     rx.center(
                         rx.button(
@@ -32,9 +33,7 @@ def profile():
                             **button_style,
                         )
                     ),
-                    **form_box_style,
-                    max_width="640px",
-                    width="100%",
+                    **box_props,
                     direction="column",
                     spacing="2",
                 ),
