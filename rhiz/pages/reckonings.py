@@ -530,6 +530,29 @@ class YourDraftsPageState(ReckoningsPageState):
         self.get_reckonings()
         yield self.scroll_to_saved_position()
 
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+
     def get_reckonings(self):
         self._load_first_window()
 
@@ -618,6 +641,29 @@ class NewConceptsPageState(ReckoningsPageState):
             return result
         self.get_reckonings()
         yield self.scroll_to_saved_position()
+
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
 
     def get_reckonings(self):
         self._load_first_window()
@@ -737,6 +783,29 @@ class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
             return result
         self.get_reckonings()
         yield self.scroll_to_saved_position()
+
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
 
     def get_reckonings(self):
         self._load_first_window()
@@ -876,6 +945,29 @@ class TrendingConceptsBySupportPageState(ReckoningsPageState):
         self.get_reckonings()
         yield self.scroll_to_saved_position()
 
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+
     def get_reckonings(self):
         self._load_first_window()
 
@@ -1013,6 +1105,29 @@ class YourConceptsPageState(ReckoningsPageState):
 
     """The state for the your reckonings page."""
 
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+
     def get_reckonings(self):
         self._load_first_window()
 
@@ -1101,6 +1216,29 @@ class ComparePageState(ReckoningsPageState):
     @rx.var
     def reckoning_id(self) -> str:
         return self.get_path_param("rid", "no rid")
+
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
 
     def get_reckonings(self):
         """Get reckonings of type concept for this user from the database."""
@@ -1230,6 +1368,29 @@ class ConceptPageState(ReckoningsPageState):
         if result:
             return result
         self.get_reckonings()
+
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
 
     def get_reckonings(self):
         """Get reckoning with rid of cid from the database."""
