@@ -10,7 +10,8 @@ Every server-side capture goes through :func:`capture` so that:
 
 Events currently captured server-side:
   signup, login, group_created, member_joined, group_answer_submitted,
-  vote_cast.
+  vote_cast, concept_submitted, comment_posted, concept_refreshed,
+  content_flagged.
 """
 
 import logging
@@ -26,6 +27,10 @@ GROUP_CREATED = "group_created"
 MEMBER_JOINED = "member_joined"
 GROUP_ANSWER_SUBMITTED = "group_answer_submitted"
 VOTE_CAST = "vote_cast"
+CONCEPT_SUBMITTED = "concept_submitted"
+COMMENT_POSTED = "comment_posted"
+CONCEPT_REFRESHED = "concept_refreshed"
+CONTENT_FLAGGED = "content_flagged"
 
 
 def _client():

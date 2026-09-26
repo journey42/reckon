@@ -71,6 +71,21 @@ class FeedbackDialogState(AppState):
             session.add(feedback)
             # session.expire_on_commit = False
             session.commit()
+
+        # Telemetry: content flagged (client request). Only for
+        # reckoning-scoped feedback (the report path), not general feedback.
+        if self.reckoning_id:
+            from rhiz.utils.telemetry import CONTENT_FLAGGED, capture
+
+            props = self.ph_session_props()
+            capture(
+                CONTENT_FLAGGED,
+                distinct_id=props.pop("distinct_id", f"user-{self.user.id}"),
+                target_reckoning_id=self.reckoning_id,
+                flag_type=self.type,
+                content_length=len(self.content),
+                **props,
+            )
         self.show = not (self.show)
 
 

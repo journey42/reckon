@@ -5,7 +5,23 @@ if (!window.__posthog_loaded__) {
     window.posthog.init('phc_rQPhVDnHM6wgc44Eq3lQayCH4rSOZH3jevGH2B4aFpo', {
       api_host: 'https://app.posthog.com',
       respect_dnt: true,
-      disable_session_recording: true,
+      capture_pageview: 'history_change',
+      disable_session_recording: false,
     });
+    // Mirror the PostHog session id into a first-party cookie so the
+    // server-side event handlers can attach $session_id to their captures
+    // (events then join the same session replay as browser activity).
+    function rhizSetSid() {
+      try {
+        var sid = window.posthog.get_session_id ? window.posthog.get_session_id() : null;
+        if (sid) {
+          document.cookie = 'rhiz_ph_sid=' + encodeURIComponent(sid) +
+            '; path=/; max-age=1800; SameSite=Lax' +
+            (location.protocol === 'https:' ? '; Secure' : '');
+        }
+      } catch (e) { /* never break the app for telemetry */ }
+    }
+    rhizSetSid();
+    window.posthog.on('session_id', function () { rhizSetSid(); });
   }
 }

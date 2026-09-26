@@ -173,3 +173,37 @@ class TestConvenerHiding:
         assert unhide_comment(session, comment.id, _people["member"]) is False
         session.refresh(comment)
         assert comment.hidden_by_convener is True
+
+@requires_db
+class TestConceptHiding:
+    def test_creator_can_hide_concept(self, session, _people, _group_and_comment):
+        from rhiz.utils.moderation import hide_comment as hide  # works for concepts too
+
+        group, comment = _group_and_comment
+        # Create a concept inside the group
+        concept = Reckoning(
+            content="a concept the creator may hide",
+            type=ReckoningTypes.concept,
+            group_id=group.id,
+            created_at=_utcnow(),
+            updated_at=_utcnow(),
+            user_id=_people["member"].id,
+        )
+        session.add(concept)
+        session.commit()
+        session.refresh(concept)
+        try:
+            assert hide(session, concept.id, _people["conv"]) is True
+            session.refresh(concept)
+            assert concept.hidden_by_convener is True
+            # Member cannot unhide
+            assert unhide_comment(session, concept.id, _people["member"]) is False
+            # Creator restores
+            assert unhide_comment(session, concept.id, _people["conv"]) is True
+            session.refresh(concept)
+            assert concept.hidden_by_convener is False
+        finally:
+            c = session.get(Reckoning, concept.id)
+            if c is not None:
+                session.delete(c)
+            session.commit()

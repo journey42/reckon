@@ -75,7 +75,9 @@ def create_group(session, name: str, founding_question: str, created_by: int):
 
     capture(
         GROUP_CREATED,
-        distinct_id=f"group-{group.id}",
+        distinct_id=f"user-{created_by}",
+        group_id=group.id,
+        group_slug=group.slug,
         created_by=created_by,
         name_length=len(name),
         is_room=bool(getattr(group, "is_room", False)),

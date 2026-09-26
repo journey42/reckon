@@ -24,7 +24,7 @@ from rhiz.pages.reckonings import (
     ReckoningsPageState,
     page,
 )
-from rhiz.state.base import Reckoning, ReckoningTypes
+from rhiz.state.base import Reckoning, ReckoningTypes, UserTypes
 from rhiz.components import container, navbar
 from rhiz.components.how_it_works_dialog import HowItWorksDialogState
 from rhiz.components.tiptap_editor import TiptapEditor
@@ -173,6 +173,14 @@ class GroupPageState(ReckoningsPageState):
                 rows, self.user.id if self.user else None, session
             )
 
+            # Per-row moderation flag: the group creator (or an admin) may
+            # hide/unhide concepts here.
+            user = self.user
+            for r in rows:
+                r.can_moderate = user is not None and (
+                    user.role >= UserTypes.admin or group.created_by == user.id
+                )
+
             # Compute traction for each concept
             for r in rows:
                 r.similarity = float((r.up_votes or 0) + (r.supports or 0))
@@ -227,6 +235,8 @@ class GroupPageState(ReckoningsPageState):
                         r.created_at,
                     )
                 )
+            # Creator-hidden concepts collapse and drop to the bottom.
+            rows.sort(key=lambda r: (r.hidden_by_convener is True))
             self.reckonings = rows
 
     @rx.event
@@ -438,15 +448,35 @@ class GroupPageState(ReckoningsPageState):
                 session.add(auto_vote)
                 session.commit()
 
-        # Capture PostHog event
-        from rhiz.utils.telemetry import GROUP_ANSWER_SUBMITTED, capture
+        # Capture PostHog events: the group answer is also a concept
+        # submission (client request: concept_submitted with the concept id,
+        # fired from the server once saved).
+        from rhiz.utils.telemetry import (
+            CONCEPT_SUBMITTED,
+            GROUP_ANSWER_SUBMITTED,
+            capture,
+        )
 
+        props = self.ph_session_props()
         capture(
             GROUP_ANSWER_SUBMITTED,
-            distinct_id=f"user-{self.user.id}",
+            distinct_id=props.pop("distinct_id", f"user-{self.user.id}"),
+            group_id=self.group_id_val,
             group_slug=self.group_slug,
+            concept_id=new_concept.id,
             content_length=len(self.submission_content),
             has_matches=has_matches,
+            **props,
+        )
+        props = self.ph_session_props()
+        capture(
+            CONCEPT_SUBMITTED,
+            distinct_id=props.pop("distinct_id", f"user-{self.user.id}"),
+            concept_id=new_concept.id,
+            group_id=self.group_id_val,
+            surface="group",
+            content_length=len(self.submission_content),
+            **props,
         )
 
         # Clear the submission box and reload the concept feed

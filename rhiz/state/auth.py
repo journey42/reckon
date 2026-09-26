@@ -185,17 +185,24 @@ class AuthState(AppState):
                 signup_group=signup_group_slug or None,
             )
 
+            # Identify in PostHog client-side right after signup so the
+            # first session joins the tester's later activity (client
+            # request #2: identify must fire at signup, not only at login).
+            identify_script = rx.call_script(
+                f"if(window.posthog)posthog.identify('user-{new_user.id}')"
+            )
+
             if not group_origin:
                 # Normal signup
                 if auto_signup:
                     # Auto-enabled: log them in and send to home (or group)
                     self.start_session(new_user)
                     target = safe_next_path(nxt) or "/"
-                    return rx.redirect(target)
+                    return [identify_script, rx.redirect(target)]
                 # Manual approval: show pending page. No session is issued -
                 # the account is not enabled yet.
                 self.user = CurrentUser.from_user(new_user)
-                return rx.redirect("/signup_successful")
+                return [identify_script, rx.redirect("/signup_successful")]
 
             # Group-origin signup
             if auto_signup:
@@ -207,7 +214,7 @@ class AuthState(AppState):
                 session.add(new_user)
                 session.commit()
                 self.start_session(new_user)
-                return rx.redirect(safe_next_path(nxt) or "/")
+                return [identify_script, rx.redirect(safe_next_path(nxt) or "/")]
 
             # Auto-signup is off: email a verification link that re-enables
             # the account and returns the user to the group after login.

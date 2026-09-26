@@ -747,6 +747,30 @@ class AppState(rx.State):
             return f"user-{self.user.id}"
         return ""
 
+    # PostHog browser session id, mirrored into a first-party cookie by
+    # assets/posthog.js so server-side events can carry $session_id and
+    # join the same session replay as browser activity.
+    posthog_session_id: str = rx.Cookie(
+        "",
+        name="rhiz_ph_sid",
+        path="/",
+        max_age=30 * 60,
+        same_site="lax",
+        secure=_is_secure_cookie(),
+    )
+
+    def ph_session_props(self) -> dict:
+        """Standard props for server-side captures from a state handler.
+
+        Carries the PostHog distinct_id and browser $session_id so events
+        join the same person and session replay as the client-side ones.
+        """
+        props = {}
+        if self.user:
+            props["distinct_id"] = f"user-{self.user.id}"
+            props["$session_id"] = self.posthog_session_id or None
+        return props
+
     @rx.var(auto_deps=False, deps=["user"])
     def user_can_manage_groups(self) -> bool:
         """True if the current user may create/manage groups (role or per-user flag).

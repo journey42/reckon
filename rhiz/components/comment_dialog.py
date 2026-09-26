@@ -92,6 +92,26 @@ class CommentDialogState(AppState):
                 session.add(comment)
                 session.commit()
                 self.show = False
+
+                # Telemetry: comment posted with its stance (client request).
+                from rhiz.utils.telemetry import COMMENT_POSTED, capture
+
+                stance = {
+                    ReckoningTypes.support: "support",
+                    ReckoningTypes.detract: "opposition",
+                    ReckoningTypes.point_of_order: "point_of_order",
+                }.get(self.type, str(self.type))
+                props = self.ph_session_props()
+                capture(
+                    COMMENT_POSTED,
+                    distinct_id=props.pop("distinct_id", f"user-{self.user.id}"),
+                    comment_id=comment.id,
+                    parent_concept_id=self.pid,
+                    stance=stance,
+                    group_id=parent_group_id,
+                    content_length=len(self.content),
+                    **props,
+                )
         # Reload the current page so the new comment appears.
         self.save_scroll_position()
         return rx.redirect(self.router.url.path or "/")

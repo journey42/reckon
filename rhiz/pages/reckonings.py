@@ -259,6 +259,19 @@ class ReckoningsPageState(AppState):
         self.loaded_count = 0
         self.has_more = True
         self._load_window(append=False)
+        # Telemetry: a concept feed was (re)loaded — "concept_refreshed"
+        # (client request #4, "ideally"). Includes the page path so the
+        # funnel (home → compare → comments) is visible in PostHog.
+        if self.logged_in:
+            from rhiz.utils.telemetry import CONCEPT_REFRESHED, capture
+
+            props = self.ph_session_props()
+            capture(
+                CONCEPT_REFRESHED,
+                distinct_id=props.pop("distinct_id", None),
+                path=self.router.url.path or "/",
+                **props,
+            )
 
     def _append_next_window(self):
         """Append the next window; triggered by the infinite-scroll sentinel."""
@@ -350,6 +363,29 @@ class ReckoningsPageState(AppState):
     @rx.event
     def unhide_comment(self, cid: int):
         """Group convener: restore a hidden comment."""
+        from rhiz.utils.moderation import unhide_comment
+
+        if not self.logged_in:
+            return
+        with rx.session() as session:
+            unhide_comment(session, cid, self.user)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        """Group creator: hide a concept (collapses to a note, drops to the
+        bottom of the group feed; record kept)."""
+        from rhiz.utils.moderation import hide_comment
+
+        if not self.logged_in:
+            return
+        with rx.session() as session:
+            hide_comment(session, cid, self.user)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        """Group creator: restore a hidden concept."""
         from rhiz.utils.moderation import unhide_comment
 
         if not self.logged_in:
@@ -1367,6 +1403,17 @@ class CommentsPageState(ReckoningsPageState):
                 self.parent.compute_tallies(
                     self.user.id if self.user else None, session=session
                 )
+                # Moderation flag for the parent concept card (group creator).
+                if self.parent.group_id is not None:
+                    g = session.get(Group, self.parent.group_id)
+                    self.parent.can_moderate = (
+                        self.user is not None
+                        and g is not None
+                        and (
+                            g.created_by == self.user.id
+                            or self.user.role >= UserTypes.admin
+                        )
+                    )
 
                 # Recursively fetch children with conditions applied
                 max_depth = 3
@@ -1450,11 +1497,24 @@ def parent_reckoning(state):
                     rx.image(src="/poo_comment.svg", **comment_badge_style),
                 ),
             ),
-            SafeMarkdown.create(
-                content=state.parent.content,
-                class_name="prose",
-                max_width="100%",
-                **read_only_text_style,
+            rx.cond(
+                state.parent.hidden_by_convener,
+                rx.box(
+                    rx.text(
+                        "Hidden by group creator",
+                        size="2",
+                        weight="medium",
+                        color_scheme="gray",
+                        style={"fontStyle": "italic"},
+                    ),
+                    padding="14px 8px 12px 44px",
+                ),
+                SafeMarkdown.create(
+                    content=state.parent.content,
+                    class_name="prose",
+                    max_width="100%",
+                    **read_only_text_style,
+                ),
             ),
             rx.flex(
                 rx.cond(
@@ -1489,10 +1549,26 @@ def parent_reckoning(state):
                                 ),
                                 rx.fragment(),
                             ),
+                            # Graduate-to-main-site button: disabled for now
+                            # (client: "we can just skip that for right now").
+                            # Group creator: hide/unhide this concept.
                             rx.cond(
-                                getattr(state, "is_group_owner", False),
-                                graduate_button(
-                                    on_click=state.graduate_concept(state.parent.id),
+                                state.parent.can_moderate
+                                & ~state.parent.hidden_by_convener,
+                                rx.button(
+                                    "Hide",
+                                    **popover_button_style,
+                                    on_click=state.hide_concept(state.parent.id),
+                                ),
+                                rx.fragment(),
+                            ),
+                            rx.cond(
+                                state.parent.can_moderate
+                                & state.parent.hidden_by_convener,
+                                rx.button(
+                                    "Unhide",
+                                    **popover_button_style,
+                                    on_click=state.unhide_concept(state.parent.id),
                                 ),
                                 rx.fragment(),
                             ),
@@ -1866,7 +1942,7 @@ def render_comment(state, c: Reckoning):
                         c.hidden_by_convener,
                         rx.box(
                             rx.text(
-                                "Hidden by group convener",
+                                "Hidden by group creator",
                                 size="2",
                                 weight="medium",
                                 color_scheme="gray",
@@ -2050,26 +2126,58 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
         class_name=rx.cond(should_pulse, "support-pulse", ""),
     )
 
+    # Group-creator hiding: a hidden concept collapses to a one-line
+    # "Hidden by group creator" note and sorts to the bottom of the group
+    # feed; the record is kept and the creator can unhide it.
+    hidden_body = rx.box(
+        rx.text(
+            "Hidden by group creator",
+            size="2",
+            weight="medium",
+            color_scheme="gray",
+            style={"fontStyle": "italic"},
+        ),
+        rx.flex(
+            rx.button(
+                "Unhide",
+                size="1",
+                variant="soft",
+                color_scheme="gray",
+                on_click=state.unhide_concept(item_id),
+            ),
+            direction="row",
+            justify_content="flex-end",
+            width="100%",
+        ),
+        padding="14px 8px 8px 8px",
+        width="100%",
+    )
+    visible_body = rx.box(
+        SafeMarkdown.create(
+            content=content,
+            class_name="prose",
+            max_width="100%",
+            **read_only_text_style,
+        ),
+        rx.flex(
+            rx.text(elapsed_time, size="1", flex_grow="1"),
+            **vote_count_and_timestamp_style,
+            direction="row",
+            align="end",
+        ),
+        position="relative",
+        cursor="pointer",
+        # The whole concept is the link to its concepts page — the black
+        # view button was removed from the action row (declutter). Full
+        # commenting (support/poo/detract) lives on the concepts page.
+        on_click=state.view_comments(item_id),
+    )
+
     return rx.grid(
-        rx.box(
-            SafeMarkdown.create(
-                content=content,
-                class_name="prose",
-                max_width="100%",
-                **read_only_text_style,
-            ),
-            rx.flex(
-                rx.text(elapsed_time, size="1", flex_grow="1"),
-                **vote_count_and_timestamp_style,
-                direction="row",
-                align="end",
-            ),
-            position="relative",
-            cursor="pointer",
-            # The whole concept is the link to its concepts page — the black
-            # view button was removed from the action row (declutter). Full
-            # commenting (support/poo/detract) lives on the concepts page.
-            on_click=state.view_comments(item_id),
+        rx.cond(
+            c.hidden_by_convener,
+            hidden_body,
+            visible_body,
         ),
         # Actions row. Wrapping flex (fixed grids clipped buttons off-page on
         # phones). Layout per client: comment icons left, compare (cycle)
@@ -2189,6 +2297,19 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                     flex_shrink="0",
                 ),
                 None,
+            ),
+            # Group-creator tool: hide this concept (collapses to a note and
+            # drops to the bottom of the group feed).
+            rx.cond(
+                c.can_moderate & ~c.hidden_by_convener,
+                rx.button(
+                    "Hide",
+                    size="1",
+                    variant="soft",
+                    color_scheme="gray",
+                    on_click=state.hide_concept(item_id),
+                ),
+                rx.fragment(),
             ),
             direction="row",
             wrap="wrap",
