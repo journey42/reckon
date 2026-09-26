@@ -58,6 +58,22 @@ class HomePageState(AppState):
         if plain_text:
             insert_text_with_embedding(plain_text, concept.id)
 
+        # Telemetry: a concept was actually saved (client request: a real
+        # submission event with the concept id, fired from the server).
+        from rhiz.utils.telemetry import CONCEPT_SUBMITTED, capture
+
+        props = self.ph_session_props()
+        props.update(
+            concept_id=concept.id,
+            content_length=len(plain_text),
+            has_media=has_media,
+        )
+        capture(
+            CONCEPT_SUBMITTED,
+            distinct_id=props.pop("distinct_id", f"user-{self.user.id}"),
+            **props,
+        )
+
         yield AppState.set_support_nudge(concept.id, has_matches=False)
         self.concept = ""
         self._db_updated = True

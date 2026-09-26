@@ -5,6 +5,7 @@ import reflex as rx
 from typing import Optional, List
 from sqlmodel import Field, Relationship, select, SQLModel
 from sqlalchemy import text, UniqueConstraint
+from typing import ClassVar
 from datetime import datetime
 from dataclasses import dataclass
 from rhiz.utils.time import calculate_elapsed_time
@@ -111,6 +112,13 @@ class Reckoning(Model, table=True):
     )
     is_graduated: bool = Field(default=False)
 
+    # Convener comment-hiding: the group convener can hide a comment without
+    # deleting it — the record stays, non-conveners see "Hidden by group
+    # convener" instead of the content.
+    hidden_by_convener: bool = Field(default=False)
+    hidden_by: Optional[int] = Field(default=None)
+    hidden_at: Optional[datetime] = Field(default=None)
+
     # textembedding: Optional[TextEmbedding] = Relationship(back_populates="reckoning")
 
     user_id: int = Field(foreign_key="user.id", nullable=True, index=True)
@@ -153,6 +161,10 @@ class Reckoning(Model, table=True):
     parent_type: int = 0
     parent_id: int = 0
     parent_user_vote_history: int = ReckoningTypes.no_vote
+    # temp variable used in rendering: may the current user moderate this row
+    # (group convener or admin)? Set at load time, never meaningful in the DB
+    # (mirrors the `depth` render-var pattern).
+    can_moderate: bool = Field(default=False)
     parent_up_votes: int = 0
     parent_down_votes: int = 0
     parent_supports: int = 0
@@ -734,6 +746,30 @@ class AppState(rx.State):
         if self.user:
             return f"user-{self.user.id}"
         return ""
+
+    # PostHog browser session id, mirrored into a first-party cookie by
+    # assets/posthog.js so server-side events can carry $session_id and
+    # join the same session replay as browser activity.
+    posthog_session_id: str = rx.Cookie(
+        "",
+        name="rhiz_ph_sid",
+        path="/",
+        max_age=30 * 60,
+        same_site="lax",
+        secure=_is_secure_cookie(),
+    )
+
+    def ph_session_props(self) -> dict:
+        """Standard props for server-side captures from a state handler.
+
+        Carries the PostHog distinct_id and browser $session_id so events
+        join the same person and session replay as the client-side ones.
+        """
+        props = {}
+        if self.user:
+            props["distinct_id"] = f"user-{self.user.id}"
+            props["$session_id"] = self.posthog_session_id or None
+        return props
 
     @rx.var(auto_deps=False, deps=["user"])
     def user_can_manage_groups(self) -> bool:

@@ -47,5 +47,7 @@ jobs:
           skip_app_build: true
           skip_api_build: true
           is_static_export: true
-          production_branch: master
+          # Staging canonical hostname serves feed-declutter (client: the
+          # master-built default URL confused users during review).
+          production_branch: feed-declutter
           app_artifact_location: swa-build

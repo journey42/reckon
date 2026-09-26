@@ -176,21 +176,21 @@ class AuthState(AppState):
                     join_group(session, new_user.id, group.id)
 
             # Capture PostHog event for signup.
-            try:
-                from rhiz.rhiz import posthog
+            from rhiz.utils.telemetry import SIGNUP, capture
 
-                if posthog:
-                    posthog.capture(
-                        "signup",
-                        distinct_id=f"user-{new_user.id}",
-                        properties={
-                            "event_type": (
-                                "group_origin" if group_origin else "normal_signup"
-                            ),
-                        },
-                    )
-            except Exception:
-                pass  # PostHog failures should not block signup.
+            capture(
+                SIGNUP,
+                distinct_id=f"user-{new_user.id}",
+                event_type=("group_origin" if group_origin else "normal_signup"),
+                signup_group=signup_group_slug or None,
+            )
+
+            # Identify in PostHog client-side right after signup so the
+            # first session joins the tester's later activity (client
+            # request #2: identify must fire at signup, not only at login).
+            identify_script = rx.call_script(
+                f"if(window.posthog)posthog.identify('user-{new_user.id}')"
+            )
 
             if not group_origin:
                 # Normal signup
@@ -198,11 +198,11 @@ class AuthState(AppState):
                     # Auto-enabled: log them in and send to home (or group)
                     self.start_session(new_user)
                     target = safe_next_path(nxt) or "/"
-                    return rx.redirect(target)
+                    return [identify_script, rx.redirect(target)]
                 # Manual approval: show pending page. No session is issued -
                 # the account is not enabled yet.
                 self.user = CurrentUser.from_user(new_user)
-                return rx.redirect("/signup_successful")
+                return [identify_script, rx.redirect("/signup_successful")]
 
             # Group-origin signup
             if auto_signup:
@@ -214,7 +214,7 @@ class AuthState(AppState):
                 session.add(new_user)
                 session.commit()
                 self.start_session(new_user)
-                return rx.redirect(safe_next_path(nxt) or "/")
+                return [identify_script, rx.redirect(safe_next_path(nxt) or "/")]
 
             # Auto-signup is off: email a verification link that re-enables
             # the account and returns the user to the group after login.
@@ -449,16 +449,13 @@ class AuthState(AppState):
                 session.commit()
 
                 # Identify user in PostHog for cross-device tracking
-                try:
-                    from rhiz.rhiz import posthog
-                    if posthog:
-                        posthog.capture(
-                            "login",
-                            distinct_id=f"user-{self.user.id}",
-                            properties={"username": self.user.username},
-                        )
-                except Exception:
-                    pass
+                from rhiz.utils.telemetry import LOGIN, capture
+
+                capture(
+                    LOGIN,
+                    distinct_id=f"user-{self.user.id}",
+                    username=self.user.username,
+                )
 
                 # Call posthog.identify on the client side
                 return [

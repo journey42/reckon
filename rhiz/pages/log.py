@@ -4,7 +4,7 @@ import reflex as rx
 from sqlmodel import select
 from zoneinfo import ZoneInfo
 from typing import Any, List
-from rhiz.state.base import Log, AppState
+from rhiz.state.base import Log, AppState, UserTypes
 from rhiz.styles import button_style, page_params, rhiz_data_editor_theme
 from rhiz.layouts import profile_layout
 from dataclasses import dataclass
@@ -80,10 +80,12 @@ class LogEditorState(AppState):
     ]
 
     def on_load(self):
-        """Load the logs editor."""
+        """Load the logs editor (admin only — site-wide audit data)."""
         result = self.check_login()
         if result:
             return result
+        if not (self.user and self.user.role >= UserTypes.admin):
+            return rx.redirect("/")
         self.logs = get_logs()
 
     def refresh(self):
@@ -94,13 +96,17 @@ class LogEditorState(AppState):
         """Resize a column in the logs editor."""
         self.cols[col["pos"]]["width"] = width
 
+    def _require_admin(self) -> bool:
+        return bool(self.user and self.user.role >= UserTypes.admin)
+
     def on_cell_edited(self, pos, val) -> str:
         """Edit a cell in the logs editor."""
         pass
 
     def on_delete(self, selection):
-        """Delete the selected logs."""
-
+        """Delete the selected logs (admin only)."""
+        if not self._require_admin():
+            return
         if selection["current"] is None:
             return
 

@@ -4,7 +4,7 @@ import reflex as rx
 from sqlmodel import select
 from typing import Any, List
 from zoneinfo import ZoneInfo
-from rhiz.state.base import Feedback, AppState
+from rhiz.state.base import Feedback, AppState, UserTypes
 from rhiz.styles import button_style, page_params, rhiz_data_editor_theme
 from rhiz.layouts import profile_layout
 from dataclasses import dataclass
@@ -80,8 +80,12 @@ class FeedbackEditorState(AppState):
     ]
 
     def on_load(self):
-        """Load the feedback editor."""
-        yield self.check_login()
+        """Load the feedback editor (admin only — all users' feedback)."""
+        result = self.check_login()
+        if result:
+            return result
+        if not (self.user and self.user.role >= UserTypes.admin):
+            return rx.redirect("/")
         self.feedback = get_feedback()
 
     def refresh(self):
@@ -96,7 +100,9 @@ class FeedbackEditorState(AppState):
         pass
 
     def on_delete(self, selection):
-        """Delete feedback from the feedback editor."""
+        """Delete feedback from the feedback editor (admin only)."""
+        if not self._require_admin():
+            return
         if selection["current"] is None:
             return
 

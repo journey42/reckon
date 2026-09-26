@@ -71,6 +71,21 @@ class FeedbackDialogState(AppState):
             session.add(feedback)
             # session.expire_on_commit = False
             session.commit()
+
+        # Telemetry: content flagged (client request). Only for
+        # reckoning-scoped feedback (the report path), not general feedback.
+        if self.reckoning_id:
+            from rhiz.utils.telemetry import CONTENT_FLAGGED, capture
+
+            props = self.ph_session_props()
+            capture(
+                CONTENT_FLAGGED,
+                distinct_id=props.pop("distinct_id", f"user-{self.user.id}"),
+                target_reckoning_id=self.reckoning_id,
+                flag_type=self.type,
+                content_length=len(self.content),
+                **props,
+            )
         self.show = not (self.show)
 
 
@@ -81,13 +96,13 @@ def feedback_dialog(options: List[str], *args, **kwargs):
             rx.dialog.title(
                 rx.grid(
                     rx.heading("Feedback", size="5"),
-                    rx.spacer(),
                     rx.dialog.close(
                         close_button(
                             **dialog_button_style, on_click=FeedbackDialogState.visible
                         ),
+                        justify_self="end",
                     ),
-                    grid_template_columns="3fr 5fr 1fr",
+                    grid_template_columns="1fr auto",
                 ),
             ),
             rx.form(

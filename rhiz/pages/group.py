@@ -24,7 +24,7 @@ from rhiz.pages.reckonings import (
     ReckoningsPageState,
     page,
 )
-from rhiz.state.base import Reckoning, ReckoningTypes
+from rhiz.state.base import Reckoning, ReckoningTypes, UserTypes
 from rhiz.components import container, navbar
 from rhiz.components.how_it_works_dialog import HowItWorksDialogState
 from rhiz.components.tiptap_editor import TiptapEditor
@@ -173,6 +173,15 @@ class GroupPageState(ReckoningsPageState):
                 rows, self.user.id if self.user else None, session
             )
 
+            # Per-row moderation flag: the group creator (or an admin) may
+            # hide/unhide concepts here. NOTE: `group` is on_load's local —
+            # use self.is_group_owner (computed there) to avoid a NameError
+            # that killed this handler for non-admin users (the client's
+            # "errors when accessing groups" report).
+            user = self.user
+            for r in rows:
+                r.can_moderate = user is not None and self.is_group_owner
+
             # Compute traction for each concept
             for r in rows:
                 r.similarity = float((r.up_votes or 0) + (r.supports or 0))
@@ -227,7 +236,35 @@ class GroupPageState(ReckoningsPageState):
                         r.created_at,
                     )
                 )
+            # Creator-hidden concepts collapse and drop to the bottom.
+            rows.sort(key=lambda r: (r.hidden_by_convener is True))
             self.reckonings = rows
+
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        """Group convener: hide a comment, then reload the group feed."""
+        self._hide_comment(cid)
+        return self._load_group_concepts()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        """Group convener: unhide a comment, then reload the group feed."""
+        self._unhide_comment(cid)
+        return self._load_group_concepts()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        """Group creator: hide a concept, then reload the group feed."""
+        self._hide_comment(cid)
+        return self._load_group_concepts()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        """Group creator: unhide a concept, then reload the group feed."""
+        self._unhide_comment(cid)
+        return self._load_group_concepts()
 
     @rx.event
     def set_submission_content(self, value: str) -> None:
@@ -438,22 +475,36 @@ class GroupPageState(ReckoningsPageState):
                 session.add(auto_vote)
                 session.commit()
 
-        # Capture PostHog event
-        try:
-            from rhiz.rhiz import posthog
+        # Capture PostHog events: the group answer is also a concept
+        # submission (client request: concept_submitted with the concept id,
+        # fired from the server once saved).
+        from rhiz.utils.telemetry import (
+            CONCEPT_SUBMITTED,
+            GROUP_ANSWER_SUBMITTED,
+            capture,
+        )
 
-            if posthog:
-                posthog.capture(
-                    "group_answer_submitted",
-                    distinct_id=f"user-{self.user.id}",
-                    properties={
-                        "group_slug": self.group_slug,
-                        "content_length": len(self.submission_content),
-                        "has_matches": has_matches,
-                    },
-                )
-        except Exception:
-            pass
+        props = self.ph_session_props()
+        capture(
+            GROUP_ANSWER_SUBMITTED,
+            distinct_id=props.pop("distinct_id", f"user-{self.user.id}"),
+            group_id=self.group_id_val,
+            group_slug=self.group_slug,
+            concept_id=new_concept.id,
+            content_length=len(self.submission_content),
+            has_matches=has_matches,
+            **props,
+        )
+        props = self.ph_session_props()
+        capture(
+            CONCEPT_SUBMITTED,
+            distinct_id=props.pop("distinct_id", f"user-{self.user.id}"),
+            concept_id=new_concept.id,
+            group_id=self.group_id_val,
+            surface="group",
+            content_length=len(self.submission_content),
+            **props,
+        )
 
         # Clear the submission box and reload the concept feed
         self.submission_content = ""

@@ -4,6 +4,8 @@ import os
 import reflex as rx
 from posthog import Posthog
 
+from rhiz.utils.unfurl import make_unfurl_app
+
 
 def _init_posthog():
     """Initialise PostHog only when explicitly configured."""
@@ -26,7 +28,27 @@ head_scripts = [
 ]
 
 app = rx.App(
-    head_components=head_scripts,
+    api_transformer=make_unfurl_app(),
+    head_components=[
+        # Social unfurl defaults (Discord/X/Slack). Group pages override the
+        # description dynamically via their own head_components.
+        rx.html('<meta property="og:site_name" content="Rhiz">'),
+        rx.html('<meta property="og:title" content="Rhiz — Speak Together">'),
+        rx.html(
+            '<meta property="og:description" content="Rhiz is a platform for '
+            'structured group discussion: propose concepts, support the best '
+            'ones, and build understanding together.">'
+        ),
+        rx.html('<meta property="og:type" content="website">'),
+        rx.html('<meta property="og:image" content="/logo.png">'),
+        rx.html('<meta name="twitter:card" content="summary">'),
+        rx.html(
+            '<meta name="description" content="Rhiz is a platform for '
+            'structured group discussion: propose concepts, support the best '
+            'ones, and build understanding together.">'
+        ),
+        *head_scripts,
+    ],
 )
 
 import rhiz.pages  # noqa: F401,E402 — registers @rx.page decorated routes

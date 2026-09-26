@@ -7,7 +7,7 @@ from typing import Optional
 from sqlmodel import select, delete, func
 from sqlalchemy.orm import aliased, noload
 from sqlalchemy import and_ as _and, or_ as _or
-from rhiz.state.base import AppState, Reckoning, ReckoningTypes
+from rhiz.state.base import AppState, Reckoning, ReckoningTypes, UserTypes
 from rhiz.styles import (
     vote_count_and_timestamp_style,
     comment_badge_style,
@@ -259,6 +259,19 @@ class ReckoningsPageState(AppState):
         self.loaded_count = 0
         self.has_more = True
         self._load_window(append=False)
+        # Telemetry: a concept feed was (re)loaded — "concept_refreshed"
+        # (client request #4, "ideally"). Includes the page path so the
+        # funnel (home → compare → comments) is visible in PostHog.
+        if self.logged_in:
+            from rhiz.utils.telemetry import CONCEPT_REFRESHED, capture
+
+            props = self.ph_session_props()
+            capture(
+                CONCEPT_REFRESHED,
+                distinct_id=props.pop("distinct_id", None),
+                path=self.router.url.path or "/",
+                **props,
+            )
 
     def _append_next_window(self):
         """Append the next window; triggered by the infinite-scroll sentinel."""
@@ -336,6 +349,30 @@ class ReckoningsPageState(AppState):
         """Graduate a concept to the main site. No-op on non-group pages."""
         pass
 
+    # NOTE: hide/unhide are PRIVATE here on purpose. Reflex dispatches a
+    # PUBLIC event handler to the substate that *defines* it — these were
+    # public, so clicking Hide ran on the base substate whose
+    # `get_reckonings` doesn't exist (AttributeError → "Contact the website
+    # administrator" toast). Each page subclass (Comments, Group) defines
+    # thin public wrappers that call these helpers and refresh its own list.
+    def _hide_comment(self, cid: int):
+        """Group convener: hide a comment/concept (record kept, content masked)."""
+        from rhiz.utils.moderation import hide_comment
+
+        if not self.logged_in:
+            return
+        with rx.session() as session:
+            hide_comment(session, cid, self.user)
+
+    def _unhide_comment(self, cid: int):
+        """Group convener: restore a hidden comment/concept."""
+        from rhiz.utils.moderation import unhide_comment
+
+        if not self.logged_in:
+            return
+        with rx.session() as session:
+            unhide_comment(session, cid, self.user)
+
     def compare_concepts(self, cid):
         result = self._require_login_redirect()
         if result:
@@ -411,25 +448,16 @@ class ReckoningsPageState(AppState):
                 self.dismiss_support_nudge()
 
             # Capture PostHog event for vote cast.
-            try:
-                from rhiz.rhiz import posthog
+            from rhiz.utils.telemetry import VOTE_CAST, capture
 
-                if posthog and self.user:
-                    posthog.capture(
-                        "vote_cast",
-                        distinct_id=f"user-{self.user.id}",
-                        properties={
-                            "event_type": "vote",
-                            "vote_type": (
-                                "upvote"
-                                if type == ReckoningTypes.up_vote
-                                else "downvote"
-                            ),
-                            "target_reckoning_id": cid,
-                        },
-                    )
-            except Exception:
-                pass  # PostHog failures should not block voting.
+            capture(
+                VOTE_CAST,
+                distinct_id=f"user-{self.user.id}" if self.user else None,
+                vote_type=(
+                    "upvote" if type == ReckoningTypes.up_vote else "downvote"
+                ),
+                target_reckoning_id=cid,
+            )
 
             yield self.save_scroll_position()
             current_path = self.router.url.path or "/"
@@ -501,6 +529,29 @@ class YourDraftsPageState(ReckoningsPageState):
             return result
         self.get_reckonings()
         yield self.scroll_to_saved_position()
+
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
 
     def get_reckonings(self):
         self._load_first_window()
@@ -590,6 +641,29 @@ class NewConceptsPageState(ReckoningsPageState):
             return result
         self.get_reckonings()
         yield self.scroll_to_saved_position()
+
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
 
     def get_reckonings(self):
         self._load_first_window()
@@ -709,6 +783,29 @@ class TrendingConceptsByUpvotesPageState(ReckoningsPageState):
             return result
         self.get_reckonings()
         yield self.scroll_to_saved_position()
+
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
 
     def get_reckonings(self):
         self._load_first_window()
@@ -848,6 +945,29 @@ class TrendingConceptsBySupportPageState(ReckoningsPageState):
         self.get_reckonings()
         yield self.scroll_to_saved_position()
 
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+
     def get_reckonings(self):
         self._load_first_window()
 
@@ -985,6 +1105,29 @@ class YourConceptsPageState(ReckoningsPageState):
 
     """The state for the your reckonings page."""
 
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+
     def get_reckonings(self):
         self._load_first_window()
 
@@ -1073,6 +1216,29 @@ class ComparePageState(ReckoningsPageState):
     @rx.var
     def reckoning_id(self) -> str:
         return self.get_path_param("rid", "no rid")
+
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
 
     def get_reckonings(self):
         """Get reckonings of type concept for this user from the database."""
@@ -1203,6 +1369,29 @@ class ConceptPageState(ReckoningsPageState):
             return result
         self.get_reckonings()
 
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+
     def get_reckonings(self):
         """Get reckoning with rid of cid from the database."""
         with rx.session() as session:
@@ -1324,12 +1513,61 @@ class CommentsPageState(ReckoningsPageState):
                 "4px" if depth == 0 else (str(depth * 20) + "px")
             )  # Set the depth for each child
             child.compute_tallies(self.user.id if self.user else None, session=session)
+            # Per-row moderation flag: the comment's group convener (or an
+            # admin) may hide/unhide it. Plain Python at load time so the
+            # template can branch on a simple attribute.
+            child.can_moderate = (
+                self.user is not None
+                and child.group_id is not None
+                and (
+                    session.get(Group, child.group_id) is not None
+                    and (
+                        session.get(Group, child.group_id).created_by
+                        == self.user.id
+                        or self.user.role >= UserTypes.admin
+                    )
+                )
+            )
             self.reckonings.append(child)
             if max_depth == -1 or depth < max_depth - 1:
                 self.fetch_children(session, child.id, depth + 1, max_depth)
 
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        """Group convener: hide a comment, then refresh the comment list."""
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        """Group convener: unhide a comment, then refresh the comment list."""
+        self._unhide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
     def get_reckonings(self):
         """Get reckonings for this parent reckoning from the database, recursively fetching children."""
+        # Telemetry: concept feed (re)loaded — "concept_refreshed".
+        if self.logged_in:
+            from rhiz.utils.telemetry import CONCEPT_REFRESHED, capture
+
+            props = self.ph_session_props()
+            capture(
+                CONCEPT_REFRESHED,
+                distinct_id=props.pop("distinct_id", None),
+                path=self.router.url.path or "/",
+                **props,
+            )
         self.reckonings = []
         with rx.session() as session:
             self.parent = session.exec(
@@ -1339,6 +1577,17 @@ class CommentsPageState(ReckoningsPageState):
                 self.parent.compute_tallies(
                     self.user.id if self.user else None, session=session
                 )
+                # Moderation flag for the parent concept card (group creator).
+                if self.parent.group_id is not None:
+                    g = session.get(Group, self.parent.group_id)
+                    self.parent.can_moderate = (
+                        self.user is not None
+                        and g is not None
+                        and (
+                            g.created_by == self.user.id
+                            or self.user.role >= UserTypes.admin
+                        )
+                    )
 
                 # Recursively fetch children with conditions applied
                 max_depth = 3
@@ -1422,11 +1671,24 @@ def parent_reckoning(state):
                     rx.image(src="/poo_comment.svg", **comment_badge_style),
                 ),
             ),
-            SafeMarkdown.create(
-                content=state.parent.content,
-                class_name="prose",
-                max_width="100%",
-                **read_only_text_style,
+            rx.cond(
+                state.parent.hidden_by_convener,
+                rx.box(
+                    rx.text(
+                        "Hidden by group creator",
+                        size="2",
+                        weight="medium",
+                        color_scheme="gray",
+                        style={"fontStyle": "italic"},
+                    ),
+                    padding="14px 8px 12px 44px",
+                ),
+                SafeMarkdown.create(
+                    content=state.parent.content,
+                    class_name="prose",
+                    max_width="100%",
+                    **read_only_text_style,
+                ),
             ),
             rx.flex(
                 rx.cond(
@@ -1461,10 +1723,26 @@ def parent_reckoning(state):
                                 ),
                                 rx.fragment(),
                             ),
+                            # Graduate-to-main-site button: disabled for now
+                            # (client: "we can just skip that for right now").
+                            # Group creator: hide/unhide this concept.
                             rx.cond(
-                                getattr(state, "is_group_owner", False),
-                                graduate_button(
-                                    on_click=state.graduate_concept(state.parent.id),
+                                state.parent.can_moderate
+                                & ~state.parent.hidden_by_convener,
+                                rx.button(
+                                    "Hide",
+                                    **popover_button_style,
+                                    on_click=state.hide_concept(state.parent.id),
+                                ),
+                                rx.fragment(),
+                            ),
+                            rx.cond(
+                                state.parent.can_moderate
+                                & state.parent.hidden_by_convener,
+                                rx.button(
+                                    "Unhide",
+                                    **popover_button_style,
+                                    on_click=state.unhide_concept(state.parent.id),
                                 ),
                                 rx.fragment(),
                             ),
@@ -1596,14 +1874,27 @@ def search_navbar(state):
 
 
 def your_concepts_navbar(state):
-    """The your concepts component of the navbar."""
-    return rx.grid(
+    """The your concepts component of the navbar.
+
+    A wrapping flex row: the search input grows to fill, the drafts button
+    sits beside it on the same line. (A grid with justify/align from
+    interior_grid_style collapsed to a single track — the input consumed
+    the full row and pushed the button below it.)
+    """
+    return rx.flex(
         rx.input(
-            on_change=state.set_search, placeholder="Search concepts", **input_style
+            on_change=state.set_search,
+            placeholder="Search concepts",
+            size="1",
+            flex_grow="1",
+            min_width="0",
         ),
         your_drafts_button(),
-        **interior_grid_style,
-        grid_template_columns="22fr 1fr",
+        direction="row",
+        wrap="nowrap",
+        align="center",
+        gap="8px",
+        width="100%",
         margin="8px 0 0 0",
     )
 
@@ -1821,11 +2112,24 @@ def render_comment(state, c: Reckoning):
                         ),
                         **comment_badge_style,
                     ),
-                    SafeMarkdown.create(
-                        content=c.content,
-                        class_name="prose",
-                        max_width="100%",
-                        **read_only_text_style,
+                    rx.cond(
+                        c.hidden_by_convener,
+                        rx.box(
+                            rx.text(
+                                "Hidden by group creator",
+                                size="2",
+                                weight="medium",
+                                color_scheme="gray",
+                                style={"fontStyle": "italic"},
+                            ),
+                            padding="14px 8px 12px 44px",
+                        ),
+                        SafeMarkdown.create(
+                            content=c.content,
+                            class_name="prose",
+                            max_width="100%",
+                            **read_only_text_style,
+                        ),
                     ),
                     rx.flex(
                         rx.text(c.elapsed_time, size="1", flex_grow="1"),
@@ -1835,7 +2139,7 @@ def render_comment(state, c: Reckoning):
                     ),
                     position="relative",
                 ),
-                rx.grid(
+                rx.flex(
                     rx.popover.root(
                         rx.popover.trigger(
                             more_button(),
@@ -1888,6 +2192,26 @@ def render_comment(state, c: Reckoning):
                                         on_click=state.delete_reckoning(c.id),
                                     ),
                                     disabled_delete_button(**popover_button_style),
+                                ),
+                                # Group convener: hide/unhide (record kept,
+                                # content masked for non-conveners).
+                                rx.cond(
+                                    c.can_moderate & ~c.hidden_by_convener,
+                                    rx.button(
+                                        "Hide",
+                                        **popover_button_style,
+                                        on_click=state.hide_comment(c.id),
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                rx.cond(
+                                    c.can_moderate & c.hidden_by_convener,
+                                    rx.button(
+                                        "Unhide",
+                                        **popover_button_style,
+                                        on_click=state.unhide_comment(c.id),
+                                    ),
+                                    rx.fragment(),
                                 ),
                                 direction="row",
                                 spacing="3",
@@ -1944,10 +2268,11 @@ def render_comment(state, c: Reckoning):
                     gap="6px",
                     width="100%",
                 ),
-                **interior_grid_style,
-                position="relative",
+                grid_template_columns="1fr",
+                width="100%",
             ),
-            **interior_grid_style,
+            direction="column",
+            width="100%",
         ),
         **reckoning_grid_style,
         margin_left=c.depth,
@@ -1975,50 +2300,123 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
         class_name=rx.cond(should_pulse, "support-pulse", ""),
     )
 
-    return rx.grid(
-        rx.box(
-            SafeMarkdown.create(
-                content=content,
-                class_name="prose",
-                max_width="100%",
-                **read_only_text_style,
-            ),
-            rx.flex(
-                rx.text(elapsed_time, size="1", flex_grow="1"),
-                **vote_count_and_timestamp_style,
-                direction="row",
-                align="end",
-            ),
-            position="relative",
-            cursor="pointer",
-            # The concept itself is the comment button: tapping anywhere in the
-            # content opens the same support-comment dialog the (removed)
-            # comment button used to open.
-            on_click=state.new_comment(content, ReckoningTypes.support, item_id),
+    # Group-creator hiding: a hidden concept collapses to a one-line
+    # "Hidden by group creator" note and sorts to the bottom of the group
+    # feed; the record is kept and the creator can unhide it.
+    hidden_body = rx.box(
+        rx.text(
+            "Hidden by group creator",
+            size="2",
+            weight="medium",
+            color_scheme="gray",
+            style={"fontStyle": "italic"},
         ),
-        # Actions row. Was a fixed 17-track grid, which could not shrink below
-        # the button icons' widths — on phones (320-390px) the rightmost items
-        # (detract, feedback) were pushed off the page. A wrapping flex lets the
-        # groups flow onto extra lines instead; each button+count pair is its
-        # own flex so a wrap never separates a button from its tally.
-        # (...) menu removed from feed rows per client request — it now lives
-        # only on the concept detail page. The compare (cycle) button sits in
-        # the middle as a border between the comment icons and the vote icons.
         rx.flex(
-            rx.flex(
-                view_concept_button(
-                    on_click=state.view_comments(item_id),
-                ),
-                rx.text(total_comments),
-                direction="row",
-                align="center",
-                gap="2px",
-                flex_shrink="0",
+            rx.button(
+                "Unhide",
+                size="1",
+                variant="soft",
+                color_scheme="gray",
+                on_click=state.unhide_concept(item_id),
             ),
+            direction="row",
+            justify_content="flex-end",
+            width="100%",
+        ),
+        padding="14px 8px 8px 8px",
+        width="100%",
+    )
+    visible_body = rx.box(
+        SafeMarkdown.create(
+            content=content,
+            class_name="prose",
+            max_width="100%",
+            **read_only_text_style,
+        ),
+        rx.flex(
+            rx.text(elapsed_time, size="1", flex_grow="1"),
+            **vote_count_and_timestamp_style,
+            direction="row",
+            align="end",
+        ),
+        position="relative",
+        cursor="pointer",
+        # The whole concept is the link to its concepts page — the black
+        # view button was removed from the action row (declutter). Full
+        # commenting (support/poo/detract) lives on the concepts page.
+        on_click=state.view_comments(item_id),
+    )
+
+    return rx.grid(
+        rx.cond(
+            c.hidden_by_convener,
+            hidden_body,
+            visible_body,
+        ),
+        # Actions row. Wrapping flex (fixed grids clipped buttons off-page on
+        # phones). Layout per client: comment icons left, compare (cycle)
+        # centered as the border between comments and votes, votes right.
+        rx.flex(
             rx.cond(
                 (state.page_type == 5),
                 rx.text(c.similarity),
                 None,
+            ),
+            # Comment entry points. The support-comment button is a real,
+            # undimmed button again (the static greyed placeholder read as
+            # "disabled"); points-of-order and detract sit beside it.
+            rx.cond(
+                allow_comments,
+                rx.flex(
+                    support_comment_button(
+                        on_click=state.new_comment(
+                            content, ReckoningTypes.support, item_id
+                        )
+                    ),
+                    rx.text(c.supports),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
+                ),
+                None,
+            ),
+            rx.cond(
+                allow_comments,
+                rx.flex(
+                    poo_comment_button(
+                        on_click=state.new_comment(
+                            content, ReckoningTypes.point_of_order, item_id
+                        )
+                    ),
+                    rx.text(c.points_of_order),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
+                ),
+                None,
+            ),
+            rx.cond(
+                allow_comments,
+                rx.flex(
+                    detract_from_comment_button(
+                        on_click=state.new_comment(
+                            content, ReckoningTypes.detract, item_id
+                        )
+                    ),
+                    rx.text(c.detracts),
+                    direction="row",
+                    align="center",
+                    gap="2px",
+                    flex_shrink="0",
+                ),
+                None,
+            ),
+            # Compare (the cycle/rerun icon) as the border between the comment
+            # icons on the left and the vote icons on the right.
+            compare_concepts_button(
+                on_click=state.compare_concepts(item_id),
             ),
             rx.cond(
                 (vote_history == ReckoningTypes.no_vote),
@@ -2074,64 +2472,18 @@ def render_concept_template(state, c: Reckoning, item_attributes: dict, allow_co
                 ),
                 None,
             ),
-            # Comment entry points. The plain support-comment button was
-            # replaced by the concept itself acting as a giant button, so the
-            # support count is shown as a static icon+count. Points-of-order
-            # and detract keep their own buttons (separate comment types).
+            # Group-creator tool: hide this concept (collapses to a note and
+            # drops to the bottom of the group feed).
             rx.cond(
-                allow_comments,
-                rx.flex(
-                    rx.image(
-                        src="/support_comment.svg",
-                        width="24px",
-                        height="24px",
-                        opacity="0.45",
-                        flex_shrink="0",
-                    ),
-                    rx.text(c.supports),
-                    direction="row",
-                    align="center",
-                    gap="2px",
-                    flex_shrink="0",
+                c.can_moderate & ~c.hidden_by_convener,
+                rx.button(
+                    "Hide",
+                    size="1",
+                    variant="soft",
+                    color_scheme="gray",
+                    on_click=state.hide_concept(item_id),
                 ),
-                None,
-            ),
-            rx.cond(
-                allow_comments,
-                rx.flex(
-                    poo_comment_button(
-                        on_click=state.new_comment(
-                            content, ReckoningTypes.point_of_order, item_id
-                        )
-                    ),
-                    rx.text(c.points_of_order),
-                    direction="row",
-                    align="center",
-                    gap="2px",
-                    flex_shrink="0",
-                ),
-                None,
-            ),
-            rx.cond(
-                allow_comments,
-                rx.flex(
-                    detract_from_comment_button(
-                        on_click=state.new_comment(
-                            content, ReckoningTypes.detract, item_id
-                        )
-                    ),
-                    rx.text(c.detracts),
-                    direction="row",
-                    align="center",
-                    gap="2px",
-                    flex_shrink="0",
-                ),
-                None,
-            ),
-            # Compare (the cycle/rerun icon) as the border between the comment
-            # icons on the left and the vote icons on the right.
-            compare_concepts_button(
-                on_click=state.compare_concepts(item_id),
+                rx.fragment(),
             ),
             direction="row",
             wrap="wrap",
@@ -2229,6 +2581,7 @@ def page(state, *args, infinite_scroll=False, **kwargs):
     return container(
         rx.html("""
             <style>
+            #infinite-load-trigger { display: none !important; }
             @keyframes supportPulse {
               0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(1, 204, 93, 0.45); }
               50% { transform: scale(1.08); box-shadow: 0 0 0 14px rgba(1, 204, 93, 0); }
