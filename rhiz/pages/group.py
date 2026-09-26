@@ -239,6 +239,32 @@ class GroupPageState(ReckoningsPageState):
             rows.sort(key=lambda r: (r.hidden_by_convener is True))
             self.reckonings = rows
 
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        """Group convener: hide a comment, then reload the group feed."""
+        self._hide_comment(cid)
+        return self._load_group_concepts()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        """Group convener: unhide a comment, then reload the group feed."""
+        self._unhide_comment(cid)
+        return self._load_group_concepts()
+
+    @rx.event
+    def hide_concept(self, cid: int):
+        """Group creator: hide a concept, then reload the group feed."""
+        self._hide_comment(cid)
+        return self._load_group_concepts()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        """Group creator: unhide a concept, then reload the group feed."""
+        self._unhide_comment(cid)
+        return self._load_group_concepts()
+
     @rx.event
     def set_submission_content(self, value: str) -> None:
         self.submission_content = value or ""

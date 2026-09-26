@@ -349,50 +349,29 @@ class ReckoningsPageState(AppState):
         """Graduate a concept to the main site. No-op on non-group pages."""
         pass
 
-    @rx.event
-    def hide_comment(self, cid: int):
-        """Group convener: hide a comment (record kept, content masked)."""
+    # NOTE: hide/unhide are PRIVATE here on purpose. Reflex dispatches a
+    # PUBLIC event handler to the substate that *defines* it — these were
+    # public, so clicking Hide ran on the base substate whose
+    # `get_reckonings` doesn't exist (AttributeError → "Contact the website
+    # administrator" toast). Each page subclass (Comments, Group) defines
+    # thin public wrappers that call these helpers and refresh its own list.
+    def _hide_comment(self, cid: int):
+        """Group convener: hide a comment/concept (record kept, content masked)."""
         from rhiz.utils.moderation import hide_comment
 
         if not self.logged_in:
             return
         with rx.session() as session:
             hide_comment(session, cid, self.user)
-        return self.get_reckonings()
 
-    @rx.event
-    def unhide_comment(self, cid: int):
-        """Group convener: restore a hidden comment."""
+    def _unhide_comment(self, cid: int):
+        """Group convener: restore a hidden comment/concept."""
         from rhiz.utils.moderation import unhide_comment
 
         if not self.logged_in:
             return
         with rx.session() as session:
             unhide_comment(session, cid, self.user)
-        return self.get_reckonings()
-
-    @rx.event
-    def hide_concept(self, cid: int):
-        """Group creator: hide a concept (collapses to a note, drops to the
-        bottom of the group feed; record kept)."""
-        from rhiz.utils.moderation import hide_comment
-
-        if not self.logged_in:
-            return
-        with rx.session() as session:
-            hide_comment(session, cid, self.user)
-        return self.get_reckonings()
-
-    @rx.event
-    def unhide_concept(self, cid: int):
-        """Group creator: restore a hidden concept."""
-        from rhiz.utils.moderation import unhide_comment
-
-        if not self.logged_in:
-            return
-        with rx.session() as session:
-            unhide_comment(session, cid, self.user)
-        return self.get_reckonings()
 
     def compare_concepts(self, cid):
         result = self._require_login_redirect()
@@ -1391,6 +1370,20 @@ class CommentsPageState(ReckoningsPageState):
             self.reckonings.append(child)
             if max_depth == -1 or depth < max_depth - 1:
                 self.fetch_children(session, child.id, depth + 1, max_depth)
+
+    # Public wrappers (dispatch to THIS substate) — see the NOTE above
+    # `_hide_comment` in ReckoningsPageState.
+    @rx.event
+    def hide_comment(self, cid: int):
+        """Group convener: hide a comment, then refresh the comment list."""
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_comment(self, cid: int):
+        """Group convener: unhide a comment, then refresh the comment list."""
+        self._unhide_comment(cid)
+        return self.get_reckonings()
 
     def get_reckonings(self):
         """Get reckonings for this parent reckoning from the database, recursively fetching children."""
