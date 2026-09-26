@@ -1394,6 +1394,17 @@ class CommentsPageState(ReckoningsPageState):
 
     def get_reckonings(self):
         """Get reckonings for this parent reckoning from the database, recursively fetching children."""
+        # Telemetry: concept feed (re)loaded — "concept_refreshed".
+        if self.logged_in:
+            from rhiz.utils.telemetry import CONCEPT_REFRESHED, capture
+
+            props = self.ph_session_props()
+            capture(
+                CONCEPT_REFRESHED,
+                distinct_id=props.pop("distinct_id", None),
+                path=self.router.url.path or "/",
+                **props,
+            )
         self.reckonings = []
         with rx.session() as session:
             self.parent = session.exec(
