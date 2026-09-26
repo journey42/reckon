@@ -17,7 +17,6 @@ def profile():
         **form_box_style,
         "max_width": "640px",
         "width": "100%",
-        "margin_x": "24px",
     }
     return profile_layout(
         rx.center(
@@ -30,7 +29,6 @@ def profile():
                         font_size="2",
                         **input_style,
                         padding_x="8px",
-                        text_align="left",
                     ),
                     rx.center(
                         rx.button(
@@ -51,10 +49,11 @@ def profile():
                     ),
                 ),
                 spacing="4",
+                width="100%",
                 max_width="640px",
-                align_items="center",
+                align="center",
             ),
             width="100%",
-            margin_top="32px",
+            padding="32px 16px",
         ),
     )
