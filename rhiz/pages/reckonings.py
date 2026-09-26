@@ -1546,6 +1546,15 @@ class CommentsPageState(ReckoningsPageState):
         self._unhide_comment(cid)
         return self.get_reckonings()
 
+    @rx.event
+    def hide_concept(self, cid: int):
+        self._hide_comment(cid)
+        return self.get_reckonings()
+
+    @rx.event
+    def unhide_concept(self, cid: int):
+        self._unhide_comment(cid)
+        return self.get_reckonings()
     def get_reckonings(self):
         """Get reckonings for this parent reckoning from the database, recursively fetching children."""
         # Telemetry: concept feed (re)loaded — "concept_refreshed".
