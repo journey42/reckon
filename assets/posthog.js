@@ -22,6 +22,19 @@ if (!window.__posthog_loaded__) {
       } catch (e) { /* never break the app for telemetry */ }
     }
     rhizSetSid();
-    window.posthog.on('session_id', function () { rhizSetSid(); });
+    try {
+      window.posthog.on('session_id', function () { rhizSetSid(); });
+    } catch (e) { /* older builds may not support .on */ }
+    // The session is created asynchronously after init — retry briefly so
+    // the cookie is set even if the 'session_id' event already fired.
+    var attempts = 0;
+    var timer = setInterval(function () {
+      attempts += 1;
+      if (document.cookie.indexOf('rhiz_ph_sid=') !== -1 || attempts > 20) {
+        clearInterval(timer);
+        return;
+      }
+      rhizSetSid();
+    }, 500);
   }
 }
