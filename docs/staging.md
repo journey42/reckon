@@ -5,9 +5,23 @@ things in. Three resources, all in `reckon-rg`:
 
 | resource | name | notes |
 | --- | --- | --- |
-| static site | `rhiz-web-staging` | canonical URL `https://mango-tree-0e1baaf0f.eastus2.1.azurestaticapps.net`, serves the `staging` branch |
-| backend | `rhiz-backend-staging` | `https://rhiz-backend-staging.politefield-c0f001d2.eastus.azurecontainerapps.io`, scales 0→1 |
-| database | `reckon-db-staging` | point-in-time restore of `reckon-db`; **stopped when not in use** |
+| static site | `rhiz-web-staging` | canonical URL `https://mango-tree-0e1baaf0f.1.azurestaticapps.net` — exactly as `properties.defaultHostname` reports it — serving the `staging` branch |
+| backend | `rhiz-backend-staging` | `https://rhiz-backend-staging.politefield-c0f001d2.eastus.azurecontainerapps.io` |
+| database | `reckon-db-staging` | point-in-time restore of `reckon-db` |
+
+Two things about the staging backend that cost time once already:
+
+- **`minReplicas` must be 1, not 0.** At 0 the revision is never activated, so
+  the container never starts — and because migrations run in the container's
+  start path, `RUN_MIGRATIONS_ON_START=1` quietly does nothing and requests get
+  `{"error":"Not found"}` from the ingress instead of the app. Production runs
+  `minReplicas=1` for the same reason.
+- **`PUBLIC_BASE_URL` must be the default hostname, not a region-qualified
+  guess.** `mango-tree-0e1baaf0f.eastus2.1.azurestaticapps.net` resolves to
+  nothing for this site; `mango-tree-0e1baaf0f.1.azurestaticapps.net` is the
+  host. Per-branch *environments* do use the longer form
+  (`mango-tree-0e1baaf0f-feeddeclutter.eastus2.1…`). Check with
+  `az staticwebapp show -n rhiz-web-staging -g reckon-rg` rather than memory.
 
 The database is a restore rather than a schema-only fixture on purpose: the
 things that go wrong here are the things that only real rows show — a group
@@ -50,6 +64,18 @@ gh workflow run "Deploy Static Web App (Staging)" --ref staging
 # 4. Backend, from the staging branch. Runs the pending migrations on start.
 gh workflow run "Deploy Backend (Staging)" --ref staging
 gh run watch                                      # or: gh run list
+
+# 5. Keep it awake, or nothing above takes effect (see the note at the top).
+az containerapp update -n rhiz-backend-staging -g reckon-rg --min-replicas 1
+```
+
+Which branch counts as "production" for the static site lives on the resource,
+not in the workflow:
+
+```bash
+az rest --method get \
+  --url "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/reckon-rg/providers/Microsoft.Web/staticSites/rhiz-web-staging?api-version=2022-09-01" \
+  --query properties.branch -o tsv          # staging
 ```
 
 The backend image is built with `API_URL` = the staging backend FQDN, and the
@@ -65,7 +91,7 @@ is served instead of swallowed by the SPA fallback, and the specific bugs the
 client reported.
 
 ```bash
-export RHIZ_BASE=https://mango-tree-0e1baaf0f.eastus2.1.azurestaticapps.net
+export RHIZ_BASE=https://mango-tree-0e1baaf0f.1.azurestaticapps.net
 export DB_URL=<the dsn that backend is using>          # staging only — see guard
 export RHIZ_REG_ADMIN_PASSWORD=... RHIZ_REG_USER_PASSWORD=...
 python scripts/seed_staging_test_user.py               # accounts + fixtures
@@ -78,12 +104,18 @@ after every staging deploy, and before anything from `staging` is merged to
 
 ## Post-test cleanup
 
+Staging is meant to stay up while the client is validating: DB running, backend
+at one replica. When the review is over,
+
 ```bash
-az postgres flexible-server stop -g reckon-rg -n reckon-db-staging   # keeps data, stops compute
+az postgres flexible-server stop -g reckon-rg -n reckon-db-staging
+az containerapp update -n rhiz-backend-staging -g reckon-rg --min-replicas 0
 ```
 
 Stopped, the restore still bills storage (a few dollars a month); deleted, the
-next restore costs another 5-10 minutes. Neither affects production.
+next restore costs another 5-10 minutes. Neither affects production. Remember
+that a stopped backend means migrations do not run — start it before trusting
+the schema.
 
 ## Known state / history
 
