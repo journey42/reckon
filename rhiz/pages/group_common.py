@@ -7,17 +7,16 @@ groups each lists and who may see the page, so those live in the page modules
 while the common rendering lives here.
 """
 
-import os
 import reflex as rx
 
 from rhiz.state.base import GroupStatus
+from rhiz.utils.urls import public_origin
 
 
 def public_base_url() -> str:
-    """Public origin for group share links. Set PUBLIC_BASE_URL in production
-    (e.g. https://www.rhiz.ai); defaults to the local dev frontend. Trailing
-    slash is stripped."""
-    return os.environ.get("PUBLIC_BASE_URL", "http://localhost:3000").rstrip("/")
+    """Public origin for group share links. Delegates to the single source of
+    truth in rhiz.utils.urls so no two callers can drift apart."""
+    return public_origin()
 
 
 def group_row(state_cls, r):

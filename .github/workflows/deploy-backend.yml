@@ -56,10 +56,40 @@ jobs:
             TAG=${GITHUB_SHA::7}
             DB_CONN="${{ secrets.DB_URL }}"
 
+            # Email is now read from AZURE_COMMUNICATION_CONNECTION_STRING. The
+            # app needs it to exist in the Container App; deploy it from a GitHub
+            # secret when one is configured, and otherwise leave whatever an
+            # administrator set in the portal alone (--set-env-vars preserves
+            # unrelated environment settings).
+            ACS_CONN="${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}"
+            ACS_SECRET_ENV=""
+            if [ -n "$ACS_CONN" ]; then
+              az containerapp secret set \
+                --name ${{ secrets.CONTAINERAPP_NAME }} \
+                --resource-group ${{ secrets.RESOURCE_GROUP }} \
+                --secrets acs-connection-string="$ACS_CONN"
+              ACS_SECRET_ENV="AZURE_COMMUNICATION_CONNECTION_STRING=secretref:acs-connection-string"
+            fi
+
             az containerapp secret set \
               --name ${{ secrets.CONTAINERAPP_NAME }} \
               --resource-group ${{ secrets.RESOURCE_GROUP }} \
               --secrets db-url="$DB_CONN"
+
+            # Email now needs AZURE_COMMUNICATION_CONNECTION_STRING. Refuse to
+            # roll out an image that will silently break verification mail if
+            # the credential is neither in a GitHub secret nor already on the
+            # Container App. A portal-configured env var counts, which is why
+            # --set-env-vars preserves unrelated settings.
+            ACS_ENV_COUNT=$(az containerapp show \
+              --name ${{ secrets.CONTAINERAPP_NAME }} \
+              --resource-group ${{ secrets.RESOURCE_GROUP }} \
+              --query "properties.template.containers[0].env[].name" -o tsv \
+              | grep -c '^AZURE_COMMUNICATION_CONNECTION_STRING$' || true)
+            if [ -z "$ACS_SECRET_ENV" ] && [ "${ACS_ENV_COUNT:-0}" -eq 0 ]; then
+              echo "::error::AZURE_COMMUNICATION_CONNECTION_STRING is not configured. Set it as the GitHub secret AZURE_COMMUNICATION_CONNECTION_STRING or in the Container App before deploying; otherwise email (verification, resets, welcome) will fail."
+              exit 1
+            fi
 
             NEW_REVISION=$(az containerapp update \
               --name ${{ secrets.CONTAINERAPP_NAME }} \
@@ -70,6 +100,7 @@ jobs:
                              SUNEDITOR_TOOLBAR_ENABLED=0 \
                              RUN_MIGRATIONS_ON_START=1 \
                              DB_URL=secretref:db-url \
+                             $ACS_SECRET_ENV \
               --query properties.latestRevisionName -o tsv)
 
             echo "Deployed revision: ${NEW_REVISION:-<unknown>}"

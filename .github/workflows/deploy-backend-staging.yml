@@ -46,6 +46,19 @@ jobs:
           TAG=${GITHUB_SHA::7}
           DB_CONN="${{ secrets.DB_URL_STAGING }}"
 
+          # Same conditional wiring as production: deploy the mail credential
+          # from a GitHub secret when configured, otherwise leave the portal
+          # configuration intact.
+          ACS_CONN="${{ secrets.AZURE_COMMUNICATION_CONNECTION_STRING }}"
+          ACS_SECRET_ENV=""
+          if [ -n "$ACS_CONN" ]; then
+            az containerapp secret set \
+              --name ${{ secrets.CONTAINERAPP_NAME_STAGING }} \
+              --resource-group ${{ secrets.RESOURCE_GROUP }} \
+              --secrets acs-connection-string="$ACS_CONN"
+            ACS_SECRET_ENV="AZURE_COMMUNICATION_CONNECTION_STRING=secretref:acs-connection-string"
+          fi
+
           az containerapp secret set \
             --name ${{ secrets.CONTAINERAPP_NAME_STAGING }} \
             --resource-group ${{ secrets.RESOURCE_GROUP }} \
@@ -56,11 +69,12 @@ jobs:
             --resource-group ${{ secrets.RESOURCE_GROUP }} \
             --image ${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${TAG} \
             --set-env-vars API_URL=${{ secrets.PUBLIC_API_URL_STAGING }} \
-                           PUBLIC_BASE_URL=https://mango-tree-0e1baaf0f.1.azurestaticapps.net \
+                           PUBLIC_BASE_URL=https://mango-tree-0e1baaf0f-feeddeclutter.eastus2.1.azurestaticapps.net \
                            SUNEDITOR_TOOLBAR_ENABLED=0 \
                            RUN_MIGRATIONS_ON_START=1 \
                            DB_URL=secretref:db-url \
                            POSTHOG_SECRET_KEY=secretref:posthog-key \
+                           $ACS_SECRET_ENV \
             --query properties.latestRevisionName -o tsv)
 
           echo "Deployed staging revision: ${NEW_REVISION:-<unknown>}"
