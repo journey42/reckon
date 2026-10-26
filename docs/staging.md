@@ -94,7 +94,11 @@ next restore costs another 5-10 minutes. Neither affects production.
   `feed-declutter` branch so reviewers saw the newest approved build there; that
   also meant the URL 404'd whenever no `feed-declutter` build was current. It
   now follows the branch you deploy from.
-- Staging sends **real** email if `AZURE_COMMUNICATION_CONNECTION_STRING` is set
-  as a GitHub secret — it shares the `reckon.cc` / `rhiz.ai` ACS resource with
-  production. Set `MAIL_DRY_RUN=1` on the staging container app if you want mail
-  printed to the container log instead of sent.
+- Staging sends **real** email only if you ask it to. The credential is wired from
+  the `AZURE_COMMUNICATION_CONNECTION_STRING` GitHub secret, but the deploy sets
+  `MAIL_DRY_RUN=1` by default, so staging prints mail to the container log instead
+  of sending it — staging shares the `reckon.cc` / `rhiz.ai` ACS resource with
+  production, and a verification email from staging is a real email to a real
+  person. To test the mail flows for real: create the repository variable
+  `STAGING_MAIL_DRY_RUN=0` (Settings → Secrets and variables → Actions → Variables)
+  and redeploy, then use addresses you control.

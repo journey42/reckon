@@ -74,6 +74,7 @@ jobs:
                            RUN_MIGRATIONS_ON_START=1 \
                            DB_URL=secretref:db-url \
                            POSTHOG_SECRET_KEY=secretref:posthog-key \
+                           MAIL_DRY_RUN=${{ vars.STAGING_MAIL_DRY_RUN || '1' }} \
                            $ACS_SECRET_ENV \
             --query properties.latestRevisionName -o tsv)
 
