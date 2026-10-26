@@ -66,8 +66,28 @@ ROOM_SPECS = (
 )
 
 
+def _db_host(db_url: str) -> str:
+    """The database host, however awkward the DSN is.
+
+    urlparse is not enough, and neither is the obvious regex: the real
+    credentials contain `@` and `?`, so "strip the query string, then split at
+    the last @" cuts the host off the middle of the password and returns
+    garbage that *looks* like a local name — which for a guard is the worst
+    failure it can have. libpq resolves the same ambiguity by treating the last
+    `@` as the separator, so that is what this does, and only then does it drop
+    the path, query and port.
+    """
+    tail = db_url
+    if "@" in tail:
+        tail = tail.rsplit("@", 1)[1]
+    tail = re.sub(r"^[a-z+]+://", "", tail, flags=re.I)
+    host = re.split(r"[/?#]", tail, 1)[0]
+    host = host.rsplit(":", 1)[0] if ":" in host else host
+    return host.strip("[]").lower()
+
+
 def _guard(db_url: str) -> str:
-    host = (urlparse(db_url).hostname or "").lower()
+    host = _db_host(db_url)
     if not host:
         sys.exit("DB_URL has no host — refusing to guess where it points.")
     if any(p.search(host) for p in PROD_HOST_PATTERNS):

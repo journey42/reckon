@@ -23,6 +23,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import time
 from urllib.parse import urlparse
 
 import sqlalchemy as sa
@@ -100,6 +101,22 @@ def db():
 # build minifies the message and the page recovers on its own — but a new code
 # showing up here means something else started hydrating badly.
 _HYDRATION = re.compile(r"Hydration|Minified React error #(418|422|423|424|425)\b")
+
+
+def wait_for_text(page, needle: str, seconds: float = 20.0) -> bool:
+    """Poll for text instead of snapshotting once.
+
+    The app renders from websocket state: a page can paint its shell, then fill
+    in the parts that depend on who you are a beat later. Asserting against the
+    first paint makes the pass flaky in exactly the places that matter — the
+    admin-only controls.
+    """
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if needle in body(page):
+            return True
+        page.wait_for_timeout(500)
+    return needle in body(page)
 
 
 def hard_errors(errors: list[str]) -> list[str]:
@@ -360,7 +377,9 @@ def demo_control_visibility(browser):
         sign_in(page, ADMIN_USER, ADMIN_PW)
         page.goto(f"{BASE}/live", wait_until="networkidle", timeout=TIMEOUT)
         page.wait_for_selector("text=Live Q&A", timeout=TIMEOUT)
-        assert "Demo page (/demo)" in body(page), "admin does not see the demo control"
+        assert wait_for_text(page, "Demo page (/demo)"), (
+            "admin does not see the demo control on /live"
+        )
     finally:
         page.context.close()
 
@@ -369,6 +388,9 @@ def demo_control_visibility(browser):
         sign_in(page, PLAIN_USER, PLAIN_PW)
         page.goto(f"{BASE}/live", wait_until="networkidle", timeout=TIMEOUT)
         page.wait_for_selector("text=Live Q&A", timeout=TIMEOUT)
+        # Give the admin-only state a chance to arrive before concluding it is
+        # absent, or this check would pass for the wrong reason.
+        page.wait_for_timeout(6000)
         assert "Demo page (/demo)" not in body(page), "an ordinary user was shown the demo control"
         assert "rhiz-demo-question-select" not in page.content()
     finally:

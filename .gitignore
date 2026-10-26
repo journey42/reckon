@@ -22,3 +22,6 @@ run_dev.sh
 run_staging.sh
 .agents/
 .claude/
+
+# Throwaway staging test credentials written by local runs; never commit.
+.staging-accounts-local.txt
