@@ -69,17 +69,22 @@ def create_room(
     created_by: int,
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     similarity_threshold: float | None = None,
+    permanent: bool = False,
 ) -> Group:
     """Create a live Q&A room: a private group in room mode.
 
     The founding question is stored both on the group and as the group's
     founding concept (same pattern as a regular group). The slug is an
     unguessable token because the room link is the only public access path.
+
+    ``permanent=True`` leaves the deadline NULL, which is what makes a Q&A that
+    never closes — the definition used by ``rhiz.utils.demo`` and the reason
+    ``enforce_deadline`` has nothing to enforce.
     """
     question = (question or "").strip()
     if not question:
         raise ValueError("The question is required.")
-    if duration_minutes not in DURATION_CHOICES:
+    if not permanent and duration_minutes not in DURATION_CHOICES:
         duration_minutes = DEFAULT_DURATION_MINUTES
     if similarity_threshold is None:
         similarity_threshold = DEFAULT_SIMILARITY_THRESHOLD
@@ -113,7 +118,7 @@ def create_room(
         created_at=now,
         is_room=True,
         similarity_threshold=similarity_threshold,
-        close_at=now + timedelta(minutes=duration_minutes),
+        close_at=None if permanent else now + timedelta(minutes=duration_minutes),
     )
     session.add(group)
     session.flush()
@@ -153,9 +158,16 @@ def enforce_deadline(session, group: Group) -> Group:
 
 
 def extend_room(session, room_id: int, minutes: int = EXTEND_MINUTES) -> Optional[Group]:
-    """Push the deadline out while the room is open."""
+    """Push the deadline out while the room is open.
+
+    A permanent question (``close_at IS NULL``) has no deadline to push: there
+    is nothing to extend, and treating "no deadline" as "now" would quietly
+    convert the printed /demo question into a timed room that closes overnight.
+    """
     group = session.get(Group, room_id)
     if group is None or not group.is_room or group.status != GroupStatus.open:
+        return None
+    if group.close_at is None:
         return None
     enforce_deadline(session, group)
     if group.status != GroupStatus.open:
@@ -183,7 +195,13 @@ def reopen_room(session, room_id: int, minutes: int = EXTEND_MINUTES) -> Optiona
     group.status = GroupStatus.open
     group.closed_at = None
     group.closing_note = None
-    group.close_at = datetime.utcnow() + timedelta(minutes=minutes)
+    # Reopening a permanent question restores it without inventing a deadline:
+    # permanence is the property of the row, and a facilitator closing it by
+    # mistake must not turn the printed /demo address into a timed room.
+    if group.close_at is None:
+        group.close_at = None
+    else:
+        group.close_at = datetime.utcnow() + timedelta(minutes=minutes)
     session.add(group)
     session.commit()
     session.refresh(group)

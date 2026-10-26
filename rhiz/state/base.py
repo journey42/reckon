@@ -465,6 +465,11 @@ class RoomParticipant(Model, table=True):
     )
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     last_seen_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    # Server-issued revision for this device's queue. It lets the server decide
+    # whether a queued intent is a replay, a genuinely newer write, or an older
+    # one that a newer intent has already superseded — without comparing the
+    # device's clock to the server's, which phones disagree about routinely.
+    intent_version: int = Field(default=0, nullable=False)
 
 
 class RoomSwap(Model, table=True):
@@ -665,7 +670,13 @@ class AppState(rx.State):
                 if idx < len(path_segments):
                     return path_segments[idx]
 
-        return path_segments[-1] if path_segments else default
+        # No guessing after this point: an earlier version returned the last
+        # path segment, so a route that declares no such parameter still got a
+        # value back — /demo read itself as a question with the slug "demo".
+        # Every caller here is on a route that does declare the name, so
+        # returning the default changes nothing for them and stops the trap for
+        # the next page.
+        return default
 
     def start_session(self, user: User) -> None:
         """Mark ``user`` as logged in and persist the session in a cookie.
@@ -739,6 +750,15 @@ class AppState(rx.State):
     def logged_in(self) -> bool:
         """Check if a user is logged in."""
         return self.user is not None
+
+    @rx.var(auto_deps=False, deps=["user"])
+    def is_admin(self) -> bool:
+        """True for admins (role >= 2).
+
+        A Var because pages need to hide admin-only controls from the client
+        without asking the server to render them and trust CSS to hide them.
+        """
+        return bool(self.user and self.user.role >= 2)
 
     @rx.var(auto_deps=False, deps=["user"])
     def posthog_distinct_id(self) -> str:

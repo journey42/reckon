@@ -14,6 +14,7 @@ import reflex as rx
 from sqlmodel import select, func
 
 from rhiz.state.base import AppState, Group, GroupStatus, Reckoning, User
+from rhiz.utils.groups import check_group_creation_quota
 from rhiz.utils.rooms import (
     DURATION_CHOICES,
     DEFAULT_DURATION_MINUTES,
@@ -26,10 +27,17 @@ from rhiz.utils.rooms import (
     extend_room,
 )
 from rhiz.utils.qr import qr_data_uri
+from rhiz.utils import demo as demo_utils
 from rhiz.utils.datetimes import naive_utc
 from rhiz.styles import page_params
 from rhiz.components import container, navbar
 from rhiz.pages.group_common import public_base_url
+
+
+# The duration select's demo option. A label rather than a number, because
+# "no timer" is the thing being chosen.
+PERMANENT_LABEL = "no timer — permanent demo"
+PERMANENT_VALUE = "permanent"
 
 
 class LiveState(AppState):
@@ -41,6 +49,18 @@ class LiveState(AppState):
     new_duration: str = "60"
     new_threshold_label: str = "Balanced"
     create_error: str = ""
+
+    # Which permanent question the public /demo page asks, and the list to
+    # choose it from.
+    demo_questions: list[dict] = []
+    demo_labels: list[str] = []
+    demo_choice: str = ""
+    # The slug behind the chosen label, resolved when the choice is made rather
+    # than when it is applied: applying rebuilds the list (the chosen question
+    # gains a "shown at /demo" suffix), and matching a label against a list that
+    # has since changed is how a save lands on the wrong question.
+    demo_choice_slug: str = ""
+    demo_note: str = ""
 
     # Close dialog (per room)
     show_close_dialog: bool = False
@@ -58,7 +78,15 @@ class LiveState(AppState):
 
     @rx.var
     def duration_labels(self) -> list[str]:
-        return [f"{m} minutes" for m in [15, 30, 60, 90, 120]]
+        return [f"{m} minutes" for m in [15, 30, 60, 90, 120]] + [PERMANENT_LABEL]
+
+    @rx.var
+    def duration_display(self) -> str:
+        """What the length select shows. ``new_duration`` is the machine value,
+        and "permanent minutes" is not a thing anyone should read on screen."""
+        if self.new_duration == PERMANENT_VALUE:
+            return PERMANENT_LABEL
+        return f"{self.new_duration} minutes"
 
     def on_load(self):
         result = self.check_user_enabled()
@@ -71,6 +99,7 @@ class LiveState(AppState):
 
     def _refresh(self):
         self.rows = []
+        self._load_demo_questions()
         base = public_base_url()
         with rx.session() as session:
             rooms = session.exec(
@@ -111,10 +140,15 @@ class LiveState(AppState):
                         "is_open": is_open,
                         "answers_text": f"{answers} answers",
                         "remaining_text": (
-                            f"closes in ~{remaining // 60} min"
-                            if is_open and remaining > 0
-                            else ""
+                            "no timer"
+                            if room.close_at is None
+                            else (
+                                f"closes in ~{remaining // 60} min"
+                                if is_open and remaining > 0
+                                else ""
+                            )
                         ),
+                        "has_timer": room.close_at is not None,
                         "url": url,
                         "qr": qr_data_uri(url),
                         "is_public": room.is_public,
@@ -139,7 +173,11 @@ class LiveState(AppState):
         self.new_question = value or ""
 
     def set_new_duration(self, value: str):
-        # value arrives as e.g. "60 minutes"
+        # value arrives as e.g. "60 minutes" — except for the permanent option,
+        # whose label carries no number to split off.
+        if (value or "").startswith(PERMANENT_LABEL):
+            self.new_duration = PERMANENT_VALUE
+            return
         self.new_duration = (value or "").split()[0] if value else str(DEFAULT_DURATION_MINUTES)
 
     def confirm_create(self):
@@ -148,6 +186,23 @@ class LiveState(AppState):
         if not question:
             self.create_error = "Write the question first."
             return
+        with rx.session() as session:
+            ok, message = check_group_creation_quota(
+                session, self.user, require_permission=False
+            )
+            if not ok:
+                self.create_error = message
+                return
+        if self.new_duration == PERMANENT_VALUE:
+            # A question with no deadline: it belongs to /demo and keeps
+            # collecting answers until someone replaces it.
+            with rx.session() as session:
+                room = demo_utils.create_demo_question(session, question, self.user.id)
+                slug = room.slug
+            self.show_create = False
+            self.new_question = ""
+            self._refresh()
+            return rx.redirect(f"/room/{slug}")
         try:
             duration = int(self.new_duration)
         except (TypeError, ValueError):
@@ -165,6 +220,94 @@ class LiveState(AppState):
         self.new_question = ""
         self._refresh()
         return rx.redirect(f"/room/{slug}")
+
+    # ------------------------------------------------------------------
+    # The public demo page (/demo)
+    # ------------------------------------------------------------------
+
+    def _load_demo_questions(self):
+        """Permanent questions this account may put on /demo.
+
+        A facilitator chooses among their own; an admin's list covers every
+        one, matching how the rest of these pages decide what you may touch.
+        """
+        self.demo_questions = []
+        self.demo_labels = []
+        if self.user is None:
+            return
+        is_admin = self.user.role >= 2
+        with rx.session() as session:
+            rows = demo_utils.list_demo_questions(session)
+        mine = [r for r in rows if is_admin or r["created_by"] == self.user.id]
+        self.demo_questions = mine
+        # A select's value is its label, so the label doubles as the key. Two
+        # questions with identical wording are indistinguishable in a dropdown
+        # regardless, and resolve to the first — which is what the dropdown
+        # would show them anyway.
+        self.demo_labels = [
+            f"{r['question']} · {r['answers']} answers"
+            + (" · shown at /demo" if r["is_active"] else "")
+            + (" · closed" if r["closed"] else "")
+            for r in mine
+        ]
+        active = next((r for r in mine if r["is_active"]), None)
+        if active:
+            self.demo_choice = self.demo_labels[mine.index(active)]
+            self.demo_choice_slug = active["slug"]
+        else:
+            self.demo_choice = ""
+            self.demo_choice_slug = ""
+
+    def set_demo_choice(self, value: str):
+        """Remember the pick, and which question it names.
+
+        The note is deliberately left alone: choosing an option fires this
+        handler again while the list is being rebuilt after a save, which would
+        otherwise wipe the confirmation the organiser just asked for.
+        """
+        self.demo_choice = value or ""
+        try:
+            index = self.demo_labels.index(self.demo_choice)
+        except ValueError:
+            self.demo_choice_slug = ""
+            return
+        self.demo_choice_slug = self.demo_questions[index]["slug"]
+
+    def apply_demo_question(self):
+        """Point /demo at the chosen permanent question.
+
+        Admin-only: the pointer is a single site-wide setting, so being able to
+        list one's own questions is not permission to change what a printed
+        address shows for everybody.
+        """
+        if self.user is None or self.user.role < 2:
+            self.demo_note = "Only administrators can change the demo question."
+            return
+        if not self.demo_choice_slug:
+            self.demo_note = "Choose a question first."
+            return
+        with rx.session() as session:
+            room = demo_utils.demo_question_by_slug(session, self.demo_choice_slug)
+            if room is None:
+                self.demo_note = "That is not a permanent question."
+                return
+            if room.status != GroupStatus.open:
+                # Applying it would write a pointer the public resolver then
+                # rejects, so "Saved" would mean something visitors never see.
+                self.demo_note = (
+                    "That question is closed. Reopen it first if it should be "
+                    "shown at /demo."
+                )
+                return
+            settled = demo_utils.set_active_demo_question(
+                session, self.demo_choice_slug
+            )
+        self.demo_note = (
+            "Saved: /demo asks this question now."
+            if settled
+            else "That question is not a permanent one, so /demo cannot show it."
+        )
+        self._refresh()
 
     # ------------------------------------------------------------------
     # Room controls (facilitator)
@@ -280,6 +423,7 @@ class LiveAdminState(LiveState):
 
     def _refresh_all(self):
         self.rows = []
+        self._load_demo_questions()
         base = public_base_url()
         with rx.session() as session:
             # Outer join so each room's creator comes back in one query,
@@ -319,10 +463,15 @@ class LiveAdminState(LiveState):
                         "is_open": room.status == GroupStatus.open,
                         "answers_text": f"{answers} answers",
                         "remaining_text": (
-                            f"closes in ~{remaining // 60} min"
-                            if room.status == GroupStatus.open and remaining > 0
-                            else ""
+                            "no timer"
+                            if room.close_at is None
+                            else (
+                                f"closes in ~{remaining // 60} min"
+                                if room.status == GroupStatus.open and remaining > 0
+                                else ""
+                            )
                         ),
+                        "has_timer": room.close_at is not None,
                         "url": url,
                         "qr": qr_data_uri(url),
                         "is_public": room.is_public,
@@ -385,12 +534,16 @@ def _room_row(r: dict, state_cls) -> rx.Component:
                 rx.cond(
                     r["is_open"],
                     rx.fragment(
-                        rx.button(
-                            "Extend +15 min",
-                            on_click=state_cls.extend(r["id"]),
-                            variant="soft",
-                            size="1",
-                            width=rx.breakpoints(initial="100%", sm="auto"),
+                        rx.cond(
+                            r["has_timer"],
+                            rx.button(
+                                "Extend +15 min",
+                                on_click=state_cls.extend(r["id"]),
+                                variant="soft",
+                                size="1",
+                                width=rx.breakpoints(initial="100%", sm="auto"),
+                            ),
+                            rx.fragment(),
                         ),
                         rx.button(
                             "Close",
@@ -425,6 +578,86 @@ def _room_row(r: dict, state_cls) -> rx.Component:
     )
 
 
+def _demo_panel(state_cls) -> rx.Component:
+    """Choose which permanent question the public ``/demo`` page asks.
+
+    The client wants to change the question between audiences without waiting on
+    a deploy, and to keep each audience's answers. Switching the pointer does the
+    first and leaves the second untouched: every question keeps its own history
+    whether or not it is the one on screen.
+    """
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.heading("Demo page (/demo)", size="3"),
+                rx.spacer(),
+                rx.link("Open /demo", href="/demo", size="2"),
+                width="100%",
+                align="center",
+            ),
+            rx.text(
+                "Questions with no timer. Pick which one the public demo page "
+                "asks — each question keeps its own answers either way.",
+                size="1",
+                color="gray",
+            ),
+            rx.cond(
+                state_cls.demo_labels.length() > 0,
+                rx.vstack(
+                    rx.select(
+                        state_cls.demo_labels,
+                        value=state_cls.demo_choice,
+                        on_change=state_cls.set_demo_choice,
+                        placeholder="Choose a question",
+                        width="100%",
+                        # Ids because this dropdown decides what a printed
+                        # address shows, and both the browser tests and anyone
+                        # scripting it need one unambiguous way to reach it.
+                        id="rhiz-demo-question-select",
+                    ),
+                    rx.hstack(
+                        rx.button(
+                            "Show this one at /demo",
+                            on_click=state_cls.apply_demo_question,
+                            size="2",
+                            color_scheme="green",
+                            id="rhiz-demo-apply",
+                        ),
+                        rx.cond(
+                            state_cls.demo_note != "",
+                            rx.text(state_cls.demo_note, size="1", color="green"),
+                            rx.fragment(),
+                        ),
+                        width="100%",
+                        align="center",
+                        gap="10px",
+                        wrap="wrap",
+                    ),
+                    rx.link(
+                        "Answer it as a visitor →",
+                        href="/demo",
+                        size="1",
+                        color="gray",
+                    ),
+                    align="stretch",
+                    width="100%",
+                    spacing="2",
+                ),
+                rx.text(
+                    "Nothing here yet: create a room above and choose “no "
+                    "timer” as its length.",
+                    size="1",
+                    color="gray",
+                ),
+            ),
+            align="start",
+            width="100%",
+            spacing="2",
+        ),
+        width="100%",
+    )
+
+
 def _create_dialog() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
@@ -441,7 +674,7 @@ def _create_dialog() -> rx.Component:
                     rx.text("Time limit", size="2", weight="medium"),
                     rx.select(
                         LiveState.duration_labels,
-                        value=LiveState.new_duration + " minutes",
+                        value=LiveState.duration_display,
                         on_change=LiveState.set_new_duration,
                         size="1",
                     ),
@@ -623,6 +856,11 @@ def live_page():
                 size="2",
             ),
             rx.cond(
+                LiveState.is_admin,
+                _demo_panel(LiveState),
+                rx.fragment(),
+            ),
+            rx.cond(
                 LiveState.rows.length() == 0,
                 rx.callout(
                     "You haven't asked any live questions yet. Create a room "
@@ -664,6 +902,11 @@ def live_all():
                 "room to freeze it, or delete one to remove it and its "
                 "anonymous answers permanently.",
                 size="2",
+            ),
+            rx.cond(
+                LiveAdminState.is_admin,
+                _demo_panel(LiveAdminState),
+                rx.fragment(),
             ),
             rx.cond(
                 LiveAdminState.rows.length() == 0,

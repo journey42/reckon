@@ -25,6 +25,11 @@ posthog = _init_posthog() if os.getenv("POSTHOG_SECRET_KEY") else None
 head_scripts = [
     rx.script(src="/scrolling.js"),
     rx.script(src="/posthog.js"),
+    # Live-room outbox. Loaded everywhere rather than only on the room page: a
+    # page-level script can arrive after React has mounted, and this one has to
+    # be able to hold a tap from the first moment the page is usable. It is a
+    # no-op anywhere that is not /room/<slug>.
+    rx.script(src="/outbox.js"),
 ]
 
 app = rx.App(

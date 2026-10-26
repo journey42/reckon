@@ -46,6 +46,7 @@ from rhiz.utils.rooms import (
 from rhiz.styles import page_params
 from rhiz.components import container
 from rhiz.pages.group_common import public_base_url
+from rhiz.utils import outbox
 
 
 def _is_secure_cookie() -> bool:
@@ -76,6 +77,38 @@ REFRESH_SCRIPT = (
     "if(busy||navigator.onLine===false){tick();}else{window.location.reload();}"
     "},DELAY);}"
     "tick();})();"
+)
+
+# ---------------------------------------------------------------------------
+# Offline outbox (see assets/outbox.js + rhiz/utils/outbox.py)
+#
+# A phone in a room of 300 people on one access point cannot ask a server it
+# cannot reach to remember anything, so a tap is recorded on the device *first*
+# and only then sent. If the send never lands, the intent stays queued and is
+# replayed later; the server applies intents as desired state, so replaying one
+# cannot double-post.
+# ---------------------------------------------------------------------------
+
+# The tap itself is recorded by the browser helper, not by an event defined
+# here. A Reflex event handler — `rx.call_script` included — is dispatched *over
+# the websocket*, so queueing this way would route the queueing step through the
+# very connection that failed. assets/outbox.js watches these button ids on the
+# device instead, and needs no server to do it.
+
+
+# The pending queue travels to the server through an ordinary input binding (see
+# _outbox_bridge), because "an event carries the component's value" is Reflex's
+# normal, documented path. Depending on what call_script does with a JavaScript
+# return value is not: these scripts are therefore side-effect only.
+
+# Hands the server whatever this room is still holding.
+OUTBOX_PUSH_SCRIPT = "window.rhizOutboxPush&&window.rhizOutboxPush();"
+
+# On mount: boot the outbox (the asset can arrive after React has mounted, hence
+# the guard) and offer anything already queued. With the page's 20s auto-refresh
+# this is also the retry heartbeat; the asset adds a faster one of its own.
+OUTBOX_MOUNT_SCRIPT = (
+    "window.rhizOutboxInit&&window.rhizOutboxInit();" + OUTBOX_PUSH_SCRIPT
 )
 
 
@@ -111,6 +144,9 @@ class RoomState(AppState):
     room_status: str = "open"
     remaining_minutes: int = 0
     remaining_seconds: int = 0
+    # "" when the room has no deadline at all — a permanent Q&A (see
+    # rhiz.utils.demo) must not advertise "Closes in ~0 min" forever.
+    deadline_label: str = ""
     threshold: float = 0.6
 
     # Facilitator controls
@@ -189,6 +225,16 @@ class RoomState(AppState):
             self.room_url = f"{public_base_url()}/room/{room.slug}"
             self.room_qr = qr_data_uri(self.room_url)
             self._load_for_status(session, room)
+            if self.device_token:
+                dhash = device_hash_for(self.device_token, room.slug)
+                participant = session.exec(
+                    select(RoomParticipant).where(
+                        RoomParticipant.device_hash == dhash
+                    )
+                ).first()
+                self.outbox_version = participant.intent_version if participant else 0
+            else:
+                self.outbox_version = 0
         self.loaded = True
 
     def _load_for_status(self, session, room):
@@ -196,6 +242,9 @@ class RoomState(AppState):
         self.room_status = info["status"]
         self.remaining_seconds = info["remaining_seconds"]
         self.remaining_minutes = max(0, info["remaining_seconds"] // 60)
+        self.deadline_label = (
+            "" if info["close_at"] is None else f"Closes in ~{self.remaining_minutes} min"
+        )
         self.threshold = info["threshold"]
         self.closing_note = info["closing_note"] or ""
 
@@ -242,6 +291,86 @@ class RoomState(AppState):
     def set_answer_input(self, value: str):
         self.answer_input = value or ""
 
+    # ------------------------------------------------------------------
+    # Offline outbox
+    # ------------------------------------------------------------------
+
+    # Server-issued revision this device is up to date with. Exposed to the
+    # browser so its queue can stamp each intent and the server can reject an
+    # older write that a newer one already superseded.
+    outbox_version: int = 0
+
+    def flush_outbox(self, payload: str):
+        """Apply whatever this device still has queued for this room.
+
+        Reached from the banner button, from the browser's retry timer (it fires
+        itself when the connection comes back), and on mount. The payload is
+        localStorage contents, so it is untrusted input: it is re-validated and
+        re-decided against current state in ``rhiz.utils.outbox``, never executed
+        as given.
+
+        The browser's copy is cleared only for what the server has settled
+        (applied, already applied, or consciously dropped). Anything that could
+        still succeed stays queued for the next round trip.
+        """
+        intents = outbox.decode_intents(payload)
+        carried = bool(payload) and payload.strip() not in ("", "{}", "null")
+        if not intents:
+            # Entries the server refused to decode or that aged out must still
+            # leave the device, or the banner would nag for ever.
+            return rx.call_script(outbox.clear_intents_js()) if carried else None
+
+        if not self.room_slug:
+            self.room_slug = self.get_path_param("slug", "")
+        if not self.device_token:
+            # A device that queued its first write while offline has no cookie
+            # yet: this round trip is its first contact with the server.
+            self.device_token = secrets.token_urlsafe(32)
+
+        with rx.session() as session:
+            room = get_room(session, self.room_slug)
+            if room is None:
+                # No room to attach the intents to; retrying cannot help.
+                return rx.call_script(outbox.clear_intents_js())
+            participant = get_or_create_participant(
+                session, room, self.device_token
+            )
+            outcomes = outbox.apply_intents(session, room, participant, intents)
+            # Show what just landed, so a replayed answer appears as submitted
+            # rather than leaving the form staring back at them. Before
+            # hydration there is nothing to update, and on_load renders fresh
+            # state moments later anyway.
+            if self.loaded:
+                # The flags are re-derived, not merely set: this device may well
+                # be looking at the nudge screen it just answered, and
+                # _load_for_status only ever turns views *on*.
+                self.show_nudge = False
+                self.has_answer = False
+                self.is_supporting = False
+                self._load_for_status(session, room)
+
+        waiting = [k for k, outcome in outcomes.items() if outcome == outbox.RETRY]
+        self.outbox_version = participant.intent_version or 0
+        # Everything that is not still waitable leaves the device — including
+        # entries that never decoded, which would otherwise be re-sent on every
+        # retry for as long as the tab is open.
+        settled = [kind for kind in outbox.KINDS if kind not in waiting]
+        if set(settled) & {outbox.KIND_ANSWER, outbox.KIND_EDIT}:
+            settled.append("draft")
+        return rx.call_script(
+            outbox.clear_intents_js(settled, version=self.outbox_version)
+        )
+
+    def _answer_settled_js(self):
+        """Tell the device its answer is on record, so the queue stops holding
+        it (and the banner stops claiming work that is already done).
+
+        Undocumented here deliberately: this Reflex version does not export the
+        event-spec type as ``rx.EventSpec``, and annotating a handler's return is
+        not worth reaching into framework internals for.
+        """
+        return rx.call_script(outbox.clear_intents_js([outbox.KIND_ANSWER, "draft"]))
+
     def submit_answer(self):
         self.error = ""
         content = self.answer_input.strip()
@@ -270,6 +399,7 @@ class RoomState(AppState):
             self.my_answer_edited = False
             self.nudge_similar = similar
             self.show_nudge = bool(similar)
+            return self._answer_settled_js()
 
     def keep_mine(self):
         self.show_nudge = False
@@ -287,6 +417,8 @@ class RoomState(AppState):
         self.show_nudge = False
         self.is_supporting = True
         self.has_answer = False
+        # The device was holding this choice; it is on record now.
+        return rx.call_script(outbox.clear_intents_js([outbox.KIND_SUPPORT]))
 
     # ------------------------------------------------------------------
     # Editing
@@ -306,6 +438,7 @@ class RoomState(AppState):
 
     def save_edit(self):
         self.error = ""
+        settled = False
         with rx.session() as session:
             room = get_room(session, self.room_slug)
             if room is None:
@@ -322,7 +455,13 @@ class RoomState(AppState):
             if updated is not None:
                 self.my_answer_content = updated.content
                 self.my_answer_edited = updated.edited_at is not None
+                settled = True
         self.editing = False
+        if settled:
+            # The device was holding this rewording; it is on record now.
+            return rx.call_script(
+                outbox.clear_intents_js([outbox.KIND_EDIT, "draft"])
+            )
 
     # ------------------------------------------------------------------
     # Facilitator controls
@@ -455,11 +594,22 @@ def _room_header() -> rx.Component:
         rx.spacer(),
         rx.cond(
             RoomState.room_status == "open",
-            rx.badge(
-                f"Closes in ~{RoomState.remaining_minutes} min",
-                color_scheme="blue",
-                variant="soft",
-                class_name="no-print",
+            rx.cond(
+                RoomState.deadline_label != "",
+                rx.badge(
+                    RoomState.deadline_label,
+                    color_scheme="blue",
+                    variant="soft",
+                    class_name="no-print",
+                ),
+                # No deadline: a permanent question, not a room that forgot to
+                # close.
+                rx.badge(
+                    "No timer",
+                    color_scheme="teal",
+                    variant="soft",
+                    class_name="no-print",
+                ),
             ),
             rx.badge("Closed", color_scheme="gray", variant="soft"),
         ),
@@ -494,12 +644,16 @@ def _facilitator_controls() -> rx.Component:
                     size="1",
                     class_name="no-print",
                 ),
-                rx.button(
-                    f"Extend +{EXTEND_MINUTES} min",
-                    on_click=RoomState.extend_deadline,
-                    variant="soft",
-                    size="1",
-                    class_name="no-print",
+                rx.cond(
+                    RoomState.deadline_label != "",
+                    rx.button(
+                        f"Extend +{EXTEND_MINUTES} min",
+                        on_click=RoomState.extend_deadline,
+                        variant="soft",
+                        size="1",
+                        class_name="no-print",
+                    ),
+                    rx.fragment(),
                 ),
                 rx.button(
                     "Close question",
@@ -591,6 +745,10 @@ def _nudge_screen() -> rx.Component:
                         rx.text(s["content"], size="2", color="#334155"),
                         rx.button(
                             "Support this",
+                            # The id carries which wording is being backed; the
+                            # browser helper records the tap the moment it
+                            # happens. See assets/outbox.js.
+                            id=f"rhiz-support-{s['id']}",
                             size="1",
                             variant="solid",
                             color_scheme="green",
@@ -623,6 +781,7 @@ def _answer_box() -> rx.Component:
     return rx.vstack(
         rx.text("Answer in your own words", size="2", color="#64748b"),
         rx.text_area(
+            id="rhiz-answer",
             value=RoomState.answer_input,
             on_change=RoomState.set_answer_input,
             placeholder="Type your answer…",
@@ -637,6 +796,10 @@ def _answer_box() -> rx.Component:
         ),
         rx.button(
             "Submit answer",
+            # Watched by the browser helper, which queues the words on the
+            # device before the network is asked to do anything: on conference
+            # wifi the tap must not depend on the link being up at that instant.
+            id="rhiz-submit-answer",
             on_click=RoomState.submit_answer,
             size="3",
             width="100%",
@@ -701,6 +864,7 @@ def _my_answer_view() -> rx.Component:
             RoomState.editing,
             rx.vstack(
                 rx.text_area(
+                    id="rhiz-edit",
                     value=RoomState.edit_input,
                     on_change=RoomState.set_edit_input,
                     width="100%",
@@ -709,7 +873,10 @@ def _my_answer_view() -> rx.Component:
                 ),
                 rx.hstack(
                     rx.button(
-                        "Save", on_click=RoomState.save_edit, size="1"
+                        "Save",
+                        id="rhiz-save-edit",
+                        on_click=RoomState.save_edit,
+                        size="1",
                     ),
                     rx.button(
                         "Cancel",
@@ -1005,10 +1172,91 @@ def _close_dialog() -> rx.Component:
     )
 
 
+def _outbox_banner() -> rx.Component:
+    """Writes this device is holding because they could not be sent.
+
+    Rendered hidden and revealed by ``assets/outbox.js``: only the browser knows
+    whether the device is holding anything, and asking the server is precisely
+    what a device with no connection cannot do. The count text is filled by the
+    same script, so this markup deliberately carries no numbers to go stale.
+
+    The button doubles as the browser's own retry target, and the hidden field
+    beside it is how the queue reaches a state event: both are ordinary Reflex
+    behaviour rather than calls into framework internals.
+    """
+    return rx.box(
+        rx.hstack(
+            rx.icon("circle-arrow-up", size=16, color="#92400e"),
+            rx.text(
+                "",
+                id="rhiz-outbox-count",
+                size="2",
+                color="#92400e",
+                weight="medium",
+            ),
+            rx.button(
+                "Try now",
+                id="rhiz-outbox-send",
+                size="1",
+                variant="soft",
+                color_scheme="amber",
+                on_click=rx.call_script(OUTBOX_PUSH_SCRIPT),
+            ),
+            # The queue's way into a state event: the script writes the pending
+            # intents here, and this binding is what turns them into an argument
+            # on the server. Invisible, never typed in, and part of the banner so
+            # the two are always mounted or hidden together.
+            rx.input(
+                id="rhiz-outbox-payload",
+                on_change=RoomState.flush_outbox,
+                tab_index=-1,
+                aria_hidden=True,
+                pointer_events="none",
+                position="absolute",
+                width="1px",
+                height="1px",
+                opacity=0,
+                border="none",
+                padding=0,
+            ),
+            # The revision the server has already accepted for this device. The
+            # browser stamps each new intent with the next one, so the server
+            # can tell a genuinely newer write from a stale replay.
+            rx.input(
+                id="rhiz-outbox-version",
+                value=RoomState.outbox_version.to_string(),
+                tab_index=-1,
+                aria_hidden=True,
+                pointer_events="none",
+                position="absolute",
+                width="1px",
+                height="1px",
+                opacity=0,
+                border="none",
+                padding=0,
+            ),
+            spacing="2",
+            align="center",
+            width="100%",
+        ),
+        id="rhiz-outbox-note",
+        display="none",
+        padding="8px 12px",
+        border_radius="8px",
+        background="#fef3c7",
+        border="1px solid #fde68a",
+        width="100%",
+        class_name="no-print",
+    )
+
+
 def room_page() -> rx.Component:
     return rx.box(
         rx.html(f"<style>{_PRINT_CSS}</style>"),
         container(
+            # Always in the DOM, before hydration: a device that arrives with no
+            # signal still has to be able to say "waiting to send".
+            _outbox_banner(),
             rx.cond(
                 RoomState.room_not_found,
                 rx.center(
@@ -1081,6 +1329,9 @@ def room_page() -> rx.Component:
             width="100%",
             padding="0 20px 48px 20px",
         ),
+        # Anything this room is still holding gets offered to the server on every
+        # load — which, with the 20s auto-refresh, is also the retry heartbeat.
+        on_mount=rx.call_script(OUTBOX_MOUNT_SCRIPT, callback=RoomState.flush_outbox),
     )
 
 
