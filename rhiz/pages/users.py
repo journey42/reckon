@@ -11,6 +11,7 @@ from rhiz.layouts import profile_layout
 from rhiz.utils.validations import validate_username, validate_email, validate_role
 from dataclasses import dataclass
 from rhiz.utils.comms import send_welcome_email
+from rhiz.pages.group_common import public_base_url
 from rhiz.utils.sessions import revoke_all_for_user
 
 
@@ -44,7 +45,10 @@ class WelcomeEmailConfirmationDialogState(AppState):
             try:
                 self.visible()
                 send_result = send_welcome_email(
-                    session, self.username, self.email, "https://rhiz.ai"
+                    session,
+                    self.username,
+                    self.email,
+                    f"{public_base_url()}/login",
                 )
                 if not send_result:
                     raise ValueError("Email not sent")
@@ -126,6 +130,8 @@ class UserEditorState(AppState):
 
     users: List[List]
     auto_signup_enabled: bool = False
+    auto_group_creation_enabled: bool = True
+    group_creation_limit: int = 3
 
     cols: list[Any] = [
         {
@@ -171,6 +177,10 @@ class UserEditorState(AppState):
         self.auto_signup_enabled = get_setting("auto_signup_enabled", "false").strip().lower() in {
             "1", "true", "on", "yes",
         }
+        from rhiz.utils.groups import auto_group_creation_enabled, group_creation_daily_limit
+
+        self.auto_group_creation_enabled = auto_group_creation_enabled()
+        self.group_creation_limit = group_creation_daily_limit()
 
     def refresh(self):
         self.users = get_users()
@@ -186,6 +196,37 @@ class UserEditorState(AppState):
         from rhiz.state.base import set_setting
         self.auto_signup_enabled = not self.auto_signup_enabled
         set_setting("auto_signup_enabled", "true" if self.auto_signup_enabled else "false")
+
+    @rx.event
+    def toggle_auto_group_creation(self):
+        """Toggle automatic group-creation grants for new accounts."""
+        if not self._require_admin():
+            return
+        from rhiz.state.base import set_setting
+        self.auto_group_creation_enabled = not self.auto_group_creation_enabled
+        set_setting(
+            "auto_group_creation_enabled",
+            "true" if self.auto_group_creation_enabled else "false",
+        )
+
+    @rx.event
+    def set_group_creation_limit(self, value: str):
+        """Set the rolling 24h creation quota (0 pauses creation).
+
+        Rooms count too: a room is a group, so capping only groups would leave
+        the event-day path wide open.
+        """
+        if not self._require_admin():
+            return
+        from rhiz.state.base import set_setting
+        from rhiz.utils.groups import DEFAULT_GROUP_DAILY_LIMIT
+
+        try:
+            limit = int((value or "").strip())
+        except (TypeError, ValueError):
+            limit = DEFAULT_GROUP_DAILY_LIMIT
+        set_setting("group_creation_daily_limit", str(max(0, limit)))
+        self.group_creation_limit = max(0, limit)
 
     def on_column_resize(self, col, width):
         """Resize a column in the logs editor."""
@@ -309,6 +350,34 @@ def users():
                     ),
                     size="2",
                     color="gray",
+                ),
+                align="center",
+                spacing="3",
+                margin_bottom="12px",
+            ),
+            rx.hstack(
+                rx.text("Auto-create groups", size="3", weight="medium"),
+                rx.switch(
+                    checked=UserEditorState.auto_group_creation_enabled,
+                    on_click=UserEditorState.toggle_auto_group_creation,
+                ),
+                rx.text(
+                    rx.cond(
+                        UserEditorState.auto_group_creation_enabled,
+                        "(new accounts get group creation automatically)",
+                        "(admins grant group creation per user)",
+                    ),
+                    size="2",
+                    color="gray",
+                ),
+                rx.spacer(),
+                rx.text("Per 24h", size="2", color="gray"),
+                rx.input(
+                    value=UserEditorState.group_creation_limit.to_string(),
+                    on_change=UserEditorState.set_group_creation_limit,
+                    type="number",
+                    width="80px",
+                    aria_label="Group and room creation limit per 24 hours",
                 ),
                 align="center",
                 spacing="3",
