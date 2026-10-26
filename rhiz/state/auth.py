@@ -13,7 +13,7 @@ import os
 from datetime import timedelta
 from rhiz.utils.comms import send_password_reset_email, send_verification_email
 from rhiz.utils.verification import generate_token, is_group_origin, TOKEN_TTL_HOURS
-from rhiz.utils.urls import safe_next_path
+from rhiz.utils.urls import safe_next_path, public_origin
 from rhiz.utils.security import hash_password, verify_password
 from rhiz.utils.sessions import revoke_all_for_user
 from urllib.parse import quote
@@ -148,6 +148,13 @@ class AuthState(AppState):
             if auto_signup and not group_origin:
                 # Auto-enable normal signups (no manual approval needed)
                 new_user.enabled = True
+            # Self-service creation is an admin toggle: when it is on, new
+            # accounts get the grant automatically; the daily quota still
+            # applies. Off means an admin grants it per user on /users.
+            from rhiz.utils.groups import auto_group_creation_enabled
+
+            if auto_group_creation_enabled():
+                new_user.can_create_groups = True
             session.add(new_user)
             session.commit()
             # Logged after the commit: before it, new_user.id is still None, so
@@ -218,9 +225,7 @@ class AuthState(AppState):
 
             # Auto-signup is off: email a verification link that re-enables
             # the account and returns the user to the group after login.
-            base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:3000").rstrip(
-                "/"
-            )
+            base = public_origin()
             verify_url = (
                 f"{base}/verify_email/{new_user.verification_token}"
                 f"?next={quote(nxt, safe='/')}"
@@ -273,6 +278,10 @@ class AuthState(AppState):
                 created_at=datetime.now(timezone.utc),
                 updated_at=None,
             )
+            from rhiz.utils.groups import auto_group_creation_enabled
+
+            if auto_group_creation_enabled():
+                user.can_create_groups = True
             session.add(user)
             session.commit()
 
@@ -345,7 +354,7 @@ class AuthState(AppState):
             if user:
                 try:
                     result = send_password_reset_email(
-                        session, user, "https://rhiz.ai/reset_password_via_email"
+                        session, user, f"{public_origin()}/reset_password_via_email"
                     )
                 except Exception as e:
                     except_log = Log(

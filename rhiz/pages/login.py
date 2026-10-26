@@ -70,6 +70,13 @@ def login():
             rx.link("Forgot password?", href="/request_reset_password", **link_style),
         ),
         rx.text(
+            rx.link(
+                "Didn't get your verification email?",
+                href="/resend_verification",
+                **link_style,
+            ),
+        ),
+        rx.text(
             rx.link("Create an account", href=AuthState.signup_link, **link_style),
         ),
     )

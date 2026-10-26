@@ -26,6 +26,7 @@ def verify_email_sent():
                     color_scheme="gray",
                     variant="soft",
                 ),
+                rx.link("Resend verification email", href="/resend_verification"),
                 rx.link("Back to login", href="/login"),
                 spacing="3",
                 align="center",
