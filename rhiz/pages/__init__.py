@@ -32,8 +32,10 @@ from .reckonings import your_drafts
 from .feedback import feedback
 from rhiz.pages.group import group  # noqa: F401
 from rhiz.pages.room import room  # noqa: F401
+from rhiz.pages.demo import demo_page  # noqa: F401
 from rhiz.pages.live import live, live_all  # noqa: F401
 from rhiz.pages.groups_admin import groups_admin  # noqa: F401
 from rhiz.pages.your_groups import your_groups  # noqa: F401
 from rhiz.pages.verify_email_sent import verify_email_sent  # noqa: F401
 from rhiz.pages.verify_email import verify_email  # noqa: F401
+from rhiz.pages.resend_verification import resend_verification  # noqa: F401
