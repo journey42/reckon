@@ -1,17 +1,118 @@
-"""Apply pending DB migrations directly via SQL (no Alembic dependency).
+"""Apply pending DB migrations on startup.
 
-Since the base migration files (5c4374b3a58f_, b2f1a9c4d7e3) are not tracked
-in git and don't exist in the container, Alembic's ScriptDirectory can't
-resolve the revision chain. This script applies the needed schema changes
-directly via SQL, bypassing Alembic entirely.
+Two mechanisms, deliberately:
+
+* the schema that predates Alembic here is brought forward with idempotent SQL
+  below, because the revision graph has two roots and three heads and
+  `alembic upgrade head` cannot resolve that;
+* anything under `migrations/versions` that descends from the current stamp is
+  then applied through Alembic, by `_apply_pending_revisions`.
+
+That second half is what was missing. Without it a deploy stamped the database
+and stopped, so a revision committed to the repo - the outbox revision, for
+example - never reached production; and because the stamp was written back to
+LATEST_SQL_MIGRATION on every start, a schema applied by hand was treated as
+never applied.
 
 Usage:
     python scripts/db_migrate.py
 """
 
 import os
+import sys
 
 from sqlalchemy import create_engine, text, inspect
+
+MIGRATIONS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrations"
+)
+
+
+def _alembic_config(db_url: str):
+    """Alembic config built in code: .dockerignore excludes alembic.ini, so the
+    container ships the migration scripts without the ini file they usually
+    come with."""
+    from alembic.config import Config
+
+    cfg = Config()
+    cfg.set_main_option("script_location", MIGRATIONS_DIR)
+    cfg.set_main_option("sqlalchemy.url", db_url)
+    return cfg
+
+
+def _is_ancestor(script, maybe_ancestor: str, of: str) -> bool:
+    """Is maybe_ancestor on the path from `of` back to a root?
+
+    False when the chain cannot be walked at all (the untracked base revisions
+    this script exists because of). Callers read False as "leave it alone",
+    which is the safe direction when the history is ambiguous.
+    """
+    if not maybe_ancestor or not of:
+        return False
+    if maybe_ancestor == of:
+        return True
+    try:
+        for rev in script.iterate_revisions(of, "base"):
+            if rev.revision == maybe_ancestor:
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def _apply_pending_revisions(db_url: str) -> None:
+    """Walk the stamp forward to every head that is actually its descendant.
+
+    Heads on unrelated branches are left alone: their changes are covered by the
+    SQL steps above, and upgrading to them would run steps against a database
+    that never had their ancestors.
+
+    A failure here is fatal on purpose. The alternative is a container that
+    starts happily and then errors on the first request that touches the column
+    the migration was supposed to add.
+    """
+    from alembic import command
+    from alembic.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
+    engine = create_engine(db_url)
+    try:
+        script = ScriptDirectory.from_config(_alembic_config(db_url))
+        with engine.connect() as conn:
+            current = MigrationContext.configure(conn).get_current_revision()
+        heads = script.get_heads()
+    except Exception as exc:  # noqa: BLE001 - unusable chain: SQL steps only
+        print(f"[migrate] alembic chain unavailable ({exc}); SQL steps only.", flush=True)
+        engine.dispose()
+        return
+
+    targets = [h for h in heads if h != current and _is_ancestor(script, current, h)]
+    if not targets:
+        print(
+            f"[migrate] alembic already at the newest applicable revision "
+            f"(stamp {current}).",
+            flush=True,
+        )
+        engine.dispose()
+        return
+
+    for head in targets:
+        print(f"[migrate] alembic upgrade {current} -> {head}", flush=True)
+        try:
+            command.upgrade(_alembic_config(db_url), head)
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"[migrate] FATAL: alembic upgrade to {head} failed: {exc}",
+                flush=True,
+            )
+            print(
+                "[migrate] Refusing to start: the app would run against a schema "
+                "it does not match.",
+                flush=True,
+            )
+            sys.exit(1)
+    print("[migrate] alembic revisions applied.", flush=True)
+    engine.dispose()
 
 
 def get_db_url() -> str:
@@ -352,17 +453,40 @@ def main():
                 flush=True,
             )
         elif existing[0] != LATEST_SQL_MIGRATION:
-            conn.execute(
-                text(
-                    "UPDATE alembic_version SET version_num = :v"
-                ),
-                {"v": LATEST_SQL_MIGRATION},
-            )
-            print(
-                f"[migrate] Advanced alembic_version stamp {existing[0]} -> "
-                f"{LATEST_SQL_MIGRATION}.",
-                flush=True,
-            )
+            # Only ever move the stamp forward. An earlier version wrote
+            # LATEST_SQL_MIGRATION unconditionally, which walked the stamp back
+            # every time a later revision had been applied - and the next start
+            # would then try to re-apply it onto a schema that already had it.
+            from alembic.script import ScriptDirectory
+
+            ahead = False
+            try:
+                script = ScriptDirectory.from_config(_alembic_config(db_url))
+                ahead = _is_ancestor(script, LATEST_SQL_MIGRATION, existing[0])
+            except Exception:
+                ahead = False
+            if ahead:
+                print(
+                    f"[migrate] stamp {existing[0]} is already ahead of "
+                    f"{LATEST_SQL_MIGRATION}; leaving it.",
+                    flush=True,
+                )
+            elif _is_ancestor(ScriptDirectory.from_config(_alembic_config(db_url)), existing[0], LATEST_SQL_MIGRATION):
+                conn.execute(
+                    text("UPDATE alembic_version SET version_num = :v"),
+                    {"v": LATEST_SQL_MIGRATION},
+                )
+                print(
+                    f"[migrate] Advanced alembic_version stamp {existing[0]} -> "
+                    f"{LATEST_SQL_MIGRATION}.",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[migrate] stamp {existing[0]} is on a branch unrelated to "
+                    f"{LATEST_SQL_MIGRATION}; leaving it alone.",
+                    flush=True,
+                )
         else:
             print(
                 f"[migrate] alembic_version already stamped at {existing[0]}.",
@@ -372,6 +496,12 @@ def main():
         conn.execute(text("COMMIT"))
 
     engine.dispose()
+
+    # The SQL steps bring the pre-Alembic schema forward; this applies whatever
+    # has been committed under migrations/versions since. Without it, adding a
+    # migration file changed nothing in a deployed environment.
+    _apply_pending_revisions(db_url)
+
     print("[migrate] Migration complete.", flush=True)
 
 
