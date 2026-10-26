@@ -47,7 +47,11 @@ jobs:
           skip_app_build: true
           skip_api_build: true
           is_static_export: true
-          # Staging canonical hostname serves feed-declutter (client: the
-          # master-built default URL confused users during review).
-          production_branch: feed-declutter
+          # The canonical staging URL serves whatever branch you deploy from
+          # here, which is `staging`. It used to be pinned to feed-declutter so
+          # reviewers saw the newest approved build on the stable URL; that also
+          # meant the URL went blank whenever no feed-declutter build was current.
+          # Push any other branch and Azure gives it its own per-branch URL, so
+          # `staging` is the one that keeps the address people already have.
+          production_branch: staging
           app_artifact_location: swa-build

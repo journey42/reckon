@@ -69,7 +69,7 @@ jobs:
             --resource-group ${{ secrets.RESOURCE_GROUP }} \
             --image ${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${TAG} \
             --set-env-vars API_URL=${{ secrets.PUBLIC_API_URL_STAGING }} \
-                           PUBLIC_BASE_URL=https://mango-tree-0e1baaf0f-feeddeclutter.eastus2.1.azurestaticapps.net \
+                           PUBLIC_BASE_URL=https://mango-tree-0e1baaf0f.eastus2.1.azurestaticapps.net \
                            SUNEDITOR_TOOLBAR_ENABLED=0 \
                            RUN_MIGRATIONS_ON_START=1 \
                            DB_URL=secretref:db-url \
