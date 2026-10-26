@@ -20,7 +20,7 @@ from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from rhiz.utils.groups import get_group_by_slug
+from rhiz.utils.groups import founding_text, get_group_by_slug
 from rhiz.pages.group_common import public_base_url
 
 # Which user agents are crawlers that read OG tags (case-insensitive match).
@@ -93,6 +93,10 @@ async def group_unfurl(request):
 
     with rx.session() as session:
         group = get_group_by_slug(session, slug)
+        # Read the wording while the session is open: the preview must say the
+        # same thing the page says, including for rows that keep the question on
+        # the founding concept rather than the group.
+        question = founding_text(session, group) if group else ""
 
     if group is None:
         return HTMLResponse(
@@ -105,7 +109,7 @@ async def group_unfurl(request):
 
     logo_url = f"{public_base_url()}/logo.png"
     return HTMLResponse(
-        _og_html(group.name, group.founding_question, group_url, logo_url)
+        _og_html(group.name, question, group_url, logo_url)
     )
 
 

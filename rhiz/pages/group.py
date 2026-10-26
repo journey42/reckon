@@ -19,7 +19,12 @@ from sqlalchemy.orm import noload
 from rhiz.styles import page_params, read_only_text_style
 from rhiz.utils.db import insert_text_with_embedding, find_similar_texts_with_join
 from rhiz.utils.parsing import remove_html_tags
-from rhiz.utils.groups import get_group_by_slug, join_group, update_group_details
+from rhiz.utils.groups import (
+    founding_text,
+    get_group_by_slug,
+    join_group,
+    update_group_details,
+)
 from rhiz.pages.reckonings import (
     ReckoningsPageState,
     page,
@@ -85,20 +90,29 @@ class GroupPageState(ReckoningsPageState):
         if not self.edit_name.strip():
             self.edit_error = "Group name is required."
             return
+        if not self.edit_founding_question.strip():
+            # An empty question would erase the wording from both the column and
+            # the founding concept, so the read fallback cannot recover it.
+            self.edit_error = "Founding question is required."
+            return
         owner_id = None if self.user.role >= 2 else self.user.id
         with rx.session() as session:
-            group = update_group_details(
-                session,
-                self.group_id_val,
-                owner_id=owner_id,
-                name=self.edit_name,
-                founding_question=self.edit_founding_question,
-            )
+            try:
+                group = update_group_details(
+                    session,
+                    self.group_id_val,
+                    owner_id=owner_id,
+                    name=self.edit_name,
+                    founding_question=self.edit_founding_question,
+                )
+            except ValueError as exc:
+                self.edit_error = str(exc)
+                return
             if group is None:
                 self.edit_error = "You can only edit groups you created."
                 return
             self.group_name = group.name
-            self.founding_question = group.founding_question
+            self.founding_question = founding_text(session, group)
         self.show_edit_headline = False
         yield HowItWorksDialogState.set_group_info(
             self.group_name, self.founding_question
@@ -135,7 +149,10 @@ class GroupPageState(ReckoningsPageState):
                 return rx.redirect(f"/room/{group.slug}")
             self.group_id_val = group.id
             self.group_name = group.name
-            self.founding_question = group.founding_question
+            # The column first, the founding concept as fallback: rows written
+            # before the column existed keep the wording only on the concept,
+            # which is what made group pages display no question at all.
+            self.founding_question = founding_text(session, group)
             self.founding_concept_id = group.concept_id
             self.is_group_public = group.is_public
             self.is_group_owner = (group.created_by == self.user.id or (self.user and self.user.role >= 2)) if self.user else False

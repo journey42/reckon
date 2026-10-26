@@ -9,7 +9,7 @@ Group record links to it.
 import reflex as rx
 
 from rhiz.state.base import AppState
-from rhiz.utils.groups import create_group
+from rhiz.utils.groups import check_group_creation_quota, create_group
 from rhiz.utils.permissions import can_manage_groups
 
 
@@ -55,6 +55,10 @@ class GroupDialogState(AppState):
             self.error = "Founding question is required."
             return
         with rx.session() as session:
+            ok, message = check_group_creation_quota(session, self.user)
+            if not ok:
+                self.error = message
+                return
             try:
                 create_group(
                     session,

@@ -1,12 +1,133 @@
 """Data-access helpers for group pages."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlmodel import select
 
-from rhiz.state.base import Group, GroupStatus, GroupMember, Reckoning, ReckoningTypes, User
+from rhiz.state.base import (
+    Group,
+    GroupStatus,
+    GroupMember,
+    Reckoning,
+    ReckoningTypes,
+    User,
+    UserTypes,
+    get_setting,
+)
 from rhiz.utils.slugs import slugify, unique_slug
+
+
+def founding_text(session, group: Optional[Group]) -> str:
+    """The question a group is built around, however this row happens to store it.
+
+    New groups keep the wording on the ``group`` row *and* as their founding
+    concept. Rows written before that column existed — and any written by a path
+    that populated only one of the two — have the text on the concept alone,
+    which is where ``concept_id`` points. Falling back to it costs one lookup and
+    is why a group page never has to show an empty "Your group has asked:".
+
+    Returns "" only when neither place has anything, which is a row worth
+    looking at: ``scripts/backfill_founding_questions.py`` reports those.
+    """
+    if group is None:
+        return ""
+    text = (group.founding_question or "").strip()
+    if text:
+        return text
+    if group.concept_id:
+        concept = session.get(Reckoning, group.concept_id)
+        if concept is not None:
+            return (concept.content or "").strip()
+    return ""
+
+# Self-service group creation is a client-requested safeguard: new accounts get
+# the grant automatically, but creation is bounded by an admin toggle and a
+# rolling 24h quota shared by groups *and* live rooms (a room is a group, so
+# capping only one of the two would leave the other wide open).
+AUTO_GROUP_CREATION_SETTING = "auto_group_creation_enabled"
+GROUP_DAILY_LIMIT_SETTING = "group_creation_daily_limit"
+DEFAULT_GROUP_DAILY_LIMIT = 3
+_GROUP_QUOTA_WINDOW_HOURS = 24
+
+
+def _utcnow_naive() -> datetime:
+    """Naive UTC now.
+
+    ``group.created_at`` is a timestamp *without* time zone holding UTC wall
+    time, so the cutoff has to be naive too: comparing it against an aware
+    datetime makes Postgres reinterpret every stored row in the session time
+    zone, which on a -07:00 box quietly ages the 24h window by seven hours.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def auto_group_creation_enabled() -> bool:
+    """Whether new accounts are granted group creation automatically.
+
+    Defaults to on: switching it off is an admin intervention, not a default.
+    """
+    return get_setting(AUTO_GROUP_CREATION_SETTING, "true").strip().lower() != "false"
+
+
+def group_creation_daily_limit() -> int:
+    """Groups + rooms one account may create per rolling 24h. 0 pauses creation.
+
+    Unset, blank or unparseable all fall back to the default, so a typo in the
+    admin UI cannot silently mean "unlimited".
+    """
+    raw = get_setting(GROUP_DAILY_LIMIT_SETTING, "").strip()
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_GROUP_DAILY_LIMIT
+
+
+def check_group_creation_quota(
+    session, user, require_permission: bool = True
+) -> tuple[bool, str]:
+    """May ``user`` create another group (or room) right now?
+
+    Returns ``(ok, message)``; ``message`` is what to show the user when the
+    answer is no. ``require_permission=False`` is the live-room path: opening a
+    room has never needed the ``can_create_groups`` grant, but the quota still
+    applies there.
+    """
+    if user is None:
+        return False, "Please log in first."
+
+    is_admin = user.role >= UserTypes.admin
+    if require_permission and not is_admin and not user.can_create_groups:
+        return False, (
+            "Your account does not have group-creation permission yet. "
+            "Ask an administrator to enable it."
+        )
+
+    if not user.enabled:
+        return False, (
+            "Verify your email address first — use the link we emailed you "
+            "before creating a group."
+        )
+
+    limit = group_creation_daily_limit()
+    if limit <= 0:
+        return False, (
+            "Group creation is paused for new accounts right now. Please try "
+            "again later."
+        )
+
+    cutoff = _utcnow_naive() - timedelta(hours=_GROUP_QUOTA_WINDOW_HOURS)
+    recent = session.exec(
+        select(Group).where(Group.created_by == user.id, Group.created_at > cutoff)
+    ).all()
+    if len(recent) >= limit:
+        return False, (
+            f"You have reached the limit of {limit} new group"
+            f"{'s' if limit != 1 else ''} or live room"
+            f"{'s' if limit != 1 else ''} per 24 hours. Please try again later."
+        )
+
+    return True, ""
 
 
 def get_group_by_slug(session, slug: str):
@@ -22,7 +143,18 @@ def create_group(session, name: str, founding_question: str, created_by: int):
 
     A group has its own founding question (stored as a concept scoped to the
     group via group_id) and serves as a container for user-submitted concepts.
+
+    The question is required here, not just in the dialog: a blank founding
+    question would create a group whose header is empty and whose founding
+    concept is empty, and neither the read fallback nor the backfill can
+    recover it. That is the failure mode the client reported.
     """
+    name = (name or "").strip()
+    founding_question = (founding_question or "").strip()
+    if not name:
+        raise ValueError("Group name is required.")
+    if not founding_question:
+        raise ValueError("Founding question is required.")
 
     def _taken(candidate: str) -> bool:
         return get_group_by_slug(session, candidate) is not None
@@ -201,6 +333,11 @@ def update_group_details(
         group.name = cleaned
     if founding_question is not None:
         cleaned = founding_question.strip()
+        if not cleaned:
+            # Empty is not a valid edit: it writes "" over both the column and
+            # the founding concept, so the read fallback has nothing to recover
+            # and the group header goes blank for good.
+            raise ValueError("Founding question is required.")
         group.founding_question = cleaned
         concept = session.exec(
             select(Reckoning).where(Reckoning.id == group.concept_id)
