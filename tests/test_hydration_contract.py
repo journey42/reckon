@@ -1,9 +1,14 @@
-"""Tests for the hydration contract between the entry and the export fixups.
+"""Tests for the hydration contract between the entry and the exported HTML.
 
 React error #418 was logged on every visit to a parameterised route: Reflex
-hydrates unconditionally, but the host serves a root-only shell for those URLs,
-so the markup can never contain the page. The fix splits into two halves that
-have to agree on a marker name, which is what these tests pin down.
+hydrates unconditionally while the host serves those URLs a root-only shell that
+cannot contain the page. Two properties have to hold for the fix to work, and
+both are pinned here because each was got wrong once already, on staging:
+
+* the entry must hydrate prerendered documents and mount client-side otherwise;
+* the thing it keys on must be markup the export already writes — annotating the
+  document (a ``<meta>``, then an attribute on ``<html>``) made the *prerendered*
+  routes mismatch, so no marker may be added anywhere.
 """
 
 from __future__ import annotations
@@ -17,79 +22,100 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import hydration_plugin  # noqa: E402
 from frontend_export_fixups import (  # noqa: E402
+    FALLBACK,
     INDEX,
-    MARKER_NAME,
-    SHELLS,
-    route_for,
-    stamp,
-    unstamp,
+    NOT_FOUND,
+    main,
+    strip_chrome,
 )
 
-
-def test_the_two_halves_agree_on_the_marker_name():
-    """The entry reads what the fixups write; a rename on one side must fail here."""
-    assert hydration_plugin.MARKER_NAME == MARKER_NAME
+SHELLS = (FALLBACK, NOT_FOUND)
 
 
-def test_entry_hydrates_only_on_a_matching_marker_and_otherwise_mounts():
+def test_entry_hydrates_and_has_a_client_render_path():
     entry = hydration_plugin.ENTRY_CLIENT_JS
     assert "hydrateRoot(document" in entry
     assert "createRoot(document).render" in entry
-    # The decision must come from the marker and the URL, not from a guess about
-    # which routes are dynamic — new routes come free.
-    assert "document.documentElement.getAttribute(MARKER)" in entry
-    assert "window.location.pathname" in entry
-    assert "function normalize" in entry
     # Reflex's own entry was unconditional; make sure it did not creep back.
     assert entry.count("hydrateRoot(") == 1
+    assert entry.count("createRoot(") == 1
 
 
-def test_the_marker_is_an_attribute_and_never_a_node_in_the_document():
-    """The whole document, ``<head>`` included, is part of the tree React
-    hydrates. A stamped ``<meta>`` is an unexpected node in it, which mismatches
-    and reproduces the very error being fixed — measured on staging, where it
-    silenced the dynamic routes and broke the prerendered ones."""
-    html = '<html lang="en"><head><title>t</title></head><body><p>x</p></body></html>'
-    stamped = stamp(html, "/login")
-    assert stamped.startswith('<html lang="en"')
-    assert MARKER_NAME in stamped.split("<head>")[0], "marker must sit on <html>, above <head>"
-    assert stamped.split("<head>")[1] == html.split("<head>")[1], "head/body must be untouched"
-    assert f"{MARKER_NAME}=" not in unstamp(stamped)
+def test_entry_keys_on_the_framework_rendered_hint():
+    entry = hydration_plugin.ENTRY_CLIENT_JS
+    assert hydration_plugin.HYDRATE_FALLBACK_HINT in entry
+    # The decision must come from the served document, not from a list of routes
+    # (which would have to be kept in sync) and not from a marker we add.
+    assert "servedFallback()" in entry
+    assert "window.location.pathname" not in entry
+
+
+def test_no_marker_is_written_into_the_document():
+    """Both earlier attempts failed for this reason; guard against a third."""
+    entry = hydration_plugin.ENTRY_CLIENT_JS
+    source = (ROOT / "scripts" / "frontend_export_fixups.py").read_text(encoding="utf-8")
+    for forbidden in ("querySelector(\"meta[name=", "documentElement.getAttribute", "data-reflex-prerendered-route"):
+        assert forbidden not in entry, f"entry still consults a document marker: {forbidden}"
+        assert forbidden not in source, f"fixups still writes a document marker: {forbidden}"
 
 
 def test_plugin_takes_ownership_of_the_entry():
-    plugin = hydration_plugin.ConditionalHydrationPlugin()
-    assert plugin.provides_entry_client() is True
+    assert hydration_plugin.ConditionalHydrationPlugin().provides_entry_client() is True
 
 
-def test_route_for_maps_exported_files_back_to_urls():
-    assert route_for(Path("index.html")) == "/"
-    assert route_for(Path("login/index.html")) == "/login"
-    assert route_for(Path("login.html")) == "/login"
-    assert route_for(Path("live/all/index.html")) == "/live/all"
-    assert route_for(Path("group/[slug].html")) == "/group/[slug]"
+def test_the_hint_separates_shells_from_prerendered_pages_on_a_real_export():
+    """The signal has to hold for real files, not for a fixture.
+
+    Skipped when no export is present (a fresh clone), because inventing the two
+    kinds of file here would test the test rather than Reflex's output.
+    """
+    out = ROOT / ".web" / "build" / "client"
+    sample = out / "login" / INDEX
+    shell = out / FALLBACK
+    if not (sample.is_file() and shell.is_file()):
+        import pytest
+
+        pytest.skip("no exported frontend at .web/build/client")
+
+    hint = hydration_plugin.HYDRATE_FALLBACK_HINT
+    assert hint in shell.read_text(encoding="utf-8"), "the shell must carry the fallback hint"
+    for prerendered in (out / INDEX, sample, out / "live" / "all" / INDEX):
+        if prerendered.is_file():
+            assert hint not in prerendered.read_text(encoding="utf-8"), (
+                f"{prerendered.relative_to(out)} would be mounted client-side, losing its prerender"
+            )
 
 
-def test_stamping_round_trips_and_replaces_a_stale_route():
-    html = "<html><head><title>t</title></head><body><p>hi</p></body></html>"
-    once = stamp(html, "/login")
-    assert f'{MARKER_NAME}="/login"' in once
-    # Idempotent, and a second pass with a different route replaces rather than
-    # piles up a second marker.
-    assert stamp(once, "/login") == once
-    twice = stamp(once, "/demo")
-    assert twice.count(MARKER_NAME) == 1
-    assert 'content=' not in twice
-    assert f'{MARKER_NAME}="/demo"' in twice
-    assert unstamp(twice) == html
+def test_a_spa_mode_export_still_gets_the_files_the_host_rewrites_to(tmp_path, monkeypatch, capsys):
+    """SPA mode emits no __spa-fallback.html, and the shared host config rewrites
+    unknown paths to exactly that name."""
+    (tmp_path / INDEX).write_text("<html><body>shell</body></html>", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["fixups", "--out", str(tmp_path)])
+    assert main() == 0
+    for name in SHELLS:
+        assert (tmp_path / name).read_text(encoding="utf-8") == (tmp_path / INDEX).read_text(encoding="utf-8")
+    # Idempotent: a second run must not churn the files.
+    before = {n: (tmp_path / n).read_bytes() for n in SHELLS}
+    monkeypatch.setattr(sys, "argv", ["fixups", "--out", str(tmp_path)])
+    assert main() == 0
+    assert {n: (tmp_path / n).read_bytes() for n in SHELLS} == before
 
 
-def test_html_without_a_head_still_gets_the_marker():
-    html = "<html><body><p>hi</p></body></html>"
-    assert MARKER_NAME in stamp(html, "/x")
+def test_missing_export_is_an_error_rather_than_a_silent_empty_deploy(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["fixups", "--out", str(tmp_path / "nope")])
+    assert main() == 2
 
-def test_the_shells_that_stand_for_unrendered_urls_are_never_stamped():
-    """404.html and __spa-fallback.html are served for URLs that were never
-    rendered, so a marker on them would tell the entry to hydrate falsely."""
-    assert set(SHELLS) == {"404.html", "__spa-fallback.html"}
-    assert INDEX not in SHELLS  # the root route's own prerender must stay stamped
+
+def test_strip_chrome_removes_only_the_shell_chrome():
+    html = (
+        '<html><head><title>t</title></head><body>'
+        '<section aria-label="Notifications alt+T" tabindex="-1"></section>'
+        '<div data-is-root-theme="true" class="radix-themes css-0">'
+        '<div title="Connection Error: "></div></div>'
+        "<script>console.log(1)</script></body></html>"
+    )
+    stripped = strip_chrome(html)
+    assert "Notifications" not in stripped
+    assert "Connection Error" not in stripped
+    assert "console.log(1)" in stripped
+    assert "<title>t</title>" in stripped

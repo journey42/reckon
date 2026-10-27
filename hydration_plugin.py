@@ -1,34 +1,41 @@
-"""Hydrate only when the served HTML is actually this route's prerender.
+"""Hydrate only when the served HTML was actually rendered for this route.
 
 Why this exists
 ---------------
 Reflex builds the frontend with React Router in ``ssr: false`` +
 ``prerender: true`` mode. That prerenders every *static* route to a real HTML
-file, and leaves *parameterised* routes — ``/group/[slug]``, ``/room/[slug]``,
-``/concept/[rid]`` and five others — with nothing but the root-only shell, which
-the host serves for them as a fallback.
+file and leaves *parameterised* routes — ``/group/[slug]``, ``/room/[slug]``,
+``/concept/[rid]`` and five others — to the host's root-only SPA fallback.
 
 Reflex's stock entry is unconditional::
 
     hydrateRoot(document, createElement(HydratedRouter));
 
-So for every dynamic route the browser is handed markup that cannot contain the
-page it is about to render. React calls that a hydration failure
-(`Minified React error #418 <https://react.dev/errors/418>`_), throws the tree
-away and re-renders it from scratch — on the app's most-visited pages, during the
-event, on phones.
+so for those URLs the browser is handed markup that cannot contain the page it is
+about to render. React calls that a hydration failure
+(`Minified React error #418 <https://react.dev/errors/418>`_), discards the tree
+and re-renders from scratch — on the app's most-visited pages, during the event,
+on phones.
 
-Two host-side fixes were measured on the deployed site and neither works: export
-in SPA mode (``--no-ssr``) makes *every* route mismatch instead of just the
-dynamic ones, and emptying the shell's body does not help either — the mismatch
-is unconditional once ``hydrateRoot`` is used against markup that was not
-rendered for this URL. The entry itself has to decide.
+What was measured, on the deployed site rather than inferred
+------------------------------------------------------------
+* Exporting in SPA mode (``--no-ssr``) is *worse*: every route serves the shell,
+  so every route mismatches instead of only the parameterised ones.
+* Emptying the shell's body changes nothing — the mismatch is not about the
+  container's contents once ``hydrateRoot`` is used.
+* Marking the document (a ``<meta>`` with the route, then an attribute on
+  ``<html>``) made *prerendered* routes mismatch too. Anything added to the
+  document is part of the tree being hydrated, so the marker cannot live there.
 
-This plugin uses Reflex's supported hook (``Plugin.provides_entry_client``, which
-makes the framework skip its own ``entry.client.js``) and writes an entry that
-hydrates when ``scripts/frontend_export_fixups.py`` stamped the document with the
-route it was prerendered for, and mounts client-side otherwise. Prerendering
-keeps working where it applies; the console stops lying about the rest.
+So the entry has to recognise the fallback from markup that already exists.
+React Router renders its ``HydrateFallback`` hint into the shell and only the
+shell (``404.html`` / ``__spa-fallback.html``); prerendered route files never
+contain it. That hint is this file's signal: hydrate when it is absent, mount
+client-side when it is present — which is exactly what a fallback asks for.
+
+Upstream is the eventual fix: React Router reworked the ``ssr: false`` +
+``prerender`` interaction (remix-run/react-router#12948). This is a small,
+reversible local fix that does not require a framework jump the week of an event.
 """
 
 from __future__ import annotations
@@ -37,50 +44,42 @@ from reflex.plugins.base import Plugin
 from reflex.utils.prerequisites import get_web_dir
 from reflex_base.constants import Embed
 
-#: Must match ``MARKER_NAME`` in scripts/frontend_export_fixups.py. An attribute on
-# ``<html>`` rather than a tag in the document: the head is part of the tree React
-# hydrates, so a stamped element there is an unexpected node and mismatches.
-MARKER_NAME = "data-reflex-prerendered-route"
+#: React Router's HydrateFallback hint, as rendered into the SPA shell. Present
+#: only in files the export never rendered for a specific route.
+HYDRATE_FALLBACK_HINT = "Hey developer"
 
 ENTRY_CLIENT_JS = """\
 // Provided by hydration_plugin.ConditionalHydrationPlugin — registered in
 // rxconfig.py. Reflex would otherwise write its own unconditional entry here.
 //
-// Hydrate only when this document was prerendered for *this* URL. Reflex
+// Hydrate only when this document was rendered for *this* route. Reflex
 // prerenders the static routes and leaves parameterised ones to the host's SPA
 // fallback; hydrating that fallback is React error #418 on every visit, which
-// costs a discarded tree and a full re-render. A stamped marker means the bytes
-// came from this route's prerender, so hydration is safe. Without it, mount
-// client-side, which is exactly what a fallback is asking for.
+// costs a discarded tree and a full re-render.
+//
+// The signal is markup the export already writes, not a marker of our own:
+// every attempt to annotate the HTML (a <meta>, then an attribute on <html>)
+// changed the tree React hydrates and made the *prerendered* routes mismatch.
+// React Router renders its HydrateFallback hint into the shell, and only the
+// shell, so its presence means "this is the fallback, not this route's HTML".
 import { createElement, startTransition } from "react";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { HydratedRouter } from "react-router/dom";
 
-const MARKER = "%(marker)s";
+const FALLBACK_HINT = "%(hint)s";
 
-function normalize(path) {
-  // /login and /login/ are the same route; the export writes files under the
-  // directory form while the host may serve either spelling.
-  return path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+function servedFallback() {
+  return document.documentElement.innerHTML.indexOf(FALLBACK_HINT) !== -1;
 }
-
-function servedRoute() {
-  // An attribute, because everything React rendered — <head> included — is
-  // compared node for node, and this marker is not part of that tree.
-  return document.documentElement.getAttribute(MARKER);
-}
-
-const served = servedRoute();
-const canHydrate = served !== null && normalize(served) === normalize(window.location.pathname);
 
 startTransition(() => {
-  if (canHydrate) {
-    hydrateRoot(document, createElement(HydratedRouter));
-  } else {
+  if (servedFallback()) {
     createRoot(document).render(createElement(HydratedRouter));
+  } else {
+    hydrateRoot(document, createElement(HydratedRouter));
   }
 });
-""" % {"marker": MARKER_NAME}
+""" % {"hint": HYDRATE_FALLBACK_HINT}
 
 
 class ConditionalHydrationPlugin(Plugin):
@@ -94,7 +93,7 @@ class ConditionalHydrationPlugin(Plugin):
         """Write the entry before the frontend is built.
 
         Runs on every compile, so an edit here cannot be masked by a stale
-        ``.web`` directory left over from a previous Reflex version.
+        ``.web`` directory left behind by a previous Reflex version.
         """
         target = get_web_dir() / Embed.ENTRY_PATH
         target.parent.mkdir(parents=True, exist_ok=True)
