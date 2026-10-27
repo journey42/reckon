@@ -35,6 +35,7 @@ jobs:
           API_URL: ${{ secrets.PUBLIC_API_URL_STAGING }}
           TOOLBAR_ENABLED: 0
           SPA_MODE: ${{ vars.STAGING_SPA_MODE }}
+          STRIP_CHROME: ${{ vars.STAGING_STRIP_CHROME }}
         run: |
           if [ "$SPA_MODE" = "1" ]; then
             echo "exporting in SPA mode (no route prerendering)"
@@ -42,7 +43,7 @@ jobs:
           else
             reflex export --frontend-only --no-zip
           fi
-          python scripts/frontend_export_fixups.py --out .web/build/client
+          python scripts/frontend_export_fixups.py --out .web/build/client --strip-chrome "${STRIP_CHROME:-none}"
 
       - name: Prepare static artifacts
         run: |
