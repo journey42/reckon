@@ -173,7 +173,7 @@ def _seed_rooms() -> list[tuple[str, bool]]:
     import reflex as rx
     from sqlmodel import select
 
-    from rhiz.state.base import Group
+    from rhiz.state.base import Group, GroupStatus
     from rhiz.utils.rooms import create_room
 
     out: list[tuple[str, bool]] = []
@@ -183,16 +183,29 @@ def _seed_rooms() -> list[tuple[str, bool]]:
             room = session.exec(
                 select(Group).where(Group.founding_question == question)
             ).first()
+            # 120 minutes, not the default: a room that expires halfway through a
+            # test session would make the pass flaky.
+            lifespan = 120
             if room is None:
-                # 120 minutes, not the default: a room that expires halfway
-                # through a test session would make the pass flaky.
                 room = create_room(
                     session,
                     question=question,
                     created_by=admin.id,
-                    duration_minutes=120,
+                    duration_minutes=lifespan,
                     permanent=permanent,
                 )
+            elif not permanent and room.close_at is not None:
+                # Re-running this script is how you revive the fixtures, so it has
+                # to actually revive them: a timed room from a previous session is
+                # closed by now, and the pass's Extend check needs an open one.
+                # Leaving it expired made "re-run the seed" advice that did
+                # nothing, while the check passed on the permanent room alone.
+                now = datetime.datetime.now(datetime.timezone.utc)
+                room.close_at = now + datetime.timedelta(minutes=lifespan)
+                room.status = GroupStatus.open
+                session.add(room)
+                session.commit()
+                session.refresh(room)
             out.append((room.slug, permanent))
     return out
 

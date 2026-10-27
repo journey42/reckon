@@ -131,6 +131,39 @@ def hard_errors(errors: list[str]) -> list[str]:
     return [e for e in errors if not _PRENDER_HINT.search(e)]
 
 
+def rows(query: str, **params):
+    with db().connect() as conn:
+        return [tuple(r) for r in conn.execute(sa.text(query), params).fetchall()]
+def sign_in(page, username: str, password: str) -> None:
+    """Log in and wait for the session to actually take.
+
+    Leaving /login too early races the session cookie and the next page renders
+    as a stranger, which would look like an authorisation bug.
+    """
+    page.goto(f"{BASE}/login", wait_until="networkidle", timeout=TIMEOUT)
+    page.wait_for_timeout(2000)
+    page.fill("input[placeholder='Username']", username)
+    page.fill("input[type=password]", password)
+    page.click("button[type=submit]")
+    page.wait_for_url(lambda url: not url.startswith(f"{BASE}/login"), timeout=TIMEOUT)
+    page.wait_for_timeout(1500)
+
+
+# --------------------------------------------------------------------------
+# checks
+# --------------------------------------------------------------------------
+CHECKS: list[tuple[str, str]] = []
+
+
+def check(title: str):
+    def deco(fn):
+        CHECKS.append((title, fn.__name__))
+        fn._title = title
+        return fn
+
+    return deco
+
+
 def _first_room_path() -> str:
     if not DB_URL:
         return "/live"
@@ -171,39 +204,6 @@ def no_hydration_failures(browser):
         offenders += [f"{path}: {s}" for s in seen]
     assert not offenders, "hydration failed:\n           " + "\n           ".join(offenders)
     return "prerendered and fallback routes both come up clean"
-
-
-def rows(query: str, **params):
-    with db().connect() as conn:
-        return [tuple(r) for r in conn.execute(sa.text(query), params).fetchall()]
-def sign_in(page, username: str, password: str) -> None:
-    """Log in and wait for the session to actually take.
-
-    Leaving /login too early races the session cookie and the next page renders
-    as a stranger, which would look like an authorisation bug.
-    """
-    page.goto(f"{BASE}/login", wait_until="networkidle", timeout=TIMEOUT)
-    page.wait_for_timeout(2000)
-    page.fill("input[placeholder='Username']", username)
-    page.fill("input[type=password]", password)
-    page.click("button[type=submit]")
-    page.wait_for_url(lambda url: not url.startswith(f"{BASE}/login"), timeout=TIMEOUT)
-    page.wait_for_timeout(1500)
-
-
-# --------------------------------------------------------------------------
-# checks
-# --------------------------------------------------------------------------
-CHECKS: list[tuple[str, str]] = []
-
-
-def check(title: str):
-    def deco(fn):
-        CHECKS.append((title, fn.__name__))
-        fn._title = title
-        return fn
-
-    return deco
 
 
 @check("deep links serve the app (staticwebapp.config fallback)")
@@ -391,10 +391,16 @@ def extend_button_matches_the_timer(browser):
         "   AND g.close_at > (now() at time zone 'utc') LIMIT 1",
         n=ADMIN_USER,
     )
-    if not permanent and not timed:
+    if not permanent or not timed:
+        # Half of this check is about the contrast, so passing with one kind
+        # missing would assert nothing. Timed fixtures expire, which is exactly
+        # how this goes quiet without anyone noticing.
+        missing = " and ".join(
+            label for label, found in (("permanent", permanent), ("timed", timed)) if not found
+        )
         return (
-            f"{ADMIN_USER} convenes no open question — run "
-            "scripts/seed_staging_test_user.py first"
+            f"{ADMIN_USER} has no open {missing} question — re-run "
+            "scripts/seed_staging_test_user.py (timed fixtures expire)"
         )
     page = browser.new_context().new_page()
     try:

@@ -166,6 +166,57 @@ Verified: staging went `a9b8c7d6e5f4 -> c9d1e2f3a4b5` and
 `roomparticipant.intent_version` appeared; production is still `a9b8c7d6e5f4`
 with the column absent, which is correct — the migration is staged, not applied.
 
+## /demo: which question it shows
+
+`/demo` renders the question stored in the `demo_room_slug` app setting, or — when
+that pointer is missing or stale — the **newest open permanent question**
+("permanent" is defined as a room with no `close_at`; see
+`rhiz/utils/demo.py:active_demo_question`). That fallback is deliberate: the demo
+card is printed, so a deleted question must not leave a broken page.
+
+It has a consequence worth knowing: any user's permanent question becomes the
+public demo question if nothing is pointed at. On staging that surfaced as the
+regression fixture ("Regression pass live question with no timer") appearing on
+`/demo`. Fix it by actually creating a demo question, not by deleting the fixture:
+
+```bash
+DB_URL=<staging dsn> python scripts/create_demo_question.py --activate "Your question?"
+```
+
+Staging now has one (`/demo/YCAPq8rQJn2DOMLp`); change the wording any time from
+the admin control at `/live`.
+
+**Before the event:** production has no `demo_room_slug` and no permanent
+question, and `/demo` is still a 404 there because the page only exists on
+`staging`. Someone must deploy it and create the question, or the printed card
+leads to an empty page.
+
+## Hydration: why the app mounts instead of hydrating
+
+Every page logged `Minified React error #418` — "the server rendered HTML didn't
+match the client, so this tree will be regenerated". The cause is structural:
+Reflex hydrates the whole document, but the exported `<head>` is not the `<head>`
+React renders, so the trees never line up.
+
+Measured on staging, in this order:
+
+| change | result |
+| --- | --- |
+| stock entry (`hydrateRoot`) | #418 on every route |
+| SPA mode (`--no-ssr`) | #418 on every route |
+| `<meta>` marker with the route | dynamic fixed, prerendered broke |
+| attribute on `<html>` | same — anything inside the document is compared |
+| `createRoot` (`client_render_plugin.py`) | no #418 anywhere, one copy of each page |
+
+Because React regenerates the tree on mismatch, the server markup was already
+being thrown away; only the error and the diff work were unique. Prerendered files
+are still exported and served, so first paint and crawlers still get content. A
+Reflex upgrade is the eventual fix (upstream reworked `ssr: false` + `prerender`,
+remix-run/react-router#12948).
+
+The pass now fails on any hydration error, so an upgrade that restores the stock
+entry cannot slip through.
+
 ## Known state / history
 
 - `reckon-db-staging` was deleted at some point after 2026-09-26, which is why
