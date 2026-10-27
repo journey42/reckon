@@ -35,13 +35,26 @@ def test_entry_hydrates_only_on_a_matching_marker_and_otherwise_mounts():
     entry = hydration_plugin.ENTRY_CLIENT_JS
     assert "hydrateRoot(document" in entry
     assert "createRoot(document).render" in entry
-    # The decision must be made from the marker and the URL, not from a guess
-    # about which routes are dynamic — new routes come free.
-    assert 'meta[name="${MARKER}"]' in entry
+    # The decision must come from the marker and the URL, not from a guess about
+    # which routes are dynamic — new routes come free.
+    assert "document.documentElement.getAttribute(MARKER)" in entry
     assert "window.location.pathname" in entry
     assert "function normalize" in entry
     # Reflex's own entry was unconditional; make sure it did not creep back.
     assert entry.count("hydrateRoot(") == 1
+
+
+def test_the_marker_is_an_attribute_and_never_a_node_in_the_document():
+    """The whole document, ``<head>`` included, is part of the tree React
+    hydrates. A stamped ``<meta>`` is an unexpected node in it, which mismatches
+    and reproduces the very error being fixed — measured on staging, where it
+    silenced the dynamic routes and broke the prerendered ones."""
+    html = '<html lang="en"><head><title>t</title></head><body><p>x</p></body></html>'
+    stamped = stamp(html, "/login")
+    assert stamped.startswith('<html lang="en"')
+    assert MARKER_NAME in stamped.split("<head>")[0], "marker must sit on <html>, above <head>"
+    assert stamped.split("<head>")[1] == html.split("<head>")[1], "head/body must be untouched"
+    assert f"{MARKER_NAME}=" not in unstamp(stamped)
 
 
 def test_plugin_takes_ownership_of_the_entry():
@@ -60,20 +73,20 @@ def test_route_for_maps_exported_files_back_to_urls():
 def test_stamping_round_trips_and_replaces_a_stale_route():
     html = "<html><head><title>t</title></head><body><p>hi</p></body></html>"
     once = stamp(html, "/login")
-    assert f'<meta name="{MARKER_NAME}" content="/login"/>' in once
+    assert f'{MARKER_NAME}="/login"' in once
     # Idempotent, and a second pass with a different route replaces rather than
     # piles up a second marker.
     assert stamp(once, "/login") == once
     twice = stamp(once, "/demo")
     assert twice.count(MARKER_NAME) == 1
-    assert 'content="/demo"' in twice
+    assert 'content=' not in twice
+    assert f'{MARKER_NAME}="/demo"' in twice
     assert unstamp(twice) == html
 
 
 def test_html_without_a_head_still_gets_the_marker():
     html = "<html><body><p>hi</p></body></html>"
     assert MARKER_NAME in stamp(html, "/x")
-
 
 def test_the_shells_that_stand_for_unrendered_urls_are_never_stamped():
     """404.html and __spa-fallback.html are served for URLs that were never

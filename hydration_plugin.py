@@ -37,8 +37,10 @@ from reflex.plugins.base import Plugin
 from reflex.utils.prerequisites import get_web_dir
 from reflex_base.constants import Embed
 
-#: Must match ``MARKER_NAME`` in scripts/frontend_export_fixups.py.
-MARKER_NAME = "reflex:prerendered-route"
+#: Must match ``MARKER_NAME`` in scripts/frontend_export_fixups.py. An attribute on
+# ``<html>`` rather than a tag in the document: the head is part of the tree React
+# hydrates, so a stamped element there is an unexpected node and mismatches.
+MARKER_NAME = "data-reflex-prerendered-route"
 
 ENTRY_CLIENT_JS = """\
 // Provided by hydration_plugin.ConditionalHydrationPlugin — registered in
@@ -63,8 +65,9 @@ function normalize(path) {
 }
 
 function servedRoute() {
-  const meta = document.querySelector(`meta[name="${MARKER}"]`);
-  return meta ? meta.getAttribute("content") : null;
+  // An attribute, because everything React rendered — <head> included — is
+  // compared node for node, and this marker is not part of that tree.
+  return document.documentElement.getAttribute(MARKER);
 }
 
 const served = servedRoute();

@@ -100,7 +100,15 @@ def db():
 # markup away and re-renders. Reported rather than failed, because a production
 # build minifies the message and the page recovers on its own — but a new code
 # showing up here means something else started hydrating badly.
-_HYDRATION = re.compile(r"Hydration|Minified React error #(418|422|423|424|425)\b")
+# Reflex renders this into the prerendered shell as a plain console.log (React
+# Router's hint about HydrateFallback). It appears on any page served from the
+# SPA fallback and is not an error — treating it as one made the pass report
+# hydration failures that were only ever that log line.
+_PRENDER_HINT = re.compile(r"Hey developer")
+
+# Hydration failures are hard failures now. While the cause was unknown they
+# were filtered out of hard_errors; a check below asserts their absence instead.
+_HYDRATION = re.compile(r"Hydration failed|Minified React error #(418|422|423|424|425)\b")
 
 
 def wait_for_text(page, needle: str, seconds: float = 20.0) -> bool:
@@ -120,7 +128,50 @@ def wait_for_text(page, needle: str, seconds: float = 20.0) -> bool:
 
 
 def hard_errors(errors: list[str]) -> list[str]:
-    return [e for e in errors if not _HYDRATION.search(e)]
+    return [e for e in errors if not _PRENDER_HINT.search(e)]
+
+
+def _first_room_path() -> str:
+    if not DB_URL:
+        return "/live"
+    found = rows(
+        'SELECT slug FROM "group" WHERE is_room = true AND status = \'open\''
+        " ORDER BY id DESC LIMIT 1"
+    )
+    return f"/room/{found[0][0]}" if found else "/live"
+
+
+@check("no page logs a hydration failure")
+def no_hydration_failures(browser):
+    """React #418 fired on every parameterised route: Reflex hydrates
+    unconditionally while the host serves those URLs a root-only shell that
+    cannot contain the page. The export now stamps prerendered files with their
+    route and the entry hydrates only on a match (hydration_plugin.py), so both
+    halves must keep working: a prerendered route mismatching means the stamp is
+    wrong, a fallback route means the entry regressed.
+
+    Only page errors count. The shell logs React Router's HydrateFallback hint
+    on load, which is a console.log in served markup, not a failure.
+    """
+    offenders: list[str] = []
+    for path in ("/login", "/demo", "/group/regression-pass-group", _first_room_path()):
+        page = browser.new_context().new_page()
+        seen: list[str] = []
+        page.on(
+            "pageerror",
+            lambda exc: seen.append(str(exc)[:110]) if _HYDRATION.search(str(exc)) else None,
+        )
+        try:
+            page.goto(f"{BASE}{path}", wait_until="load", timeout=TIMEOUT)
+            page.wait_for_timeout(6000)
+            body = " ".join(page.inner_text("body").split())
+            if len(body) < 40:
+                seen.append(f"rendered nothing at all ({body[:60]!r})")
+        finally:
+            page.context.close()
+        offenders += [f"{path}: {s}" for s in seen]
+    assert not offenders, "hydration failed:\n           " + "\n           ".join(offenders)
+    return "prerendered and fallback routes both come up clean"
 
 
 def rows(query: str, **params):

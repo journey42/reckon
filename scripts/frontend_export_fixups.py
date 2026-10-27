@@ -31,13 +31,14 @@ INDEX = "index.html"
 SHELLS = (FALLBACK, NOT_FOUND)
 
 #: Must match MARKER_NAME in hydration_plugin.py, which reads it in the browser.
-MARKER_NAME = "reflex:prerendered-route"
+#: It is an attribute on <html>, deliberately: the whole document, <head>
+#: included, is part of the tree React hydrates, so a stamped <meta> is an
+#: unexpected node and reproduces the very mismatch this exists to remove.
+#: Extra *attributes* on server markup are kept and ignored instead.
+MARKER_NAME = "data-reflex-prerendered-route"
 
-# The leading whitespace is part of the match because `stamp` indents the tag it
-# inserts, so `unstamp` has to remove it to give back the original bytes.
-_META_RE = re.compile(
-    r'[ \t]*<meta name="' + MARKER_NAME + r'" content="[^"]*"/?>', re.I
-)
+_META_RE = re.compile(r'\s*data-reflex-prerendered-route="[^"]*"', re.I)
+_HTML_RE = re.compile(r"(<html\b[^>]*?)(/?>)", re.I)
 
 
 def route_for(relative: Path) -> str:
@@ -55,20 +56,17 @@ def route_for(relative: Path) -> str:
 
 
 def stamp(html: str, route: str) -> str:
-    """Record which route this document was prerendered for, or replace a stale one."""
-    meta = f'<meta name="{MARKER_NAME}" content="{route}"/>'
+    """Record which route this document was prerendered for, or refresh a stale one."""
+    attr = f' {MARKER_NAME}="{route}"'
     if _META_RE.search(html):
-        # Keep the same indent the replacement path adds, so stamping twice is a
-        # no-op and a re-run of the pipeline does not churn every file.
-        return _META_RE.sub("  " + meta, html, count=1)
-    if "</head>" in html:
-        return html.replace("</head>", f"  {meta}</head>", 1)
-    # No head to hide in; put it first so the entry still finds it.
-    return meta + html
+        # Normalised the same way every pass, so stamping twice is a no-op.
+        return _META_RE.sub(attr, html, count=1)
+    return _HTML_RE.sub(lambda m: m.group(1) + attr + m.group(2), html, count=1)
 
 
 def unstamp(html: str) -> str:
-    return _META_RE.sub("", html)
+    """Remove the marker, leaving the document byte-identical to the export."""
+    return _META_RE.sub("", html, count=1)
 
 # The markup Reflex/React Router renders into the shell: the toaster portal, the
 # Radix root theme, and Reflex's connection banner, plus React Router's
