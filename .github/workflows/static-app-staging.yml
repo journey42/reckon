@@ -25,10 +25,24 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Export frontend
+        # STAGING_SPA_MODE=1 exports with --no-ssr, i.e. one root-only HTML shell
+        # for every route instead of prerendering the static ones. It exists so
+        # the hydration question can be settled by measuring the deployed site
+        # rather than by reading framework docs; flip the variable off to go back
+        # to prerendering. The exported bundle differs between the two modes, so
+        # the export fixups below are what keep deep links working either way.
         env:
           API_URL: ${{ secrets.PUBLIC_API_URL_STAGING }}
           TOOLBAR_ENABLED: 0
-        run: reflex export --frontend-only --no-zip
+          SPA_MODE: ${{ vars.STAGING_SPA_MODE }}
+        run: |
+          if [ "$SPA_MODE" = "1" ]; then
+            echo "exporting in SPA mode (no route prerendering)"
+            reflex export --frontend-only --no-zip --no-ssr
+          else
+            reflex export --frontend-only --no-zip
+          fi
+          python scripts/frontend_export_fixups.py --out .web/build/client
 
       - name: Prepare static artifacts
         run: |
@@ -36,6 +50,7 @@ jobs:
           mkdir -p swa-build
           cp -a .web/build/client/. swa-build/
           cp deploy/staticwebapp.config.json swa-build/staticwebapp.config.json
+          ls -la swa-build/__spa-fallback.html swa-build/404.html
 
       - name: Deploy to Azure Static Web Apps
         # Only these inputs exist on the action: app_location,
