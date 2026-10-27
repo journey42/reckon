@@ -1,6 +1,8 @@
 import reflex as rx
 import os
 
+from hydration_plugin import ConditionalHydrationPlugin
+
 config = rx.Config(
     app_name="rhiz",
     #db_url="sqlite:///reflex.db",
@@ -9,6 +11,9 @@ config = rx.Config(
     show_built_with_reflex=False,
     env=rx.Env.DEV,
     plugins=[
+        # Owns .web/app/entry.client.js so a page served from the host's SPA
+        # fallback mounts client-side instead of failing to hydrate (#418).
+        ConditionalHydrationPlugin(),
         rx.plugins.RadixThemesPlugin(
             theme=rx.theme(
                 appearance="light",

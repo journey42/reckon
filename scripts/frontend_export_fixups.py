@@ -26,6 +26,50 @@ FALLBACK = "__spa-fallback.html"
 NOT_FOUND = "404.html"
 INDEX = "index.html"
 
+# Files that are *not* any one route's prerender: the host serves them for URLs
+# the export never rendered, so they must never claim to be prerendered.
+SHELLS = (FALLBACK, NOT_FOUND)
+
+#: Must match MARKER_NAME in hydration_plugin.py, which reads it in the browser.
+MARKER_NAME = "reflex:prerendered-route"
+
+# The leading whitespace is part of the match because `stamp` indents the tag it
+# inserts, so `unstamp` has to remove it to give back the original bytes.
+_META_RE = re.compile(
+    r'[ \t]*<meta name="' + MARKER_NAME + r'" content="[^"]*"/?>', re.I
+)
+
+
+def route_for(relative: Path) -> str:
+    """The URL an exported HTML file was prerendered for.
+
+    ``index.html`` -> ``/``, ``login/index.html`` and ``login.html`` ->
+    ``/login``, ``live/all/index.html`` -> ``/live/all``.
+    """
+    parts = list(relative.parts)
+    if parts[-1] == INDEX:
+        parts = parts[:-1]
+    else:
+        parts[-1] = parts[-1][: -len(".html")]
+    return "/" + "/".join(parts)
+
+
+def stamp(html: str, route: str) -> str:
+    """Record which route this document was prerendered for, or replace a stale one."""
+    meta = f'<meta name="{MARKER_NAME}" content="{route}"/>'
+    if _META_RE.search(html):
+        # Keep the same indent the replacement path adds, so stamping twice is a
+        # no-op and a re-run of the pipeline does not churn every file.
+        return _META_RE.sub("  " + meta, html, count=1)
+    if "</head>" in html:
+        return html.replace("</head>", f"  {meta}</head>", 1)
+    # No head to hide in; put it first so the entry still finds it.
+    return meta + html
+
+
+def unstamp(html: str) -> str:
+    return _META_RE.sub("", html)
+
 # The markup Reflex/React Router renders into the shell: the toaster portal, the
 # Radix root theme, and Reflex's connection banner, plus React Router's
 # HydrateFallback hint. The client's first render of a real page cannot match
@@ -100,6 +144,38 @@ def main() -> int:
                 target.write_text(stripped, encoding="utf-8")
             removed = len(html) - len(stripped)
             print(f"  {name}: removed {removed} bytes of prerendered chrome")
+
+    # Tell the browser entry which URL each document was rendered for, so it can
+    # hydrate when the bytes match and mount client-side when they cannot. See
+    # hydration_plugin.py for why guessing on the client is not an option.
+    stamped = unstamped = 0
+    if not args.dry_run:
+        for html_file in sorted(root.rglob("*.html")):
+            rel = html_file.relative_to(root)
+            if rel.parts and rel.parts[0] == "assets":
+                continue
+            html = html_file.read_text(encoding="utf-8")
+            if rel.as_posix() in SHELLS:
+                if _META_RE.search(html):
+                    html_file.write_text(unstamp(html), encoding="utf-8")
+                    unstamped += 1
+                continue
+            route = route_for(rel)
+            updated = stamp(html, route)
+            if updated != html:
+                html_file.write_text(updated, encoding="utf-8")
+            stamped += 1
+        # The fallbacks are copied from index.html above, which by then carries
+        # the root route's marker; make sure neither keeps it.
+        for name in SHELLS:
+            shell = root / name
+            if shell.is_file() and _META_RE.search(shell.read_text(encoding="utf-8")):
+                shell.write_text(unstamp(shell.read_text(encoding="utf-8")), encoding="utf-8")
+                unstamped += 1
+    print(
+        f"  marker '{MARKER_NAME}': stamped {stamped} prerendered file(s), "
+        f"cleared {unstamped} shell(s)"
+    )
     return 0
 
 
