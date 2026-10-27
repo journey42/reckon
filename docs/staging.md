@@ -166,6 +166,36 @@ Verified: staging went `a9b8c7d6e5f4 -> c9d1e2f3a4b5` and
 `roomparticipant.intent_version` appeared; production is still `a9b8c7d6e5f4`
 with the column absent, which is correct — the migration is staged, not applied.
 
+## Adding questions to the /demo dropdown
+
+The dropdown lists **permanent questions** — a room with no `close_at`. That is
+the whole definition (`rhiz.utils.demo.is_demo_question`), so there is no separate
+"make this a demo question" switch to look for.
+
+In the app (admin or the question's owner), on `/live`:
+
+1. **Ask a live question** → type the wording.
+2. Set **Time limit** to `no timer — permanent demo` (the last option).
+3. Create it. It is now in the *Demo page (/demo)* card's dropdown.
+4. Optional: pick it there and press **Show this one at /demo** to make it the
+   question the public page asks. Only an admin can move that pointer, since it
+   is one site-wide setting and the demo address is printed.
+
+From a shell, the same thing:
+
+```bash
+DB_URL=<dsn> python scripts/create_demo_question.py "Your question?"            # add
+DB_URL=<dsn> python scripts/create_demo_question.py --activate "Another one?"   # add + show it
+```
+
+**Switching is per question, not per deployment.** All questions live at the one
+`/demo` URL; the dropdown changes which one that URL asks, and each keeps its own
+answers (verified end to end: answering question A, switching to B, switching
+back — the answer to A is still there, and B never showed it). The dropdown
+labels carry the answer count and mark the one currently shown, so it is visible
+which question a printed address leads to.
+
+The list shows your own questions, or every question if you are an admin.
 ## /demo: which question it shows
 
 `/demo` renders the question stored in the `demo_room_slug` app setting, or — when

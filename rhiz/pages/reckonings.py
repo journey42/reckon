@@ -75,10 +75,14 @@ def _exclude_private_groups():
 
 
 NUDGE_HEADING = "!Your idea has NOT been published yet!"
+# The two options are lettered so the choice reads as a list. They used to be
+# "A)" followed by two sunglasses emoji in place of the second letter, which read
+# as "a) ... and then sunglasses" — the client reported it as a typo, and the
+# banner is the first thing a submitter sees.
 NUDGE_RELATED_BODY = (
     "Your comment is related to a previous entry. You can choose to\n"
     "A) Upvote your own submission to make it “sticky”, or\n"
-    "😎 😎 Lend your vote to the previous entry\n"
+    "B) Lend your vote to the previous entry\n"
     "Nothing is public until you make that choice"
 )
 NUDGE_FIRST_TOPIC_BODY = (
