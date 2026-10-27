@@ -143,15 +143,14 @@ def _first_room_path() -> str:
 
 @check("no page logs a hydration failure")
 def no_hydration_failures(browser):
-    """React #418 fired on every parameterised route: Reflex hydrates
-    unconditionally while the host serves those URLs a root-only shell that
-    cannot contain the page. The export now stamps prerendered files with their
-    route and the entry hydrates only on a match (hydration_plugin.py), so both
-    halves must keep working: a prerendered route mismatching means the stamp is
-    wrong, a fallback route means the entry regressed.
+    """React #418 fired on every route: Reflex's entry hydrates the whole
+    document, whose exported <head> can never match the one React renders, so the
+    tree was discarded and rebuilt every visit. client_render_plugin.py makes the
+    app mount on the client instead, which is the same work without the error.
 
-    Only page errors count. The shell logs React Router's HydrateFallback hint
-    on load, which is a console.log in served markup, not a failure.
+    Checked here because nothing else would notice a Reflex upgrade quietly
+    restoring the stock entry. Only page errors count: the served shell also logs
+    React Router's HydrateFallback hint, which is markup, not a failure.
     """
     offenders: list[str] = []
     for path in ("/login", "/demo", "/group/regression-pass-group", _first_room_path()):

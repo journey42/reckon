@@ -18,8 +18,8 @@ Deliberately absent: any marker written into the HTML. Stamping the prerendered
 route — as a ``<meta>``, then as an attribute on ``<html>`` — was tried on the
 deployed site twice, and both variants made *every* prerendered route log React
 error #418. The whole document, head and root element included, is the tree
-React hydrates, so no edit to it is neutral. ``hydration_plugin.py`` therefore
-decides from markup the export already writes.
+React hydrates, so no edit to it is neutral. The entry therefore mounts on the client
+(``client_render_plugin.py``).
 
 Usage:
     python scripts/frontend_export_fixups.py [--out .web/build/client] [--dry-run]

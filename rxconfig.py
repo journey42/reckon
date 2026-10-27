@@ -1,7 +1,7 @@
 import reflex as rx
 import os
 
-from hydration_plugin import ConditionalHydrationPlugin
+from client_render_plugin import ClientRenderPlugin
 
 config = rx.Config(
     app_name="rhiz",
@@ -11,9 +11,9 @@ config = rx.Config(
     show_built_with_reflex=False,
     env=rx.Env.DEV,
     plugins=[
-        # Owns .web/app/entry.client.js so a page served from the host's SPA
-        # fallback mounts client-side instead of failing to hydrate (#418).
-        ConditionalHydrationPlugin(),
+        # Owns .web/app/entry.client.js so the app mounts client-side instead of
+        # hydrating a document whose <head> can never match (#418).
+        ClientRenderPlugin(),
         rx.plugins.RadixThemesPlugin(
             theme=rx.theme(
                 appearance="light",
