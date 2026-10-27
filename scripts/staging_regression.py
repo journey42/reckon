@@ -398,6 +398,40 @@ def demo_control_visibility(browser):
         page.context.close()
 
 
+@check("a wrong password is refused, and says so")
+def wrong_password_is_refused(browser):
+    """The rejection is a browser alert (rx.window_alert), so nothing appears in
+    the page body — capture the dialog or the check proves nothing either way.
+
+    This matters because it is the one place a visitor learns their credentials
+    were wrong rather than that the app is broken.
+    """
+    if not (PLAIN_USER and PLAIN_PW):
+        raise AssertionError("RHIZ_REG_USER_USER / RHIZ_REG_USER_PASSWORD not set")
+    page = browser.new_context().new_page()
+    dialogs: list[str] = []
+
+    def on_dialog(dialog):
+        dialogs.append(dialog.message)
+        dialog.dismiss()
+
+    page.on("dialog", on_dialog)
+    try:
+        page.goto(f"{BASE}/login", wait_until="networkidle", timeout=TIMEOUT)
+        page.wait_for_timeout(3000)
+        page.fill("input[placeholder='Username']", PLAIN_USER)
+        page.fill("input[type=password]", PLAIN_PW + "-definitely-wrong")
+        page.click("button[type=submit]")
+        deadline = time.time() + 25
+        while time.time() < deadline and not dialogs:
+            page.wait_for_timeout(500)
+        assert dialogs, "no rejection was shown for a wrong password"
+        assert "/login" in page.url, f"logged in with a wrong password! {page.url}"
+        return dialogs[0][:80]
+    finally:
+        page.context.close()
+
+
 @check("/demo renders and answers")
 def demo_page_renders(browser):
     page = browser.new_context().new_page()

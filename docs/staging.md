@@ -15,7 +15,29 @@ Two things about the staging backend that cost time once already:
   the container never starts — and because migrations run in the container's
   start path, `RUN_MIGRATIONS_ON_START=1` quietly does nothing and requests get
   `{"error":"Not found"}` from the ingress instead of the app. Production runs
-  `minReplicas=1` for the same reason.
+- **The app had no ingress at all** (`external: null`, no target port), so
+  nothing could reach it — which is also why it never activated. Enable it with
+  `az containerapp ingress enable -n rhiz-backend-staging -g reckon-rg --type external --target-port 8000 --transport auto`.
+  `az containerapp update --set properties.configuration.ingress.external=true`
+  reports `Succeeded` and changes nothing, so verify against the ARM REST GET
+  rather than the CLI's exit code.
+
+### Things about this app the CLI will not tell you
+
+- `az containerapp logs show` dies with `KeyError: 'eventStreamEndpoint'`, and
+  the ARM `listLogs` operation 404s. To see the container's own output, run the
+  deployed image locally: `docker pull rhizregistry.azurecr.io/rhiz-backend:<tag>`
+  and `docker run` it with `-e DB_URL=... -e RUN_MIGRATIONS_ON_START=1`. That is
+  how the migration path was verified end to end.
+- `az containerapp revision restart` returns `InternalServerError` for this app.
+  Nothing else reliably restarts a running container either: scaling to 0 does
+  not tear the replica down while traffic keeps arriving, and re-applying the
+  same image creates no revision. To force a fresh start, change something in
+  the template (any env var value).
+- If the FQDN answers `{"error":"App is not available"}` while the ARM API
+  insists `healthState: Healthy, replicas: 1, trafficWeight: 100`, the rollout is
+  wedged. Forcing a new revision clears it. Production, in the same managed
+  environment, keeps serving throughout.
 - **`PUBLIC_BASE_URL` must be the default hostname, not a region-qualified
   guess.** `mango-tree-0e1baaf0f.eastus2.1.azurestaticapps.net` resolves to
   nothing for this site; `mango-tree-0e1baaf0f.1.azurestaticapps.net` is the
@@ -95,12 +117,19 @@ export RHIZ_BASE=https://mango-tree-0e1baaf0f.1.azurestaticapps.net
 export DB_URL=<the dsn that backend is using>          # staging only — see guard
 export RHIZ_REG_ADMIN_PASSWORD=... RHIZ_REG_USER_PASSWORD=...
 python scripts/seed_staging_test_user.py               # accounts + fixtures
-python scripts/staging_regression.py                   # 13 checks
+python scripts/staging_regression.py                   # 14 checks
 ```
 
 Both scripts refuse to run against a production host. They are meant to be run
 after every staging deploy, and before anything from `staging` is merged to
 `master`.
+
+The seed script creates two throwaway accounts (`regtest_admin`,
+`regtest_user`) and four fixtures: a group whose question sits on the group row,
+a group whose question exists only on the founding concept (the #11653 shape), a
+timed question and a permanent one. It goes through the app's own
+`create_group`/`create_room`, so the rows are shaped like real ones rather than
+like test data.
 
 ## Post-test cleanup
 
@@ -116,6 +145,26 @@ Stopped, the restore still bills storage (a few dollars a month); deleted, the
 next restore costs another 5-10 minutes. Neither affects production. Remember
 that a stopped backend means migrations do not run — start it before trusting
 the schema.
+
+## Before the event: the migration
+
+`RUN_MIGRATIONS_ON_START` used to be a lie. `scripts/db_migrate.py` stamped
+`alembic_version` and stopped; nothing in the repo ran `alembic upgrade head`, so
+a revision committed under `migrations/versions` never reached a deployed
+database — and the stamp was written *back* to `LATEST_SQL_MIGRATION` on every
+start, so a hand-applied schema counted as never applied. It now walks the stamp
+forward to each head that is genuinely a descendant of it, and exits non-zero
+rather than serve a schema it does not match.
+
+Confirm it moved after a deploy:
+
+```bash
+psql "$DB_URL" -Atc "select version_num from alembic_version"   # expect the new head
+```
+
+Verified: staging went `a9b8c7d6e5f4 -> c9d1e2f3a4b5` and
+`roomparticipant.intent_version` appeared; production is still `a9b8c7d6e5f4`
+with the column absent, which is correct — the migration is staged, not applied.
 
 ## Known state / history
 
