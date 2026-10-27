@@ -41,6 +41,12 @@ def test_no_emoji_stands_in_for_a_letter():
         assert not found, f"{name} contains emoji that may be standing in for text: {found}"
 
 
+def test_the_heading_does_not_start_with_stray_punctuation():
+    """It shipped as "!Your idea has NOT been published yet!" — a leftover marker."""
+    assert NUDGE_HEADING == "Your idea has NOT been published yet!"
+    assert not NUDGE_HEADING.startswith(("!", "*", "#", "_"))
+
+
 def test_the_banner_still_says_the_thing_is_private():
     """Wording can be tidied; this promise cannot be lost."""
     assert "not been published" in NUDGE_HEADING.lower()

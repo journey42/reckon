@@ -74,7 +74,9 @@ def _exclude_private_groups():
     )
 
 
-NUDGE_HEADING = "!Your idea has NOT been published yet!"
+# The leading "!" was a stray character (the remains of an emphasis marker), not
+# punctuation: it rendered as "!Your idea has NOT been published yet!".
+NUDGE_HEADING = "Your idea has NOT been published yet!"
 # The two options are lettered so the choice reads as a list. They used to be
 # "A)" followed by two sunglasses emoji in place of the second letter, which read
 # as "a) ... and then sunglasses" — the client reported it as a typo, and the
