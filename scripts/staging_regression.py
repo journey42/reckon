@@ -208,13 +208,29 @@ def no_hydration_failures(browser):
 
 @check("deep links serve the app (staticwebapp.config fallback)")
 def deep_link_serves_the_app(browser):
+    """A deep link must reach the app rather than the host's 404 page.
+
+    The page is mounted on the client now, so the served shell carries almost no
+    text and the visible content arrives after the socket connects. Reading the
+    body once raced that and reported "rendered almost nothing" (the shell's
+    "How this works" line) about one run in three — so wait for real content,
+    then judge.
+    """
     page = browser.new_context().new_page()
     try:
         resp = page.goto(f"{BASE}/your_concepts", wait_until="networkidle", timeout=TIMEOUT)
         assert resp and resp.status == 200, f"HTTP {getattr(resp, 'status', '?')}"
+        # Anonymous, so the app redirects this deep link to /signup; what matters
+        # is that the app answered and rendered, not the host's 404.
+        deadline = time.time() + 25
+        while time.time() < deadline and len(body(page)) <= 40:
+            page.wait_for_timeout(500)
         text = body(page)
+        loaded = len(text) > 40
         assert "404" not in text[:200], f"deep link returned the 404 page: {text[:120]!r}"
-        assert len(text) > 40, f"page rendered almost nothing: {text[:120]!r}"
+        assert loaded and len(text) > 40, (
+            f"deep link did not render the app within the timeout: {text[:120]!r}"
+        )
     finally:
         page.context.close()
 
