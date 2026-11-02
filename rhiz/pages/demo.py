@@ -44,6 +44,10 @@ EXPLAIN_ABOVE = (
     "points of agreement emerge, and the group discovers agreement it didn't know "
     "it had."
 )
+#: The client's Substack, offered at the bottom of the page: someone who has just
+#: answered a question here is the likeliest reader of the longer argument.
+SUBSTACK_URL = "https://americaantonym.substack.com"
+
 EXPLAIN_BELOW = (
     "The concept comes from the theory of emergence: complex structures can arise "
     "from small, simple processes. I believe a group has to become legible to "
@@ -329,6 +333,33 @@ class DemoState(AppState):
 # --------------------------------------------------------------------------
 # Layout
 # --------------------------------------------------------------------------
+def _substack_footer() -> rx.Component:
+    """A quiet link to the client's writing, at the very bottom of the page.
+
+    Rendered outside the question/no-question branches on purpose: it belongs to
+    the page, so it is also there on the day the demo has no question set up.
+    """
+    return rx.hstack(
+        rx.text("Read more about the thinking behind Rhiz:", size="1", color="#64748b"),
+        rx.link(
+            "subscribe on Substack →",
+            href=SUBSTACK_URL,
+            # Opens in a new tab so an answer in progress is not lost; the rel
+            # value stops the new page from reaching back through window.opener.
+            # `is_external` sets the target, not the rel, so it is passed here.
+            is_external=True,
+            rel="noopener noreferrer",
+            size="1",
+            id="rhiz-demo-substack",
+        ),
+        spacing="2",
+        align="center",
+        wrap="wrap",
+        width="100%",
+        padding="0 0 32px 0",
+    )
+
+
 def _top_bar() -> rx.Component:
     """The one thing worth offering someone who arrived from a card."""
     return rx.hstack(
@@ -605,6 +636,7 @@ def demo_page():
                     padding="16px 0 48px 0",
                 ),
             ),
+            _substack_footer(),
             width="100%",
             max_width="720px",
             padding="0 16px",
