@@ -1,0 +1,68 @@
+name: Uptime check
+
+# Container logs are not streamable for this app and the container cannot be
+# watched by hand during an event, so this is the tripwire: if the demo page or
+# the backend stops answering, the scheduled run fails and GitHub notifies the
+# repository's watchers. It touches nothing and writes nothing.
+
+on:
+  schedule:
+    # Every 10 minutes. GitHub's scheduler is best-effort and can lag at busy
+    # times; this is a tripwire, not an SLA monitor.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The demo page is served
+        run: |
+          body=$(curl -sS --max-time 30 -w '\n%{http_code}' https://www.rhiz.ai/demo)
+          code=$(printf '%s' "$body" | tail -1)
+          html=$(printf '%s' "$body" | sed '$d')
+          echo "HTTP $code, ${#html} bytes"
+          [ "$code" = "200" ] || { echo "::error::/demo returned HTTP $code"; exit 1; }
+          # The page is prerendered, so the shell must be there even before the
+          # client mounts. A host misconfiguration serves the 404 page instead.
+          printf '%s' "$html" | grep -qi 'rhiz' || { echo "::error::/demo did not look like our page"; exit 1; }
+
+      - name: The backend is accepting connections
+        # A plain GET on the websocket endpoint answers 400 "Invalid transport"
+        # when the app is up. Anything else — 502/503 from the platform, or a
+        # connection refusal — means it is not.
+        run: |
+          code=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' \
+            'https://rhiz-backend.politefield-c0f001d2.eastus.azurecontainerapps.io/_event/?token=uptime' || echo 000)
+          echo "backend /_event -> HTTP $code (400 is healthy)"
+          [ "$code" = "400" ] || { echo "::error::backend did not answer like Reflex (HTTP $code)"; exit 1; }
+
+      - name: The login page renders
+        run: |
+          code=$(curl -sS --max-time 30 -o /tmp/login.html -w '%{http_code}' https://www.rhiz.ai/login)
+          echo "HTTP $code"
+          [ "$code" = "200" ] || { echo "::error::/login returned HTTP $code"; exit 1; }
+
+      - name: Recent errors in the logs
+        # Only a warning: Log Analytics can lag by a few minutes, and a failed
+        # scheduled run is for "the site is down", not "something logged an
+        # error". Prints them so they are in the run summary.
+        continue-on-error: true
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          if [ -z "$AZURE_CREDENTIALS" ]; then
+            echo "no Azure credentials available; skipping"
+            exit 0
+          fi
+          echo "$AZURE_CREDENTIALS" > /tmp/az.json
+          az login --service-principal -u "$(jq -r .clientId /tmp/az.json)" \
+            -p "$(jq -r .clientSecret /tmp/az.json)" \
+            --tenant "$(jq -r .tenantId /tmp/az.json)" >/dev/null
+          rm -f /tmp/az.json
+          python scripts/prod_logs.py --minutes 15 --errors --limit 25
