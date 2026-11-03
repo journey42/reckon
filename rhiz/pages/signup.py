@@ -66,12 +66,14 @@ def signup():
                 on_blur=AuthState.set_confirm_password,
                 **input_style,
             ),
-            rx.center(
-                rx.button(
-                    "Sign up",
-                    on_click=AuthState.signup,
-                    **button_style,
-                )
+            # Full width, like the log-in button: the two auth pages should read
+            # the same, and a left-aligned button in a centred card looks like a
+            # layout bug.
+            rx.button(
+                "Sign up",
+                on_click=AuthState.signup,
+                width="100%",
+                **button_style,
             ),
             **form_box_style,
             direction="column",
