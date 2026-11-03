@@ -3,15 +3,24 @@
 The short version: **read the logs, restart if wedged, don't deploy anything new.**
 
 Production is `www.rhiz.ai` (Static Web App `rhiz-web`, branch `master`) and
-`rhiz-backend` (Container App, `reckon-rg`, East US). Database is
-`reckon-db` (PostgreSQL 16, General Purpose `D2ds_v5`).
+`rhiz-backend-ha` (Container App, `reckon-rg`, East US, **2 replicas, sticky
+sessions**). Database is `reckon-db` (PostgreSQL 16, General Purpose
+`D2ds_v5`, **zone-redundant HA**, standby in zone 2).
+
+Two older things still exist and are deliberately kept:
+
+* `rhiz-backend` — the previous single-replica app on the *express* environment
+  (`rhiz-env`). It is the rollback target and no longer receives traffic.
+  Scale it to zero (`--min-replicas 0`) once you are happy, or delete it.
+* `rhiz-env` — the express environment. `rhiz-env-ha` is the standard
+  (workload-profiles) environment that supports session affinity.
 
 ## Is it up?
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' https://www.rhiz.ai/demo     # 200
 curl -sS -o /dev/null -w '%{http_code}\n' \
-  'https://rhiz-backend.politefield-c0f001d2.eastus.azurecontainerapps.io/_event/?token=x'  # 400 = healthy
+  'https://rhiz-backend-ha.proudbay-01371b35.eastus.azurecontainerapps.io/_event/?token=x'  # 400 = healthy
 ```
 
 `400 "Invalid transport"` is the app saying hello. `502`/`503` is the platform or
@@ -35,10 +44,14 @@ Requires `az login` with read access to `workspace-reckonrgzwFp`.
 
 ## Restarting the backend
 
-There is **one replica on purpose**: this is an ACA *express* environment, which
-does not support sticky sessions, and Reflex keeps a user's state in the process
-it connected to. More than one replica means people get silently logged out or
-lose an answer mid-session. Do not raise `maxReplicas`.
+`rhiz-backend-ha` runs **2 replicas with sticky sessions** (`stickySessions.
+affinity = sticky`), which is what makes replicas safe: Reflex keeps a user's
+state in the process they connected to, so the platform must keep routing that
+browser to the same one. Session affinity is only available on standard
+(workload-profiles) environments — the express environment cannot do it, which
+is why the old `rhiz-backend` was pinned to a single replica.
+
+Do not remove the sticky-session setting while running more than one replica.
 
 `az containerapp revision restart` may return `InternalServerError`. In order of
 preference:
@@ -80,6 +93,24 @@ Credentials come from the Container App secret `acs-connection-string`
 (`AZURE_COMMUNICATION_CONNECTION_STRING`). `MAIL_DRY_RUN` must **not** be set in
 production, or nothing is sent. The deploy workflow refuses to roll out an image
 if the credential is missing, so a successful deploy implies mail is configured.
+
+## Rollback (if the HA backend misbehaves)
+
+The frontend's backend URL is baked in at export time, so rolling back is a
+setting change plus one workflow run — about 4 minutes, no code revert:
+
+```bash
+gh variable set PUBLIC_API_URL --body https://rhiz-backend.politefield-c0f001d2.eastus.azurecontainerapps.io
+gh workflow run "Deploy Static Web App" --ref master
+```
+
+That points `www.rhiz.ai` back at the old single-replica app, which is still
+running for exactly this reason. To flip forward again, set the variable to
+`https://rhiz-backend-ha.proudbay-01371b35.eastus.azurecontainerapps.io` and re-run the workflow.
+
+Last-resort artefacts (pre-HA state) are in `/home/vince/backups/reckon/pre-ha-20261103T0044Z`: container app JSON, DB dump,
+and `swa-build-5a064fe.tar.gz` — a byte-exact rebuild of the frontend that was
+live before the switch.
 
 ## Deploying (only if something must change)
 

@@ -38,7 +38,7 @@ jobs:
         # connection refusal — means it is not.
         run: |
           code=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' \
-            'https://rhiz-backend.politefield-c0f001d2.eastus.azurecontainerapps.io/_event/?token=uptime' || echo 000)
+            'https://rhiz-backend-ha.proudbay-01371b35.eastus.azurecontainerapps.io/_event/?token=uptime' || echo 000)
           echo "backend /_event -> HTTP $code (400 is healthy)"
           [ "$code" = "400" ] || { echo "::error::backend did not answer like Reflex (HTTP $code)"; exit 1; }
 
