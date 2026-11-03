@@ -26,7 +26,11 @@ jobs:
 
       - name: Export frontend
         env:
-          API_URL: https://rhiz-backend.politefield-c0f001d2.eastus.azurecontainerapps.io
+          # The backend URL is baked into the bundle at export time, so switching
+          # backends (or rolling one back) means re-running this workflow with a
+          # different value. It lives in a repository variable rather than a
+          # literal so the switch is one setting, not a commit.
+          API_URL: ${{ vars.PUBLIC_API_URL || 'https://rhiz-backend.politefield-c0f001d2.eastus.azurecontainerapps.io' }}
           TOOLBAR_ENABLED: 0
         run: reflex export --frontend-only --no-zip
 
