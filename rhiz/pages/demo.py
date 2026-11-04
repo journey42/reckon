@@ -143,6 +143,7 @@ class DemoState(AppState):
     question_slug: str = ""
     question: str = ""
     not_found: bool = False
+    closed_question: bool = False
     loaded: bool = False
 
     # Answers, five at a time until asked for more
@@ -166,6 +167,7 @@ class DemoState(AppState):
 
     def on_load(self):
         self.not_found = False
+        self.closed_question = False
         self.error = ""
         self.loaded = False
         self.show_nudge = False
@@ -188,7 +190,16 @@ class DemoState(AppState):
                 else demo.active_demo_question(session)
             )
             if room is None:
-                self.not_found = True
+                # A closed permanent question is not the same as no question:
+                # /demo/<slug> is printed on cards, and "no question set up yet"
+                # would be misleading when the question exists but has closed.
+                closed = (
+                    demo.demo_question_by_slug(session, wanted)
+                    if wanted
+                    else None
+                )
+                self.closed_question = closed is not None
+                self.not_found = closed is None
                 self.loaded = True
                 return
             self.question_slug = room.slug
@@ -600,40 +611,56 @@ def demo_page():
                 padding=0,
             ),
             rx.cond(
-                DemoState.not_found,
+                DemoState.closed_question,
                 rx.vstack(
-                    rx.heading("No question set up yet", size="5"),
+                    rx.heading("This question has closed", size="5"),
                     rx.text(
-                        "An organiser needs to add a permanent question before "
-                        "this page has anything to ask."
+                        "It is no longer taking answers. The current demo question "
+                        "is below, or you can start a group of your own."
                     ),
+                    rx.link("See the current question", href="/demo"),
                     rx.link("Sign up for Rhiz", href="/signup"),
                     align="start",
                     spacing="3",
                     width="100%",
                     padding="24px 0",
                 ),
-                rx.vstack(
-                    rx.text(
-                        EXPLAIN_ABOVE, size="3", color="#334155", line_height="1.7"
+                rx.cond(
+                    DemoState.not_found,
+                    rx.vstack(
+                        rx.heading("No question set up yet", size="5"),
+                        rx.text(
+                            "An organiser needs to add a permanent question before "
+                            "this page has anything to ask."
+                        ),
+                        rx.link("Sign up for Rhiz", href="/signup"),
+                        align="start",
+                        spacing="3",
+                        width="100%",
+                        padding="24px 0",
                     ),
-                    rx.heading(DemoState.question, size="6", margin_top="12px"),
-                    rx.cond(
-                        DemoState.has_answer | DemoState.is_supporting,
-                        _my_position(),
-                        _answer_box(),
+                    rx.vstack(
+                        rx.text(
+                            EXPLAIN_ABOVE, size="3", color="#334155", line_height="1.7"
+                        ),
+                        rx.heading(DemoState.question, size="6", margin_top="12px"),
+                        rx.cond(
+                            DemoState.has_answer | DemoState.is_supporting,
+                            _my_position(),
+                            _answer_box(),
+                        ),
+                        _nudge(),
+                        _answers(),
+                        rx.divider(margin_top="16px"),
+                        rx.text(
+                            EXPLAIN_BELOW, size="2", color="#64748b", line_height="1.7"
+                        ),
+                        rx.link("Make your own group →", href="/signup", size="2"),
+                        align="stretch",
+                        spacing="4",
+                        width="100%",
+                        padding="16px 0 48px 0",
                     ),
-                    _nudge(),
-                    _answers(),
-                    rx.divider(margin_top="16px"),
-                    rx.text(
-                        EXPLAIN_BELOW, size="2", color="#64748b", line_height="1.7"
-                    ),
-                    rx.link("Make your own group →", href="/signup", size="2"),
-                    align="stretch",
-                    spacing="4",
-                    width="100%",
-                    padding="16px 0 48px 0",
                 ),
             ),
             _substack_footer(),

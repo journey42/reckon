@@ -629,6 +629,20 @@ class TestDemoPageInABrowser:
         assert question in body(page)
         page.context.close()
 
+    def test_a_closed_question_says_it_is_closed(self, browser, shown_question):
+        """A printed /demo/<slug> link can outlive its question. Saying "no
+        question set up yet" would imply the address was never configured."""
+        slug, _ = shown_question
+        with rx.session() as session:
+            close_room(session, _room(session, slug).id)
+        page = browser.new_context().new_page()
+        page.goto(f"{BASE}/demo/{slug}", wait_until="networkidle", timeout=90000)
+        page.wait_for_timeout(3000)
+        text = body(page)
+        assert "This question has closed" in text
+        assert "No question set up yet" not in text
+        page.context.close()
+
     def test_the_explanation_sits_above_and_below_the_question(
         self, browser, demo_question
     ):
