@@ -1,0 +1,97 @@
+name: Hibernate staging
+
+# Staging is not a always-on environment. It exists for a review or the
+# regression pass, and the rest of the time it should cost storage and nothing
+# else. Hibernating it is two commands (`docs/staging.md`), but a hibernated
+# database does not stay hibernated: Azure restarts a stopped Azure Database for
+# PostgreSQL flexible server seven days after it was stopped. Left alone, a
+# "stopped" staging database bills for a week out of every two.
+#
+# This job re-hibernates it once a day, which bounds an unattended
+# auto-restart to under a day of a Burstable B1ms (cents), and keeps the staging
+# backend from being pinned at a replica if a deploy ever sets `minReplicas: 1`.
+#
+# It names staging resources only. Production — `rhiz-backend-ha`, `reckon-db`,
+# `rhiz-web` — is never mentioned here, so this cannot reach it even when the
+# schedule misfires.
+#
+# While staging is deliberately up for a review, set the repository variable
+# `STAGING_AWAKE` to `true`; that disables the job, so the cron cannot pull the
+# database out from under the reviewer mid-test. Clear it when the review ends.
+#   gh variable set STAGING_AWAKE --body true
+#   gh variable set STAGING_AWAKE --body false
+
+on:
+  schedule:
+    # Daily, 05:17 UTC. The exact minute does not matter; what matters is that
+    # it is more frequent than the 7-day auto-start.
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  STAGING_DB: reckon-db-staging
+  STAGING_APP: rhiz-backend-staging
+
+jobs:
+  hibernate:
+    runs-on: ubuntu-latest
+    if: vars.STAGING_AWAKE != 'true'
+    steps:
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Stop the staging database
+        env:
+          RG: ${{ secrets.RESOURCE_GROUP }}
+        run: |
+          set -euo pipefail
+          state=$(az postgres flexible-server show -n "$STAGING_DB" -g "$RG" --query state -o tsv)
+          echo "$STAGING_DB is $state"
+          case "$state" in
+            Stopped)
+              echo "already hibernated; nothing to do"
+              ;;
+            Ready)
+              # The only way this is Ready is an auto-start or a review that
+              # forgot to clear itself. Stopping it is what the environment is
+              # for.
+              az postgres flexible-server stop -n "$STAGING_DB" -g "$RG"
+              echo "$STAGING_DB stopped"
+              ;;
+            *)
+              # Starting/Stopping/Updating: a stop right now would fight the
+              # other operation. The next run picks it up.
+              echo "::warning::$STAGING_DB is $state; leaving it for the next run"
+              ;;
+          esac
+
+      - name: Unpin the staging backend
+        env:
+          RG: ${{ secrets.RESOURCE_GROUP }}
+        run: |
+          set -euo pipefail
+          min=$(az containerapp show -n "$STAGING_APP" -g "$RG" \
+            --query properties.template.scale.minReplicas -o tsv)
+          echo "$STAGING_APP minReplicas: $min"
+          if [ "$min" = "0" ]; then
+            exit 0
+          fi
+          # A pinned replica is the expensive half of staging (~$79/month at
+          # 1 vCPU/2 GiB), and nothing else turns it back down.
+          az containerapp update -n "$STAGING_APP" -g "$RG" --min-replicas 0 --max-replicas 1
+          echo "$STAGING_APP unpinned"
+
+      - name: Report the state it ended in
+        if: always()
+        env:
+          RG: ${{ secrets.RESOURCE_GROUP }}
+        run: |
+          az postgres flexible-server show -n "$STAGING_DB" -g "$RG" \
+            --query '{db:name,state:state,sku:sku.name}' -o table
+          az containerapp replica list -n "$STAGING_APP" -g "$RG" \
+            --query 'length(@)' -o tsv | sed 's/^/staging replicas: /'
