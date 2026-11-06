@@ -136,6 +136,27 @@ Last-resort artefacts (pre-HA state) are in `/home/vince/backups/reckon/pre-ha-2
 and `swa-build-5a064fe.tar.gz` — a byte-exact rebuild of the frontend that was
 live before the switch.
 
+## The registry keeps three images
+
+`rhizregistry` is Basic, which includes 10 GB; every deploy tags an image with the
+commit SHA, so the repository had grown to 93 manifests and 26.5 GB of layers —
+about $1.6/month of storage and a slow `az acr` on every call. It was pruned to
+the three images that can matter: `fec4732` (deployed now, also `latest`),
+`5a064fe` (the rollback app) and `1f5b7ae` (the deploy before that).
+
+So an older tag being gone is expected: rebuild it from the commit instead of
+hunting for the image —
+
+```bash
+TAG=${GIT_SHA::7}
+docker build --build-arg API_URL=https://rhiz-backend-ha.proudbay-01371b35.eastus.azurecontainerapps.io \
+  -t rhizregistry.azurecr.io/rhiz-backend:$TAG .
+docker push rhizregistry.azurecr.io/rhiz-backend:$TAG
+```
+
+— and when pruning again, `--dry-run` first: `az acr manifest list-metadata -r rhizregistry -n rhiz-backend`
+lists manifests, and only a digest with no kept tag can go.
+
 ## Deploying (only if something must change)
 
 - Backend: push to `master` → `Deploy Backend Container App` runs automatically.
