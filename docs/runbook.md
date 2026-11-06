@@ -3,15 +3,33 @@
 The short version: **read the logs, restart if wedged, don't deploy anything new.**
 
 Production is `www.rhiz.ai` (Static Web App `rhiz-web`, branch `master`) and
-`rhiz-backend-ha` (Container App, `reckon-rg`, East US, **2 replicas, sticky
-sessions**). Database is `reckon-db` (PostgreSQL 16, General Purpose
-`D2ds_v5`, **zone-redundant HA**, standby in zone 2).
+`rhiz-backend-ha` (Container App, `reckon-rg`, East US, **1 replica, sticky
+sessions**). Database is `reckon-db` (PostgreSQL 16, **Burstable `B1ms`,
+HA off**).
+
+That is the post-conference cost posture, not the capacity used during the
+event. Before the conference production ran **2 replicas** and `D2ds_v5` with
+**zone-redundant HA**; both were downgraded afterwards on the basis of measured
+load (DB CPU peaked around 6%, 14 connections, ~1-7 backend requests/hour).
+Raise it again — matching the shape below — before a high-traffic event:
+
+```bash
+az containerapp update -n rhiz-backend-ha -g reckon-rg --min-replicas 2 --max-replicas 3
+az postgres flexible-server update -n reckon-db -g reckon-rg \
+  --zonal-resiliency Enabled --sku-name Standard_D2ds_v5 --tier GeneralPurpose
+```
+
+Zone-redundant HA is not available on Burstable, so re-enabling HA means going
+back to a General Purpose SKU; each `az postgres flexible-server update` is a
+restart (a few minutes), so do them in a quiet window. `B1ms` allows 100
+connections, which is comfortable — the app held 14.
 
 Two older things still exist and are deliberately kept:
 
 * `rhiz-backend` — the previous single-replica app on the *express* environment
-  (`rhiz-env`). It is the rollback target and no longer receives traffic.
-  Scale it to zero (`--min-replicas 0`) once you are happy, or delete it.
+  (`rhiz-env`). It is the rollback target and no longer receives traffic. It is
+  now at `--min-replicas 0`, so a rollback to it pays a cold start (~30-60s) on
+  the first request; the image (`5a064fe`) is still in the registry.
 * `rhiz-env` — the express environment. `rhiz-env-ha` is the standard
   (workload-profiles) environment that supports session affinity.
 
@@ -87,6 +105,11 @@ Point-in-time restore is enabled (7 days). A pre-upgrade dump is kept at
 `~/backups/reckon/`. Any restore is a new server plus a DSN secret change in the
 Container App — not a quick fix, so prefer the dump only if data is actually lost.
 
+The compute SKU is a cost decision, not a schema one: changing it never touches
+rows. Taken before the November downgrade, `reckon-db` was 13 MB with 138 users,
+17 groups, 1005 reckonings; the same table counts and the same `demo_room_slug`
+were present immediately after.
+
 ## Email
 
 Credentials come from the Container App secret `acs-connection-string`
@@ -104,8 +127,9 @@ gh variable set PUBLIC_API_URL --body https://rhiz-backend.politefield-c0f001d2.
 gh workflow run "Deploy Static Web App" --ref master
 ```
 
-That points `www.rhiz.ai` back at the old single-replica app, which is still
-running for exactly this reason. To flip forward again, set the variable to
+That points `www.rhiz.ai` back at the old single-replica app. It is kept for
+exactly this reason, but it now sits at `--min-replicas 0`, so a rollback pays a
+cold start on the first request. To flip forward again, set the variable to
 `https://rhiz-backend-ha.proudbay-01371b35.eastus.azurecontainerapps.io` and re-run the workflow.
 
 Last-resort artefacts (pre-HA state) are in `/home/vince/backups/reckon/pre-ha-20261103T0044Z`: container app JSON, DB dump,

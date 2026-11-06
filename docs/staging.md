@@ -1,20 +1,31 @@
 # Staging
 
 Staging is a copy of production that reviewers and the regression pass can break
-things in. Three resources, all in `reckon-rg`:
+things in. It lives in `reckon-rg` and is **hibernated by default** — nothing
+bills compute until you bring it up.
 
-| resource | name | notes |
+| resource | name | hibernate state |
 | --- | --- | --- |
-| static site | `rhiz-web-staging` | canonical URL `https://mango-tree-0e1baaf0f.1.azurestaticapps.net` — exactly as `properties.defaultHostname` reports it — serving the `staging` branch |
-| backend | `rhiz-backend-staging` | `https://rhiz-backend-staging.politefield-c0f001d2.eastus.azurecontainerapps.io` |
-| database | `reckon-db-staging` | point-in-time restore of `reckon-db` |
+| static site | *(none — `rhiz-web-staging` was deleted)* | gone; recreate from the steps below if a deployable site is needed |
+| backend | `rhiz-backend-staging` | `--min-replicas 0`, 0 replicas |
+| database | `reckon-db-staging` | `state: Stopped` |
+
+`az staticwebapp list -g reckon-rg` should show only the production `rhiz-web`.
+The two staging workflows in `.github/workflows/` still name the deleted site, so
+do not dispatch them until a replacement static app exists.
+
+A stopped flexible server auto-starts after **7 days** of being stopped, which is
+why the daily job described under *Staying hibernated* exists.
 
 Two things about the staging backend that cost time once already:
 
 - **`minReplicas` must be 1, not 0.** At 0 the revision is never activated, so
   the container never starts — and because migrations run in the container's
   start path, `RUN_MIGRATIONS_ON_START=1` quietly does nothing and requests get
-  `{"error":"Not found"}` from the ingress instead of the app. Production runs
+  `{"error":"Not found"}` from the ingress instead of the app. Production keeps
+  one replica for a different but related reason: that is what serves requests
+  without a cold start, and it is also where the post-conference downgrade
+  stopped (`1`, not `0`).
 - **The app had no ingress at all** (`external: null`, no target port), so
   nothing could reach it — which is also why it never activated. Enable it with
   `az containerapp ingress enable -n rhiz-backend-staging -g reckon-rg --type external --target-port 8000 --transport auto`.
@@ -134,7 +145,7 @@ like test data.
 ## Post-test cleanup
 
 Staging is meant to stay up while the client is validating: DB running, backend
-at one replica. When the review is over,
+at one replica. When the review is over — this is the state it is in now —
 
 ```bash
 az postgres flexible-server stop -g reckon-rg -n reckon-db-staging
@@ -145,6 +156,34 @@ Stopped, the restore still bills storage (a few dollars a month); deleted, the
 next restore costs another 5-10 minutes. Neither affects production. Remember
 that a stopped backend means migrations do not run — start it before trusting
 the schema.
+
+## Staying hibernated
+
+Those two commands are not enough on their own: **Azure restarts a stopped
+flexible server seven days after it was stopped.** A database hibernated by hand
+quietly comes back, and if nothing is watching, it bills until someone notices.
+
+`.github/workflows/hibernate-staging.yml` runs the pair daily (05:17 UTC): it
+stops `reckon-db-staging` if it finds it `Ready`, and sets
+`rhiz-backend-staging` back to `--min-replicas 0` if a deploy pinned it. That
+bounds an auto-restart to under a day of `B1ms`, and an unpinned backend to
+nothing. It names staging resources only, so it cannot reach production.
+
+It will get in your way exactly once, on purpose: if you bring staging up for a
+review, the next cron run stops the database under the reviewer. Say you are
+awake first, and clear it afterwards:
+
+```bash
+gh variable set STAGING_AWAKE --body true    # pause the cron
+gh variable set STAGING_AWAKE --body false   # re-arm it
+```
+
+Check the current state without waking anything:
+
+```bash
+az postgres flexible-server show -n reckon-db-staging -g reckon-rg --query '{state:state,sku:sku.name}' -o table
+az containerapp replica list -n rhiz-backend-staging -g reckon-rg --query 'length(@)' -o tsv
+```
 
 ## Before the event: the migration
 
