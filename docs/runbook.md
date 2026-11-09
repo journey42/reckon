@@ -53,6 +53,47 @@ down from 10:06Z and the tripwire's last run was 09:17Z — 49 minutes *before*
 the outage — so nothing was reported for the rest of the day. If a fast signal
 matters, something with a real scheduler has to do it.
 
+## The tripwire
+
+Two Azure Monitor scheduled-query rules in `reckon-rg` page
+`vincent.thomasino@karykeion.com` through the action group **`rhiz-ops`**. They
+read the Log Analytics workspace, so they run on Azure's scheduler — minutes,
+not hours — and they are evaluated whether or not anyone is watching.
+
+| rule | severity | fires when |
+| --- | --- | --- |
+| `rhiz-backend-cannot-start` | 1 | `ImagePullFail`, `BackOff`, `CrashLoopBackOff`, `Unhealthy`, or a `ContainerTerminated` carrying a reason — i.e. the container could not start or died non-gracefully |
+| `rhiz-backend-probe-failing` | 2 | 3+ liveness probe failures in 10 minutes (`StartUp` probe failures excluded: they are normal during a rollout) |
+
+Both look back 10 minutes, evaluate every 5, and auto-mitigate. The first rule's
+query matched 230 events during the 2026-11-09 outage, so it would have fired
+about five minutes in rather than never.
+
+What they **do not** catch: a container that is running and failing requests.
+The liveness probe is a TCP check on 8000, so "process alive, app broken" is
+invisible to it. That needs an outside-in HTTP check — the GitHub workflow is
+the only one today, and its cron is throttled as described above.
+
+The `Replicas` metric is **not** usable as a tripwire: through the entire
+2026-11-09 outage it reported `1`, because the platform counts a replica that
+cannot start. `Requests` told the truth (about 85 per 30 minutes normally,
+exactly 0 for the outage).
+
+Prove the mail path still works (Azure reports `Succeeded` per receiver):
+
+```bash
+az monitor action-group test-notifications create -g reckon-rg \
+  --action-group rhiz-ops --alert-type logalertv2 \
+  -a email vincent vincent.thomasino@karykeion.com usecommonalertschema
+```
+
+Silence it while working on staging or during a planned cutover:
+
+```bash
+az monitor scheduled-query update -n rhiz-backend-cannot-start -g reckon-rg --disabled true
+az monitor scheduled-query update -n rhiz-backend-probe-failing -g reckon-rg --disabled true
+```
+
 ## What is it doing?
 
 `az containerapp logs show` **does not work for this app** — it needs
