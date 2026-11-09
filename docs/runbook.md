@@ -43,7 +43,15 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 
 `400 "Invalid transport"` is the app saying hello. `502`/`503` is the platform or
 a crashed container. The scheduled **Uptime check** workflow runs the same
-checks every 10 minutes and fails loudly.
+checks and fails loudly.
+
+The schedule says every 10 minutes, but it is a GitHub Actions cron, and GitHub
+throttles those on quiet repositories: in practice it fired every **3–7 hours**
+over the week to 2026-11-09, including a 10-hour gap. It is a backstop for "the
+site has been down for hours", never a pager. On 2026-11-09 the backend was
+down from 10:06Z and the tripwire's last run was 09:17Z — 49 minutes *before*
+the outage — so nothing was reported for the rest of the day. If a fast signal
+matters, something with a real scheduler has to do it.
 
 ## What is it doing?
 
@@ -144,8 +152,46 @@ about $1.6/month of storage and a slow `az acr` on every call. It was pruned to
 the three images that can matter: `fec4732` (deployed now, also `latest`),
 `5a064fe` (the rollback app) and `1f5b7ae` (the deploy before that).
 
-So an older tag being gone is expected: rebuild it from the commit instead of
-hunting for the image —
+### Delete tags, never manifests
+
+The first prune deleted untagged manifests as well, which emptied the registry
+for the running app. `docker build` here pushes an **OCI image index**: the tag
+points at an index that points at the platform manifest (and a build
+attestation), and those children carry no tags of their own. Deleting "a digest
+with no tag" therefore deletes the children of the images that are being kept.
+The index still resolves, so `az acr repository show-tags` looks healthy — the
+tag is there, the digest exists — while every pull fails with
+
+```
+MANIFEST_UNKNOWN  manifest sha256:… not found
+ImagePullFailure
+```
+
+That happened on 2026-11-09: the app kept serving from the replica that was
+already running, then lost ~9 hours as soon as the platform scheduled a
+replacement replica at 10:06Z and could not pull it.
+
+So prune by tag only, and leave untagged manifests alone — they are about 2 KB
+each, and ACR reclaims layer blobs once no kept manifest references them:
+
+```bash
+a=rhizregistry; repo=rhiz-backend
+keep='^(fec4732|latest|5a064fe|1f5b7ae)$'
+for t in $(az acr repository show-tags -n $a --repository $repo -o tsv); do
+  printf '%s\n' "$t" | grep -Eq "$keep" || az acr repository delete -n $a --repository $repo --tag "$t" --yes
+done
+```
+
+Check the result before trusting it — every child digest of every kept tag must
+resolve on its own:
+
+```bash
+az acr manifest show -r rhizregistry -n rhiz-backend:fec4732   # index, lists children
+az acr manifest show -r rhizregistry -n rhiz-backend@sha256:<child>  # must not 404
+```
+
+And an older tag being gone is expected — rebuild it from the commit rather than
+hunting for the image:
 
 ```bash
 TAG=${GIT_SHA::7}
@@ -153,9 +199,6 @@ docker build --build-arg API_URL=https://rhiz-backend-ha.proudbay-01371b35.eastu
   -t rhizregistry.azurecr.io/rhiz-backend:$TAG .
 docker push rhizregistry.azurecr.io/rhiz-backend:$TAG
 ```
-
-— and when pruning again, `--dry-run` first: `az acr manifest list-metadata -r rhizregistry -n rhiz-backend`
-lists manifests, and only a digest with no kept tag can go.
 
 ## Deploying (only if something must change)
 
